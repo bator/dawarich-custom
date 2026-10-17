@@ -49,6 +49,23 @@ hu:
       previous: Újabbak
       next: Régebbiek
       total: "%{count} utazás"
+      hours_minutes: "%{hours} ó %{minutes} p"
+      summary_label: Az időszak összesítése
+      rides:
+        one: utazás
+        other: utazás
+      day_rides:
+        one: "%{count} utazás"
+        other: "%{count} utazás"
+      on_board: utazással töltve
+      distance: megtett út
+      to_review:
+        one: "%{count} ellenőrizendő"
+        other: "%{count} ellenőrizendő"
+      all_reviewed: Nincs ellenőrizendő
+      empty_uncertain: Ebben az időszakban nincs bizonytalan utazás.
+      today: Ma
+      yesterday: Tegnap
     card:
       uncertain: Bizonytalan
       confirmed: Megerősítve

@@ -1,8 +1,16 @@
 <% content_for :title, t('.title') %>
+<%
+  hours_minutes = lambda do |seconds|
+    minutes = (seconds / 60.0).round
+    minutes >= 60 ? t('.hours_minutes', hours: minutes / 60, minutes: minutes % 60) : t('transit_segments.card.minutes', count: minutes)
+  end
+  filter_params = ->(extra = {}) { { days: @days, uncertain: (@only_uncertain ? '1' : nil) }.merge(extra).compact }
+%>
 
-<div class="min-h-content w-full my-5 max-w-5xl mx-auto px-2">
+<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
   <%= render layout: 'shared/page_header', locals: { title: t('.title') } do %>
-    <%= link_to t('.devices_link'), transit_devices_path, class: 'btn btn-sm' %>
+    <%= link_to t('transit_segments.index.devices_link'), transit_devices_path, class: 'btn btn-sm' %>
+    <%= link_to t('transit_segments.index.settings_link'), settings_transit_path, class: 'btn btn-sm btn-ghost' %>
   <% end %>
 
   <% unless @enabled %>
@@ -12,37 +20,92 @@
     </div>
   <% end %>
 
-  <%= form_with url: transit_segments_path, method: :get, local: true, class: 'flex flex-wrap items-end gap-3 mb-4' do %>
+  <section class="card bg-base-200 shadow mb-4" aria-label="<%= t('.summary_label') %>">
+    <div class="card-body p-4 gap-3">
+      <div class="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+        <div>
+          <div class="text-3xl font-bold tabular-nums"><%= @summary[:count] %></div>
+          <div class="text-xs opacity-70"><%= t('.rides', count: @summary[:count]) %></div>
+        </div>
+        <div>
+          <div class="text-3xl font-bold tabular-nums"><%= hours_minutes.call(@summary[:duration_s]) %></div>
+          <div class="text-xs opacity-70"><%= t('.on_board') %></div>
+        </div>
+        <div>
+          <div class="text-3xl font-bold tabular-nums"><%= number_with_precision(@summary[:distance_m] / 1000.0, precision: 0, delimiter: ' ') %> km</div>
+          <div class="text-xs opacity-70"><%= t('.distance') %></div>
+        </div>
+        <div class="ml-auto self-center">
+          <% if @summary[:uncertain].positive? %>
+            <%= link_to transit_segments_path(days: @days, uncertain: '1'),
+                        class: "btn btn-sm #{@only_uncertain ? 'btn-warning' : 'btn-outline btn-warning'}" do %>
+              ⚠ <%= t('.to_review', count: @summary[:uncertain]) %>
+            <% end %>
+          <% else %>
+            <span class="badge badge-success badge-outline gap-1">✔ <%= t('.all_reviewed') %></span>
+          <% end %>
+        </div>
+      </div>
+      <% if @summary[:by_mode].any? %>
+        <ul class="flex flex-wrap gap-2" role="list">
+          <% @summary[:by_mode].each do |mode, count| %>
+            <li class="badge badge-lg gap-1 bg-base-100 border-base-300">
+              <span aria-hidden="true"><%= Gtfs::Discord::MessageBuilder::EMOJI.fetch(mode) %></span>
+              <span class="sr-only"><%= t("transit_modes.#{mode}") %>:</span>
+              <span class="tabular-nums"><%= count %></span>
+            </li>
+          <% end %>
+        </ul>
+      <% end %>
+    </div>
+  </section>
+
+  <%= form_with url: transit_segments_path, method: :get, local: true, class: 'flex flex-wrap items-end gap-3 mb-6' do %>
     <label class="form-control">
       <span class="label-text"><%= t('.period') %></span>
       <%= select_tag :days, options_for_select(TransitSegmentsController::PERIODS.map { |d| [t('.days', count: d), d] }, @days),
-                     class: 'select select-bordered min-h-11' %>
+                     class: 'select select-bordered select-sm min-h-11' %>
     </label>
     <label class="label cursor-pointer gap-2 min-h-11">
-      <%= check_box_tag :uncertain, '1', @only_uncertain, class: 'checkbox' %>
+      <%= check_box_tag :uncertain, '1', @only_uncertain, class: 'checkbox checkbox-sm' %>
       <span class="label-text"><%= t('.show_uncertain') %></span>
     </label>
-    <%= submit_tag t('.filter'), class: 'btn btn-primary min-h-11', name: nil %>
+    <%= submit_tag t('.filter'), class: 'btn btn-primary btn-sm min-h-11', name: nil %>
     <span class="text-sm opacity-70 ml-auto"><%= t('.total', count: @total) %></span>
   <% end %>
 
   <% if @segments.empty? %>
-    <p class="opacity-70"><%= t('.empty') %></p>
+    <p class="opacity-70"><%= t(@only_uncertain ? '.empty_uncertain' : '.empty') %></p>
   <% else %>
-    <ul class="grid grid-cols-1 lg:grid-cols-2 gap-4" role="list">
-      <% @segments.each do |segment| %>
-        <%= render 'card', segment:, colors: @colors, zone: @zone %>
+    <div class="flex flex-col gap-6">
+      <% @by_day.each do |date, segments| %>
+        <section aria-labelledby="day-<%= date.iso8601 %>">
+          <header class="flex items-baseline justify-between gap-2 border-b border-base-300 pb-1 mb-1">
+            <h2 id="day-<%= date.iso8601 %>" class="font-semibold">
+              <%= date == @zone.today ? t('.today') : (date == @zone.today - 1 ? t('.yesterday') : l(date, format: '%A')) %>,
+              <span class="opacity-70 font-normal"><%= l(date, format: :long) %></span>
+            </h2>
+            <span class="text-xs opacity-70 whitespace-nowrap">
+              <%= t('.day_rides', count: segments.size) %> · <%= hours_minutes.call(segments.sum { |s| s.ended_at - s.started_at }) %>
+            </span>
+          </header>
+          <ul class="flex flex-col" role="list">
+            <% segments.sort_by(&:started_at).each do |segment| %>
+              <%= render 'card', segment:, colors: @colors, zone: @zone %>
+            <% end %>
+          </ul>
+        </section>
       <% end %>
-    </ul>
+    </div>
   <% end %>
 
   <% if @total > TransitSegmentsController::PER_PAGE %>
     <nav class="join mt-6 flex justify-center" aria-label="pagination">
       <% if @page > 1 %>
-        <%= link_to t('.previous'), transit_segments_path(days: @days, uncertain: (@only_uncertain ? '1' : nil), page: @page - 1), class: 'join-item btn' %>
+        <%= link_to t('.previous'), transit_segments_path(filter_params.call(page: @page - 1)), class: 'join-item btn' %>
       <% end %>
       <% if @page * TransitSegmentsController::PER_PAGE < @total %>
-        <%= link_to t('.next'), transit_segments_path(days: @days, uncertain: (@only_uncertain ? '1' : nil), page: @page + 1), class: 'join-item btn' %>
+        <%= link_to t('.next'), transit_segments_path(filter_params.call(page: @page + 1)), class: 'join-item btn' %>
       <% end %>
     </nav>
   <% end %>

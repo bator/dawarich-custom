@@ -49,6 +49,23 @@ en:
       previous: Newer
       next: Older
       total: "%{count} rides"
+      hours_minutes: "%{hours} h %{minutes} min"
+      summary_label: Summary of the period
+      rides:
+        one: ride
+        other: rides
+      day_rides:
+        one: "%{count} ride"
+        other: "%{count} rides"
+      on_board: on board
+      distance: travelled
+      to_review:
+        one: "%{count} to review"
+        other: "%{count} to review"
+      all_reviewed: Nothing to review
+      empty_uncertain: No uncertain rides in this period.
+      today: Today
+      yesterday: Yesterday
     card:
       uncertain: Uncertain
       confirmed: Confirmed

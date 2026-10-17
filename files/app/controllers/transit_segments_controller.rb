@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
-# Spec 12.3: the detected rides as cards, with confirm / reject / undo and
-# "another trip". All changes go through Gtfs::SegmentReview. A ride that was
-# matched again meanwhile (review A2) gives a notice and a reloaded list.
+# Spec 12.3: the detected rides as a day-by-day timeline under a summary
+# strip; each row opens to confirm / reject / undo and "another trip". All
+# changes go through Gtfs::SegmentReview. A ride that was matched again
+# meanwhile (review A2) gives a notice and a reloaded list.
 class TransitSegmentsController < ApplicationController
   PERIODS = [7, 14, 30, 90, 365].freeze
-  PER_PAGE = 30
+  PER_PAGE = 50
 
   before_action :authenticate_user!
 
@@ -14,10 +15,17 @@ class TransitSegmentsController < ApplicationController
     @days = PERIODS.include?(params[:days].to_i) ? params[:days].to_i : 14
     @only_uncertain = params[:uncertain] == '1'
     @page = [params[:page].to_i, 1].max
-    scope = Gtfs::SegmentQuery.new(current_user, start_at: @days.days.ago.to_i).scope
-    @total, @segments = @only_uncertain ? uncertain_page(scope) : [scope.count, page_of(scope).to_a]
-    @colors = Api::TransitSegmentSerializer.colors_for(@segments)
     @zone = ActiveSupport::TimeZone[current_user.timezone_iana] || Time.zone
+    # One load for the summary strip and the list. TransitSegment#uncertain?
+    # is computed in Ruby (thresholds and debug flags), so the "only
+    # uncertain" filter and the review count need the rows anyway.
+    all = Gtfs::SegmentQuery.new(current_user, start_at: @days.days.ago.to_i).scope.to_a
+    @summary = summary(all)
+    listed = @only_uncertain ? all.select(&:uncertain?) : all
+    @total = listed.size
+    @segments = listed.slice((@page - 1) * PER_PAGE, PER_PAGE) || []
+    @by_day = @segments.group_by { |segment| @zone.at(segment.started_at).to_date }
+    @colors = Api::TransitSegmentSerializer.colors_for(@segments)
   end
 
   def update
@@ -37,15 +45,13 @@ class TransitSegmentsController < ApplicationController
 
   private
 
-  # Paged in SQL (review A2).
-  def page_of(scope)
-    scope.offset((@page - 1) * PER_PAGE).limit(PER_PAGE)
-  end
-
-  # TransitSegment#uncertain? is computed in Ruby (thresholds and debug
-  # flags), so only the auto rides of the period are loaded and filtered.
-  def uncertain_page(scope)
-    segments = scope.where(status: :auto).select(&:uncertain?)
-    [segments.size, segments.slice((@page - 1) * PER_PAGE, PER_PAGE) || []]
+  def summary(segments)
+    {
+      count: segments.size,
+      duration_s: segments.sum { |s| s.ended_at - s.started_at },
+      distance_m: segments.sum { |s| s.distance_m.to_f },
+      by_mode: segments.map(&:mode).tally.sort_by { |mode, count| [-count, mode] },
+      uncertain: segments.count(&:uncertain?)
+    }
   end
 end
