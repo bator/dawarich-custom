@@ -60,6 +60,9 @@ SMOKE_TIMEOUT_SEC = 240
 BOT_UNIT = "dawarich-gtfs-discord-bot"
 GEM_FILES = ("Gemfile", "Gemfile.lock")
 MIGRATION_RE = re.compile(r"^db/migrate/(\d{14})_.+\.rb$")
+# Ruby backtrace lines ("/path/x.rb:12:in 'm'", "\tfrom /path/x.rb:12:in ..."): dropped
+# from error reports so the actual exception (PG::..., rake aborted!) survives the tail
+BACKTRACE_RE = re.compile(r"^\s*(from\s+)?\S+:\d+:in\s")
 
 
 # --- helpers -------------------------------------------------------------
@@ -156,7 +159,8 @@ def run(cmd: list[str], timeout: int, env: dict | None = None) -> None:
     log("$ " + " ".join(cmd))
     r = subprocess.run(cmd, cwd=APP, env=env, capture_output=True, text=True, timeout=timeout)
     if r.returncode != 0:
-        tail = "\n".join((r.stderr or r.stdout).strip().splitlines()[-15:])
+        lines = [l[:300] for l in (r.stderr or r.stdout).strip().splitlines() if not BACKTRACE_RE.match(l)]
+        tail = "\n".join(lines[-15:])
         raise RuntimeError(f"{' '.join(cmd)} failed ({r.returncode}):\n{tail}")
 
 
@@ -248,6 +252,7 @@ def plan_restore(manifest: dict, state: dict, version: str):
             records[rel] = {"version": version, "written_sha": sha(cur)}
         elif cur is None or sha(cur) == rec.get("written_sha"):
             writes[rel] = src
+            records[rel] = {"version": version, "written_sha": sha(src)}
         else:
             conflicts.append(f"`{rel}` exists and differs (new upstream file on our path, or edited live without capture)")
 
