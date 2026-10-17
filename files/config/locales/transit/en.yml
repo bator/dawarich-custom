@@ -121,3 +121,6 @@ en:
       part_stationary: "standing still"
       accuracy: "95% of the fixes within"
       failed_to_load: "Failed to load walking legs"
+  shared:
+    navbar:
+      transit: Transit

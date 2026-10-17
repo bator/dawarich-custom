@@ -121,3 +121,6 @@ hu:
       part_stationary: "egy helyben"
       accuracy: "a pontok 95%-a ennyin belül:"
       failed_to_load: "Nem sikerült betölteni a gyalogos szakaszokat"
+  shared:
+    navbar:
+      transit: Közlekedés

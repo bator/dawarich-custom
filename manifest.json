@@ -149,6 +149,7 @@
     "app/models/user.rb",
     "app/views/map/maplibre/_settings_panel.html.erb",
     "app/views/settings/_navigation.html.erb",
+    "app/views/shared/_navbar.html.erb",
     "config/initializers/sidekiq.rb",
     "config/routes.rb",
     "config/schedule.yml",
