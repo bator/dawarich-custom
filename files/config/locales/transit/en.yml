@@ -1,0 +1,123 @@
+en:
+  settings:
+    navigation:
+      transit: Public transit
+    transit:
+      show:
+        title: Public transit detection (GTFS)
+        intro: Dawarich compares your recorded points with public transport timetables and marks the rides it recognises (line, stops, times). Everything runs on this server; your points are never sent anywhere and never changed.
+        disabled_globally: Timetable import is switched off on this instance (GTFS_ENABLED). Ask the administrator to enable it.
+        enabled_label: Detect public transport rides (GTFS)
+        feeds_label: Timetables to use
+        feeds_hint: Leave all unticked to use every available timetable.
+        min_confidence_label: Minimum confidence to show a ride
+        min_confidence_hint: Rides below this value are hidden (confirmed rides are always shown).
+        save: Save
+        status_title: Timetables
+        feed_name: Timetable
+        last_import: Last import
+        validity: Valid
+        no_feeds: No timetable has been imported yet.
+        never: never
+        expired: expired
+        expiring_soon: expires soon
+        attribution_title: Data sources and licences
+        attribution_missing: "%{feed}: no attribution or licence recorded; the administrator has to fill it in."
+        licence: licence
+        last_match: 'Last matched day: %{date} (%{status})'
+        backfill_status: 'History matching: %{status}, %{days} days done'
+        rematch_title: Match the whole history again
+        rematch_hint: Goes through every day the stored timetables still cover. This takes a while.
+        rematch_button: Rematch the whole history
+        rematch_confirm: Match all past days again? This runs in the background and can take a long time.
+        rides_link: Show my rides
+    transit_controller:
+      saved: Public transit settings saved.
+      rematch_started: Matching of the whole history has started.
+      rate_limited: Please wait before starting another rematch.
+      disabled: Turn on public transit detection first.
+  transit_segments:
+    index:
+      title: Public transport rides
+      disabled: Public transit detection is off. You can turn it on in the settings.
+      settings_link: Settings
+      empty: No rides in this period.
+      period: Period
+      days: "Last %{count} days"
+      show_uncertain: Only uncertain rides
+      filter: Filter
+      previous: Newer
+      next: Older
+      total: "%{count} rides"
+    card:
+      uncertain: Uncertain
+      confirmed: Confirmed
+      auto: Detected
+      chosen: Changed to another trip, awaiting approval
+      confidence: "Confidence %{value}%"
+      delay_late: "about %{minutes} min late"
+      delay_early: "about %{minutes} min early"
+      on_time: on time
+      minutes: "%{count} min"
+      km: "%{value} km"
+      confirm: Confirm
+      reject: Reject
+      undo: Undo
+      other_trip: Another trip
+      choose: Choose
+      no_alternatives: No other trip fits this ride.
+      on_map: Show on map
+      reason_no_intermediate_stops: No intermediate stop, the path could not be checked.
+      reason_no_dwell: Did not stop at the stops (could be a car or bike).
+      reason_ambiguous: Another line fits as well.
+      reason_trip_ambiguous: Another departure of the same line fits as well.
+    update:
+      confirmed: Ride confirmed.
+      rejected: Ride rejected; it will not be shown or matched again.
+      auto: Your decision was undone.
+      chosen: Ride changed to the chosen trip. It still needs your approval.
+      reload: This ride no longer exists (it was matched again). The list has been reloaded.
+      invalid: "Could not change the ride: %{message}"
+  transit_modes:
+    bus: Bus
+    tram: Tram
+    metro: Metro
+    rail: Train
+    suburban: Suburban railway
+    ferry: Ferry
+    other: Other
+  map:
+    maplibre:
+      transit_settings:
+        transit: Public transport rides
+        transit_hint: Detected rides (GTFS). Dashed lines are uncertain.
+        all_modes: All vehicles
+        walk_legs: Walks to and from the rides
+        walk_legs_hint: "Snapped to footpaths: dark dashed line; recorded GPS: light grey dotted."
+  javascript:
+    transit:
+      failed_to_load: Failed to load public transport rides
+      uncertain: Uncertain
+      confirmed: Confirmed
+      confidence: Confidence
+      delay: Delay
+      direction: Direction
+      confirm: Confirm
+      reject: Reject
+      open_list: Open in list
+      reload: This ride was matched again; reloading.
+      done_confirmed: Ride confirmed
+      done_rejected: Ride rejected
+      failed: Could not change the ride
+    walk_legs:
+      title: "Walk"
+      length: "Length"
+      source: "Source"
+      source_valhalla: "snapped to footpaths"
+      source_mixed: "partly snapped"
+      source_raw: "recorded GPS"
+      part_valhalla: "this part: snapped"
+      part_raw: "this part: recorded GPS"
+      part_stationary: "standing still"
+      accuracy: "95% of the fixes within"
+      failed_to_load: "Failed to load walking legs"

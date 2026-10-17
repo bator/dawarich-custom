@@ -1,0 +1,200 @@
+# frozen_string_literal: true
+
+# What the Discord map image of one ride shows: the matched line between the
+# boarding and alighting stop (the trip's shape, e.g. the pfaedle-matched MÁV
+# railway; else the line through the timetable stops; else a straight line),
+# the GPS trace and the two stops. Nothing that lies in one of the user's
+# privacy zones (plus ZONE_BUFFER_M) is returned: every edge of the lines
+# and the trace is clipped exactly at the zone circle (review A1: an edge
+# between two points outside a zone can still cross it), so they end at the
+# buffered zone border, and a stop inside one is left out.
+class Gtfs::Discord::RideMap
+  EARTH_RADIUS_M = 6_371_000.0
+  ZONE_BUFFER_M = 50.0 # the line stops a bit before the zone, not at its exact border
+  EPSILON = 1e-9
+
+  Result = Struct.new(:line, :line_source, :gps, :board, :alight, keyword_init: true) do
+    delegate :empty?, to: :coordinates
+
+    def coordinates
+      line.flatten(1) + gps.flatten(1) + [board, alight].compact
+    end
+  end
+
+  def initialize(segment, zones: nil)
+    @segment = segment
+    @zones = zones || Users::PrivacyZones.new(segment.user).call
+  end
+
+  def call
+    source, coordinates = line_coordinates
+    Result.new(line: runs(coordinates), line_source: source, gps: runs(gps_coordinates),
+               board: visible(lonlat(@segment.boarding_lonlat)), alight: visible(lonlat(@segment.alighting_lonlat)))
+  end
+
+  private
+
+  def line_coordinates
+    shape = shape_coordinates
+    return ['shape', shape] if shape.size >= 2
+
+    stops = stop_coordinates
+    return ['stops', stops] if stops.size >= 2
+
+    ['straight', [lonlat(@segment.boarding_lonlat), lonlat(@segment.alighting_lonlat)].compact]
+  end
+
+  # The trip's shape between the points closest to the two stops.
+  def shape_coordinates
+    board = lonlat(@segment.boarding_lonlat)
+    alight = lonlat(@segment.alighting_lonlat)
+    return [] unless board && alight && @segment.trip_gtfs_id
+
+    sql = <<~SQL.squish
+      WITH shape AS (
+        SELECT gtfs_shapes.path::geometry AS g
+        FROM gtfs_trips
+        JOIN gtfs_shapes ON gtfs_shapes.feed_id = gtfs_trips.feed_id AND gtfs_shapes.version = gtfs_trips.version
+                        AND gtfs_shapes.gtfs_id = gtfs_trips.shape_gtfs_id
+        WHERE gtfs_trips.feed_id = ? AND gtfs_trips.version = ? AND gtfs_trips.gtfs_id = ?
+        LIMIT 1
+      ), located AS (
+        SELECT g, ST_LineLocatePoint(g, ST_SetSRID(ST_MakePoint(?, ?), 4326)) AS a,
+                  ST_LineLocatePoint(g, ST_SetSRID(ST_MakePoint(?, ?), 4326)) AS b
+        FROM shape
+      )
+      SELECT ST_AsGeoJSON(ST_LineSubstring(g, LEAST(a, b), GREATEST(a, b)), 6) FROM located WHERE a <> b
+    SQL
+    json = select_value(sql, @segment.feed_id, @segment.feed_version, @segment.trip_gtfs_id, *board, *alight)
+    json ? Array(JSON.parse(json)['coordinates']) : []
+  end
+
+  # The timetable stops from the boarding to the alighting stop.
+  def stop_coordinates
+    return [] unless @segment.trip_gtfs_id
+
+    sql = <<~SQL.squish
+      SELECT gtfs_stop_times.stop_gtfs_id, ST_X(gtfs_stops.lonlat::geometry), ST_Y(gtfs_stops.lonlat::geometry)
+      FROM gtfs_stop_times
+      JOIN gtfs_stops ON gtfs_stops.feed_id = gtfs_stop_times.feed_id AND gtfs_stops.version = gtfs_stop_times.version
+                     AND gtfs_stops.gtfs_id = gtfs_stop_times.stop_gtfs_id
+      WHERE gtfs_stop_times.feed_id = ? AND gtfs_stop_times.version = ? AND gtfs_stop_times.trip_gtfs_id = ?
+      ORDER BY gtfs_stop_times.stop_sequence
+    SQL
+    rows = select_rows(sql, @segment.feed_id, @segment.feed_version, @segment.trip_gtfs_id)
+    from = rows.index { |row| row[0] == @segment.boarding_stop_gtfs_id }
+    to = from && rows.each_index.find { |i| i > from && rows[i][0] == @segment.alighting_stop_gtfs_id }
+    return [] unless to
+
+    rows[from..to].map { |row| [row[1].to_f, row[2].to_f] }
+  end
+
+  # Read only: the ride's points, oldest first.
+  def gps_coordinates
+    sql = <<~SQL.squish
+      SELECT ST_X(points.lonlat::geometry), ST_Y(points.lonlat::geometry)
+      FROM transit_segment_points
+      JOIN points ON points.id = transit_segment_points.point_id
+      WHERE transit_segment_points.transit_segment_id = ? AND points.lonlat IS NOT NULL
+      ORDER BY points.timestamp, points.id
+    SQL
+    select_rows(sql, @segment.id).map { |lon, lat| [lon.to_f, lat.to_f] }
+  end
+
+  # The visible parts of a polyline, each a list of coordinates.
+  def runs(coordinates)
+    return coordinates.reject { |c| in_zone?(c) }.map { |c| [c] } if coordinates.size < 2
+
+    result = []
+    current = []
+    coordinates.each_cons(2) do |a, b|
+      intervals = visible_intervals(a, b)
+      intervals.each do |t0, t1|
+        if t0 <= EPSILON && current.any?
+          current << point_at(a, b, t1)
+        else
+          result << current if current.size >= 2
+          current = [point_at(a, b, t0), point_at(a, b, t1)]
+        end
+      end
+      next if intervals.any? && intervals.last[1] >= 1 - EPSILON
+
+      result << current if current.size >= 2
+      current = []
+    end
+    result << current if current.size >= 2
+    result
+  end
+
+  # Parts [t0, t1] of the edge from->to (t in 0..1) outside every zone.
+  def visible_intervals(from, to)
+    hidden = @zones.filter_map { |zone| hidden_interval(from, to, zone) }.sort
+    visible = []
+    from = 0.0
+    hidden.each do |t0, t1|
+      visible << [from, t0] if t0 - from > EPSILON
+      from = [from, t1].max
+    end
+    visible << [from, 1.0] if 1.0 - from > EPSILON
+    visible
+  end
+
+  # Where the edge runs inside the (buffered) zone circle, in a local metric
+  # projection around the zone centre: |a + t (b - a)| <= r.
+  def hidden_interval(from, to, zone)
+    ax, ay = local_xy(from, zone)
+    bx, by = local_xy(to, zone)
+    dx = bx - ax
+    dy = by - ay
+    radius = zone[:radius].to_f + ZONE_BUFFER_M
+    qa = (dx * dx) + (dy * dy)
+    qc = (ax * ax) + (ay * ay) - (radius * radius)
+    return (qc <= 0 ? [0.0, 1.0] : nil) if qa < EPSILON
+
+    qb = 2 * ((ax * dx) + (ay * dy))
+    disc = (qb * qb) - (4 * qa * qc)
+    return nil if disc.negative?
+
+    root = Math.sqrt(disc)
+    t0 = [(-qb - root) / (2 * qa), 0.0].max
+    t1 = [(-qb + root) / (2 * qa), 1.0].min
+    t1 - t0 > EPSILON ? [t0, t1] : nil
+  end
+
+  def local_xy(coordinate, zone)
+    lon, lat = coordinate
+    lat0 = zone[:lat].to_f
+    rad = Math::PI / 180
+    [(lon - zone[:lon].to_f) * rad * EARTH_RADIUS_M * Math.cos(lat0 * rad), (lat - lat0) * rad * EARTH_RADIUS_M]
+  end
+
+  def point_at(from, to, frac)
+    return from if frac <= EPSILON
+    return to if frac >= 1 - EPSILON
+
+    [from[0] + ((to[0] - from[0]) * frac), from[1] + ((to[1] - from[1]) * frac)]
+  end
+
+  def visible(coordinate)
+    coordinate unless coordinate.nil? || in_zone?(coordinate)
+  end
+
+  def in_zone?(coordinate)
+    @zones.any? do |zone|
+      x, y = local_xy(coordinate, zone)
+      Math.hypot(x, y) <= zone[:radius].to_f + ZONE_BUFFER_M
+    end
+  end
+
+  def lonlat(point)
+    point && [point.x.to_f, point.y.to_f]
+  end
+
+  def select_value(sql, *binds)
+    TransitSegment.connection.select_value(TransitSegment.sanitize_sql_array([sql, *binds]))
+  end
+
+  def select_rows(sql, *binds)
+    TransitSegment.connection.select_rows(TransitSegment.sanitize_sql_array([sql, *binds]))
+  end
+end

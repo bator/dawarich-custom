@@ -1,0 +1,47 @@
+<% content_for :title, t('.title') %>
+
+<div class="min-h-content w-full my-5 max-w-5xl mx-auto px-2">
+  <%= render 'shared/page_header', title: t('.title') %>
+
+  <% unless @enabled %>
+    <div role="alert" class="alert alert-info mb-6">
+      <span><%= t('.disabled') %></span>
+      <%= link_to t('.settings_link'), settings_transit_path, class: 'btn btn-sm' %>
+    </div>
+  <% end %>
+
+  <%= form_with url: transit_segments_path, method: :get, local: true, class: 'flex flex-wrap items-end gap-3 mb-4' do %>
+    <label class="form-control">
+      <span class="label-text"><%= t('.period') %></span>
+      <%= select_tag :days, options_for_select(TransitSegmentsController::PERIODS.map { |d| [t('.days', count: d), d] }, @days),
+                     class: 'select select-bordered min-h-11' %>
+    </label>
+    <label class="label cursor-pointer gap-2 min-h-11">
+      <%= check_box_tag :uncertain, '1', @only_uncertain, class: 'checkbox' %>
+      <span class="label-text"><%= t('.show_uncertain') %></span>
+    </label>
+    <%= submit_tag t('.filter'), class: 'btn btn-primary min-h-11', name: nil %>
+    <span class="text-sm opacity-70 ml-auto"><%= t('.total', count: @total) %></span>
+  <% end %>
+
+  <% if @segments.empty? %>
+    <p class="opacity-70"><%= t('.empty') %></p>
+  <% else %>
+    <ul class="grid grid-cols-1 lg:grid-cols-2 gap-4" role="list">
+      <% @segments.each do |segment| %>
+        <%= render 'card', segment:, colors: @colors, zone: @zone %>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <% if @total > TransitSegmentsController::PER_PAGE %>
+    <nav class="join mt-6 flex justify-center" aria-label="pagination">
+      <% if @page > 1 %>
+        <%= link_to t('.previous'), transit_segments_path(days: @days, uncertain: (@only_uncertain ? '1' : nil), page: @page - 1), class: 'join-item btn' %>
+      <% end %>
+      <% if @page * TransitSegmentsController::PER_PAGE < @total %>
+        <%= link_to t('.next'), transit_segments_path(days: @days, uncertain: (@only_uncertain ? '1' : nil), page: @page + 1), class: 'join-item btn' %>
+      <% end %>
+    </nav>
+  <% end %>
+</div>

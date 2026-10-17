@@ -1,0 +1,23 @@
+--- a/app/javascript/controllers/maps/maplibre/settings_manager.js
++++ b/app/javascript/controllers/maps/maplibre/settings_manager.js
+@@ -73,6 +73,8 @@
+       familyToggle: "familyEnabled",
+       tracksToggle: "tracksEnabled",
+       flightsToggle: "flightsEnabled",
++      transitToggle: "transitEnabled",
++      walkLegsToggle: "walkLegsEnabled",
+       anomaliesToggle: "anomaliesEnabled",
+     }
+ 
+@@ -101,6 +103,11 @@
+       }
+     })
+ 
++    if (controller.hasTransitModeSelectTarget) {
++      controller.transitModeSelectTarget.value =
++        this.settings.transitMode || "all"
++    }
++
+     this.syncPointsEditAvailability()
+ 
+     // Show/hide visits search based on initial toggle state

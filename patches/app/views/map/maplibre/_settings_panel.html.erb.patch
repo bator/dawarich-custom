@@ -1,0 +1,42 @@
+--- a/app/views/map/maplibre/_settings_panel.html.erb
++++ b/app/views/map/maplibre/_settings_panel.html.erb
+@@ -139,6 +139,39 @@
+             </div>
+           </div>
+ 
++          <% if Gtfs::UserSettings.new(current_user).enabled? %>
++            <div class="layer-options__group space-y-2" data-layer-options="transit">
++              <span class="layer-options__label"><%= t('map.maplibre.transit_settings.transit') %></span>
++              <label class="label cursor-pointer justify-start gap-3 py-0">
++                <input type="checkbox"
++                       class="toggle toggle-primary toggle-sm"
++                       data-maps--maplibre-target="transitToggle"
++                       data-action="change->maps--maplibre#toggleTransit" />
++                <span class="label-text"><%= t('map.maplibre.transit_settings.transit') %></span>
++              </label>
++              <p class="text-sm text-base-content/60"><%= t('map.maplibre.transit_settings.transit_hint') %></p>
++              <select class="select select-bordered select-sm w-auto"
++                      aria-label="<%= t('map.maplibre.transit_settings.all_modes') %>"
++                      data-maps--maplibre-target="transitModeSelect"
++                      data-action="change->maps--maplibre#changeTransitMode">
++                <option value="all"><%= t('map.maplibre.transit_settings.all_modes') %></option>
++                <% %w[bus tram metro rail suburban ferry other].each do |mode| %>
++                  <option value="<%= mode %>"><%= t("transit_modes.#{mode}") %></option>
++                <% end %>
++              </select>
++              <% if Gtfs::Walk::Config.exclude_list_set? && !Gtfs::Walk::Config.excluded?(current_user) %>
++                <label class="label cursor-pointer justify-start gap-3 py-0">
++                  <input type="checkbox"
++                         class="toggle toggle-primary toggle-sm"
++                         data-maps--maplibre-target="walkLegsToggle"
++                         data-action="change->maps--maplibre#toggleWalkLegs" />
++                  <span class="label-text"><%= t('map.maplibre.transit_settings.walk_legs') %></span>
++                </label>
++                <p class="text-sm text-base-content/60"><%= t('map.maplibre.transit_settings.walk_legs_hint') %></p>
++              <% end %>
++            </div>
++          <% end %>
++
+           <div class="layer-options__group space-y-2" data-maps--maplibre-target="visitsSearch" style="display: none;">
+             <span class="layer-options__label"><%= t('.visits') %></span>
+             <input type="text"

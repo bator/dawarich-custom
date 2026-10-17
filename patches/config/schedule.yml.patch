@@ -1,0 +1,17 @@
+--- a/config/schedule.yml
++++ b/config/schedule.yml
+@@ -124,3 +124,14 @@
+   cron: "*/5 * * * *"
+   class: "Stats::ToponymsRefreshJob"
+   queue: stats
++
++gtfs_match_recent_job:
++  # before the feed sync below: decision K4 keeps only active + one backup timetable (docs/gtfs.md)
++  cron: "<%= ENV.fetch('GTFS_MATCH_CRON', '0 3 * * * Europe/Budapest') %>" # no-op unless GTFS_ENABLED=true
++  class: "Gtfs::MatchRecentJob"
++  queue: gtfs
++
++gtfs_sync_all_feeds_job:
++  cron: "<%= ENV.fetch('GTFS_SYNC_CRON', '30 3 * * * Europe/Budapest') %>" # no-op unless GTFS_ENABLED=true
++  class: "Gtfs::SyncAllFeedsJob"
++  queue: gtfs

@@ -1,0 +1,31 @@
+--- a/app/javascript/controllers/maps/maplibre_controller.js
++++ b/app/javascript/controllers/maps/maplibre_controller.js
+@@ -74,6 +74,9 @@
+     "anomaliesToggle",
+     "familyToggle",
+     "flightsToggle",
++    "transitToggle",
++    "transitModeSelect",
++    "walkLegsToggle",
+     "tracksToggle",
+     // Globe projection
+     "globeToggle",
+@@ -1436,6 +1439,18 @@
+   toggleFlights(event) {
+     return this.layerVisibilityManager.toggleFlights(event)
+   }
++
++  toggleTransit(event) {
++    return this.layerVisibilityManager.toggleTransit(event)
++  }
++
++  changeTransitMode(event) {
++    return this.layerVisibilityManager.changeTransitMode(event)
++  }
++
++  toggleWalkLegs(event) {
++    return this.layerVisibilityManager.toggleWalkLegs(event)
++  }
+   toggleAnomalies(event) {
+     return this.layerVisibilityManager.toggleAnomalies(event)
+   }

@@ -1,0 +1,11 @@
+--- a/app/javascript/maps_maplibre/utils/settings_manager.js
++++ b/app/javascript/maps_maplibre/utils/settings_manager.js
+@@ -70,6 +70,8 @@
+   Areas: "areasEnabled",
+   Tracks: "tracksEnabled",
+   Flights: "flightsEnabled",
++  Transit: "transitEnabled",
++  "Walking legs": "walkLegsEnabled",
+   "Fog of War": "fogEnabled",
+   "Scratch map": "scratchEnabled",
+   "Family Members": "familyEnabled",

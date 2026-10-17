@@ -1,0 +1,29 @@
+--- a/app/javascript/controllers/maps/maplibre/map_data_manager.js
++++ b/app/javascript/controllers/maps/maplibre/map_data_manager.js
+@@ -73,6 +73,8 @@
+           areasGeoJSON: EMPTY_GEOJSON,
+           placesGeoJSON: EMPTY_GEOJSON,
+           flightsGeoJSON: EMPTY_GEOJSON,
++          transitGeoJSON: EMPTY_GEOJSON,
++          walkLegsGeoJSON: EMPTY_GEOJSON,
+         },
+         isCurrent,
+       )
+@@ -300,6 +302,8 @@
+       places: "places",
+       photos: "photos",
+       flights: "flights",
++      transit: "transit",
++      walkLegs: "walkLegs",
+     }
+     const layerName = layerMap[source]
+     if (!layerName) return
+@@ -358,6 +362,8 @@
+         data.placesGeoJSON,
+         data.flightsGeoJSON,
+         isCurrent,
++        data.transitGeoJSON,
++        data.walkLegsGeoJSON,
+       )
+       if (!isCurrent()) return
+ 

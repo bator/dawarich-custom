@@ -1,0 +1,52 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "9db7ba2d8f31b2dce51881c5e8236c2a275301b347a3f82a744f25de9a9bca29",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/transit_walk_leg.rb",
+      "line": 73,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "where(:id => ids).update_all(\"drawn = #{drawn_sql}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "TransitWalkLeg",
+        "method": "TransitWalkLeg.refresh_drawn!"
+      },
+      "user_input": "drawn_sql",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (GTFS walk review A-8-4): DRAWN_ASSIGNMENT is built once at class load from string constants (TransitWalkLeg.drawn_sql with its default column name); no request or user input reaches it. ids are bound by where(id:)."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "83c5daaf6af848bb896af17ffa8bb4dd5ea08a46e4a7b43bf722219b1b1587bf",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/transit_walk_leg.rb",
+      "line": 79,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "where(\"ST_AsBinary(transit_walk_legs.drawn) IS DISTINCT FROM ST_AsBinary(#{drawn_sql})\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "TransitWalkLeg",
+        "method": "stale_drawn"
+      },
+      "user_input": "drawn_sql",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (GTFS walk review A-9-3): STALE_DRAWN_SQL is a frozen constant built once at class load from string constants (TransitWalkLeg.drawn_sql with its default column name); no request or user input reaches it."
+    }
+  ],
+  "updated": "2026-10-11 15:30:00 +0200",
+  "brakeman_version": "8.0.6"
+}

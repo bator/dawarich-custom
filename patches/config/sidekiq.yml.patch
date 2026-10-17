@@ -1,0 +1,8 @@
+--- a/config/sidekiq.yml
++++ b/config/sidekiq.yml
+@@ -23,4 +23,5 @@
+   - digests
+   - achievements
+   - route_videos
++  - gtfs
+   - low_priority

@@ -1,0 +1,123 @@
+hu:
+  settings:
+    navigation:
+      transit: Közösségi közlekedés
+    transit:
+      show:
+        title: Közösségi közlekedés felismerése (GTFS)
+        intro: A Dawarich összeveti a rögzített pontjaidat a menetrendekkel, és megjelöli a felismert utazásokat (vonal, megállók, idők). Minden ezen a szerveren fut; a pontjaid nem kerülnek máshová, és nem módosulnak.
+        disabled_globally: Ezen a példányon ki van kapcsolva a menetrendek importja (GTFS_ENABLED). Kérd meg az adminisztrátort, hogy kapcsolja be.
+        enabled_label: Közösségi közlekedés felismerése (GTFS)
+        feeds_label: Használt menetrendek
+        feeds_hint: Ha egyiket sem jelölöd be, minden elérhető menetrend használatban lesz.
+        min_confidence_label: Minimális megbízhatóság a megjelenítéshez
+        min_confidence_hint: Az ennél bizonytalanabb utazások rejtve maradnak (a megerősítettek mindig látszanak).
+        save: Mentés
+        status_title: Menetrendek
+        feed_name: Menetrend
+        last_import: Utolsó import
+        validity: Érvényes
+        no_feeds: Még nincs importált menetrend.
+        never: soha
+        expired: lejárt
+        expiring_soon: hamarosan lejár
+        attribution_title: Adatforrások és licencek
+        attribution_missing: "%{feed}: nincs megadva forrásmegjelölés vagy licenc; az adminisztrátornak kell kitöltenie."
+        licence: licenc
+        last_match: 'Utoljára illesztett nap: %{date} (%{status})'
+        backfill_status: 'Előzmények illesztése: %{status}, %{days} nap kész'
+        rematch_title: A teljes előzmény újraillesztése
+        rematch_hint: Minden napot újra feldolgoz, amelyet a tárolt menetrendek még lefednek. Ez sokáig tart.
+        rematch_button: Újraillesztés a teljes előzményre
+        rematch_confirm: Biztosan újraillesszük az összes korábbi napot? A háttérben fut, és sokáig tarthat.
+        rides_link: Utazásaim
+    transit_controller:
+      saved: A közösségi közlekedés beállításai elmentve.
+      rematch_started: Elindult a teljes előzmény újraillesztése.
+      rate_limited: Várj egy kicsit, mielőtt újabb újraillesztést indítasz.
+      disabled: Előbb kapcsold be a közösségi közlekedés felismerését.
+  transit_segments:
+    index:
+      title: Közösségi közlekedési utazások
+      disabled: A közösségi közlekedés felismerése ki van kapcsolva. A beállításokban bekapcsolhatod.
+      settings_link: Beállítások
+      empty: Ebben az időszakban nincs utazás.
+      period: Időszak
+      days: "Az elmúlt %{count} nap"
+      show_uncertain: Csak a bizonytalanok
+      filter: Szűrés
+      previous: Újabbak
+      next: Régebbiek
+      total: "%{count} utazás"
+    card:
+      uncertain: Bizonytalan
+      confirmed: Megerősítve
+      auto: Felismerve
+      chosen: Másik járatra cserélve, jóváhagyásra vár
+      confidence: "Megbízhatóság %{value}%"
+      delay_late: "kb. %{minutes} perc késés"
+      delay_early: "kb. %{minutes} perccel korábban"
+      on_time: pontosan
+      minutes: "%{count} perc"
+      km: "%{value} km"
+      confirm: Megerősít
+      reject: Elutasít
+      undo: Visszavonás
+      other_trip: Másik járat
+      choose: Ezt választom
+      no_alternatives: Más járat nem illeszkedik erre az utazásra.
+      on_map: Megnyitás a térképen
+      reason_no_intermediate_stops: Nincs köztes megálló, az útvonal nem ellenőrizhető.
+      reason_no_dwell: Nem állt meg a megállókban (lehet autó vagy bicikli).
+      reason_ambiguous: Más vonal is illeszkedik.
+      reason_trip_ambiguous: Ugyanennek a vonalnak egy másik járata is illeszkedik.
+    update:
+      confirmed: Utazás megerősítve.
+      rejected: Utazás elutasítva; többé nem jelenik meg, és nem illesztjük újra.
+      auto: A döntésedet visszavontuk.
+      chosen: Az utazás a választott járatra módosult, még jóvá kell hagynod.
+      reload: Ez az utazás már nem létezik (újraillesztettük). A listát frissítettük.
+      invalid: "Nem sikerült módosítani az utazást: %{message}"
+  transit_modes:
+    bus: Busz
+    tram: Villamos
+    metro: Metró
+    rail: Vonat
+    suburban: HÉV
+    ferry: Hajó
+    other: Egyéb
+  map:
+    maplibre:
+      transit_settings:
+        transit: Közlekedési szakaszok
+        transit_hint: Felismert utazások (GTFS). A szaggatott vonal bizonytalan.
+        all_modes: Minden jármű
+        walk_legs: Gyaloglás a járművekhez
+        walk_legs_hint: "Járdára illesztve: sötét szaggatott vonal; nyers GPS: világosszürke pontozott."
+  javascript:
+    transit:
+      failed_to_load: Nem sikerült betölteni a közlekedési szakaszokat
+      uncertain: Bizonytalan
+      confirmed: Megerősítve
+      confidence: Megbízhatóság
+      delay: Késés
+      direction: Irány
+      confirm: Megerősít
+      reject: Elutasít
+      open_list: Megnyitás a listában
+      reload: Ezt az utazást újraillesztettük; frissítés.
+      done_confirmed: Utazás megerősítve
+      done_rejected: Utazás elutasítva
+      failed: Nem sikerült módosítani az utazást
+    walk_legs:
+      title: "Gyaloglás"
+      length: "Hossz"
+      source: "Forrás"
+      source_valhalla: "járdára illesztve"
+      source_mixed: "részben illesztve"
+      source_raw: "nyers GPS"
+      part_valhalla: "ez a rész: illesztve"
+      part_raw: "ez a rész: nyers GPS"
+      part_stationary: "egy helyben"
+      accuracy: "a pontok 95%-a ennyin belül:"
+      failed_to_load: "Nem sikerült betölteni a gyalogos szakaszokat"

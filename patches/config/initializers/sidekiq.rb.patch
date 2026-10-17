@@ -1,0 +1,22 @@
+--- a/config/initializers/sidekiq.rb
++++ b/config/initializers/sidekiq.rb
+@@ -70,4 +70,19 @@
+   configured = ENV['REVERSE_GEOCODING_CONCURRENCY'].presence&.to_i
+ 
+   Sidekiq::Queue['reverse_geocoding'].limit = [configured || pool_size / 3, 1].max
++
++  # GTFS imports are heavy (millions of rows) and must not starve the regular
++  # queues: one thread by default (docs/gtfs.md).
++  Sidekiq::Queue['gtfs'].limit = [ENV.fetch('GTFS_QUEUE_CONCURRENCY', 1).to_i, 1].max
++
++  # Every Sidekiq thread may hold a database connection, and the pool size is
++  # RAILS_MAX_THREADS (config/database.yml). A larger concurrency makes jobs,
++  # including GTFS imports, wait for or fail to get a connection (spec 7.9).
++  db_pool = ENV.fetch('RAILS_MAX_THREADS', 10).to_i
++  if pool_size > db_pool
++    Rails.logger.warn(
++      "[Sidekiq] BACKGROUND_PROCESSING_CONCURRENCY (#{pool_size}) is larger than RAILS_MAX_THREADS (#{db_pool}); " \
++      'set RAILS_MAX_THREADS >= BACKGROUND_PROCESSING_CONCURRENCY for the worker'
++    )
++  end
+ end

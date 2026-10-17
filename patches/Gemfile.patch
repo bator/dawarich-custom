@@ -1,0 +1,10 @@
+--- a/Gemfile
++++ b/Gemfile
+@@ -15,6 +15,7 @@
+ gem 'bcrypt', '>= 3.1.22'
+ gem 'bootsnap', require: false
+ gem 'chartkick'
++gem 'chunky_png', '~> 1.4' # Discord ride map images (GTFS); already locked via rqrcode
+ gem 'connection_pool', '< 4' # Pin to 2.x - version 3.0+ has breaking API changes with Rails RedisCacheStore
+ gem 'data_migrate'
+ gem 'devise', '>= 5.0.4'

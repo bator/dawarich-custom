@@ -1,0 +1,89 @@
+# GTFS feed definitions (docs/gtfs.md). `bin/rails gtfs:seed_feeds` creates the
+# rows DISABLED; enable the ones you want in the database/console.
+#
+# url:      fixed download URL (checked with curl on 2026-10-10: HTTP 200)
+# url_env:  environment variable that overrides `url` (or is the only source)
+# auth:     credentials are ONLY read from environment variables
+# attribution / license_url: intentionally left empty - verify each feed's
+#           licence and fill these in by hand before publishing (spec 3, 12.5).
+#
+# name:     shown to users (Discord message, map popups, settings): no
+#           internal notes in it, put those into YAML comments.
+#
+# The 18 regional feeds use the gtfs.menetbrand.com mirror (spec 2.0a), the
+# same source the existing host-side gtfs-feed-sync.py uses. `budapest` and
+# `bkk` contain the same BKK network: enable only one of them.
+feeds:
+  bkk:
+    # Official BKK source.
+    name: BKK Budapest
+    url: https://go.bkk.hu/api/static/v1/public-gtfs/budapest_gtfs.zip
+    url_env: GTFS_BKK_URL
+  mav:
+    # Rail; requires access. No public URL: request access at
+    # https://www.mavcsoport.hu/gtfs-igenybejelento and set GTFS_MAV_URL plus
+    # the HTTP Basic credentials below.
+    name: MÁV-START / GYSEV
+    url_env: GTFS_MAV_URL
+    auth:
+      type: basic
+      username_env: GTFS_MAV_USERNAME
+      password_env: GTFS_MAV_PASSWORD
+    user_agent_env: GTFS_MAV_USER_AGENT
+  bahart:
+    name: BAHART (Balaton ferries)
+    url: https://gtfs.menetbrand.com/download/bahart/
+  budaors:
+    name: Budaörs local buses
+    url: https://gtfs.menetbrand.com/download/budaors/
+  budapest:
+    # menetbrand mirror of the BKK feed.
+    name: BKK Budapest
+    url: https://gtfs.menetbrand.com/download/budapest/
+  dombovar:
+    name: Dombóvár local buses
+    url: https://gtfs.menetbrand.com/download/dombovar/
+  hodmezovasarhely:
+    name: Hódmezővásárhely local buses
+    url: https://gtfs.menetbrand.com/download/hodmezovasarhely/
+  kaposvar:
+    name: Kaposvár (Kaposvári Közlekedési Zrt.)
+    url: https://gtfs.menetbrand.com/download/kaposvar/
+  kiskunhalas:
+    name: Kiskunhalas (Halas Busz)
+    url: https://gtfs.menetbrand.com/download/kiskunhalas/
+  miskolc:
+    name: Miskolc (MVK Zrt.)
+    url: https://gtfs.menetbrand.com/download/miskolc/
+  paks:
+    name: Paks local buses
+    url: https://gtfs.menetbrand.com/download/paks/
+  pecs:
+    name: Pécs (Tüke Busz)
+    url: https://gtfs.menetbrand.com/download/pecs/
+  szeged:
+    name: Szeged (SZKT)
+    url: https://gtfs.menetbrand.com/download/szeged/
+  szekesfehervar:
+    name: Székesfehérvár local buses
+    url: https://gtfs.menetbrand.com/download/szekesfehervar/
+  szombathely:
+    name: Szombathely (Blaguss Agora)
+    url: https://gtfs.menetbrand.com/download/szombathely/
+  tatabanya:
+    name: Tatabánya (T-Busz)
+    url: https://gtfs.menetbrand.com/download/tatabanya/
+  varpalota:
+    name: Várpalota (Thury Busz)
+    url: https://gtfs.menetbrand.com/download/varpalota/
+  veszprem:
+    name: Veszprém (V-Busz)
+    url: https://gtfs.menetbrand.com/download/veszprem/
+  volanbusz:
+    name: Volánbusz (regional and local)
+    url: https://gtfs.menetbrand.com/download/volanbusz/
+    # 8.3 M shape points: set import_shapes to false on small machines.
+    import_shapes: true
+  weekendbus:
+    name: Weekendbus
+    url: https://gtfs.menetbrand.com/download/weekendbus/

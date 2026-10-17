@@ -1,0 +1,129 @@
+<% content_for :title, t('.title') %>
+
+<div class="min-h-content w-full my-5">
+  <%= render 'shared/page_header', title: t('.title') %>
+  <%= render 'settings/navigation' %>
+
+  <% unless Gtfs.enabled? %>
+    <div role="alert" class="alert alert-warning mb-6"><span><%= t('.disabled_globally') %></span></div>
+  <% end %>
+
+  <div class="card bg-base-200 shadow-xl mb-6">
+    <%= form_with url: settings_transit_path, method: :patch, scope: :transit, local: true do |f| %>
+      <div class="card-body">
+        <p class="text-sm opacity-80 mb-4"><%= t('.intro') %></p>
+
+        <div class="form-control mb-4">
+          <label class="label cursor-pointer justify-start gap-3">
+            <%= f.check_box :enabled, { checked: @settings.enabled?, class: 'toggle toggle-primary' }, 'true', 'false' %>
+            <span class="label-text font-semibold"><%= t('.enabled_label') %></span>
+          </label>
+        </div>
+
+        <fieldset class="form-control mb-4">
+          <legend class="label-text font-semibold mb-2"><%= t('.feeds_label') %></legend>
+          <% if @feeds.empty? %>
+            <p class="text-sm opacity-70"><%= t('.no_feeds') %></p>
+          <% else %>
+            <div class="flex flex-wrap gap-x-6 gap-y-2">
+              <% @feeds.each do |feed| %>
+                <label class="label cursor-pointer justify-start gap-2 min-h-11">
+                  <%= check_box_tag 'transit[feed_keys][]', feed.key, Array(@settings.feed_keys).include?(feed.key),
+                                    id: "transit_feed_#{feed.key}", class: 'checkbox checkbox-primary' %>
+                  <span class="label-text"><%= feed.name %></span>
+                </label>
+              <% end %>
+            </div>
+            <span class="text-xs opacity-70 mt-1"><%= t('.feeds_hint') %></span>
+          <% end %>
+        </fieldset>
+
+        <div class="form-control mb-4">
+          <%= f.label :min_confidence, t('.min_confidence_label'), class: 'label-text font-semibold' %>
+          <div class="max-w-md">
+            <%= f.range_field :min_confidence, value: @settings.min_confidence.clamp(0.5, 0.95), min: 0.5, max: 0.95,
+                                               step: 0.05, class: 'range range-primary range-sm', list: 'transit-confidence-ticks' %>
+            <datalist id="transit-confidence-ticks">
+              <% [0.5, 0.6, 0.7, 0.8, 0.9].each do |v| %><option value="<%= v %>" label="<%= (v * 100).round %>%"></option><% end %>
+            </datalist>
+            <div class="flex justify-between text-xs opacity-70 px-1" aria-hidden="true">
+              <span>50%</span><span>60%</span><span>70%</span><span>80%</span><span>90%</span>
+            </div>
+          </div>
+          <span class="text-xs opacity-70 mt-1"><%= t('.min_confidence_hint') %></span>
+        </div>
+
+        <div class="card-actions justify-between items-center">
+          <%= link_to t('.rides_link'), transit_segments_path, class: 'btn btn-ghost' %>
+          <%= f.submit t('.save'), class: 'btn btn-primary' %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl mb-6">
+    <div class="card-body">
+      <h2 class="text-xl font-bold"><%= t('.status_title') %></h2>
+      <% if @feeds.empty? %>
+        <p class="text-sm opacity-70"><%= t('.no_feeds') %></p>
+      <% else %>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead><tr><th><%= t('.feed_name') %></th><th><%= t('.last_import') %></th><th><%= t('.validity') %></th></tr></thead>
+            <tbody>
+              <% @feeds.each do |feed| %>
+                <tr>
+                  <td><%= feed.name %></td>
+                  <td><%= feed.last_imported_at ? l(feed.last_imported_at, format: :short) : t('.never') %></td>
+                  <td>
+                    <%= [feed.valid_from, feed.valid_until].compact.map { |d| l(d) }.join(' – ') %>
+                    <% if feed.expired? %><span class="badge badge-error badge-sm">⚠ <%= t('.expired') %></span>
+                    <% elsif feed.expiring_soon? %><span class="badge badge-warning badge-sm">⚠ <%= t('.expiring_soon') %></span><% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% end %>
+      <% if @state&.last_match.present? %>
+        <p class="text-sm"><%= t('.last_match', date: @state.last_match['date'], status: @state.last_match['status']) %></p>
+      <% end %>
+      <% if @state&.backfill.present? %>
+        <p class="text-sm"><%= t('.backfill_status', status: @state.backfill['status'], days: @state.backfill['days_done'].to_i) %></p>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl mb-6">
+    <div class="card-body">
+      <h2 class="text-xl font-bold"><%= t('.rematch_title') %></h2>
+      <p class="text-sm opacity-80"><%= t('.rematch_hint') %></p>
+      <div class="card-actions justify-end">
+        <%= button_to t('.rematch_button'), rematch_all_settings_transit_path, method: :post,
+                      class: 'btn btn-outline btn-warning', disabled: !@settings.enabled?,
+                      form: { data: { turbo_confirm: t('.rematch_confirm') } } %>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl mb-6">
+    <div class="card-body">
+      <h2 class="text-xl font-bold"><%= t('.attribution_title') %></h2>
+      <ul class="text-sm list-disc ml-5 space-y-1">
+        <% @feeds.each do |feed| %>
+          <% if feed.attribution.present? || feed.license_url.present? %>
+            <li>
+              <%= feed.name %>: <%= feed.attribution %>
+              <% if feed.license_url.present? %>
+                (<%= link_to t('.licence'), feed.license_url, target: '_blank', rel: 'noopener noreferrer', class: 'link' %>)
+              <% end %>
+            </li>
+          <% else %>
+            <li class="opacity-70"><%= t('.attribution_missing', feed: feed.name) %></li>
+          <% end %>
+        <% end %>
+      </ul>
+    </div>
+  </div>
+</div>

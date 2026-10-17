@@ -1,0 +1,63 @@
+--- a/app/javascript/maps_maplibre/services/api_client.js
++++ b/app/javascript/maps_maplibre/services/api_client.js
+@@ -1039,6 +1039,60 @@
+     return response.json()
+   }
+ 
++  /**
++   * Detected public transport rides (GTFS) as GeoJSON for the map layer.
++   */
++  async fetchTransitSegments({ start_at, end_at } = {}) {
++    const params = new URLSearchParams()
++    if (start_at) params.set("start_at", start_at)
++    if (end_at) params.set("end_at", end_at)
++
++    const response = await fetch(
++      `${this.baseURL}/transit/segments/map?${params}`,
++      { headers: this.getHeaders() },
++    )
++    if (!response.ok) {
++      throw new Error(`Failed to fetch transit segments: ${response.statusText}`)
++    }
++    return response.json()
++  }
++
++  /**
++   * Walking legs next to the rides (GTFS walk snap) as GeoJSON, one feature
++   * per drawn part (part_source valhalla / raw / stationary).
++   */
++  async fetchWalkLegs({ start_at, end_at } = {}) {
++    const params = new URLSearchParams()
++    if (start_at) params.set("start_at", start_at)
++    if (end_at) params.set("end_at", end_at)
++
++    const response = await fetch(
++      `${this.baseURL}/transit/walk_legs/map?${params}`,
++      { headers: this.getHeaders() },
++    )
++    if (!response.ok) {
++      throw new Error(`Failed to fetch walking legs: ${response.statusText}`)
++    }
++    return response.json()
++  }
++
++  /**
++   * Confirm / reject a ride. Resolves to { ok, status, reload }; a 404 means
++   * the ride was matched again meanwhile and the layer must be reloaded.
++   */
++  async updateTransitSegment(id, status) {
++    const response = await fetch(`${this.baseURL}/transit/segments/${id}`, {
++      method: "PATCH",
++      headers: this.getHeaders(),
++      body: JSON.stringify({ status }),
++    })
++    return {
++      ok: response.ok,
++      status: response.status,
++      reload: response.status === 404,
++    }
++  }
++
+   getHeaders() {
+     return {
+       Authorization: `Bearer ${this.apiKey}`,
