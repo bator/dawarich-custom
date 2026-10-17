@@ -1,0 +1,83 @@
+<% content_for :title, t('.title') %>
+
+<div class="min-h-content w-full my-5 max-w-5xl mx-auto px-2">
+  <%= render layout: 'shared/page_header', locals: { title: t('.title') } do %>
+    <%= link_to t('.rides_link'), transit_segments_path, class: 'btn btn-sm' %>
+  <% end %>
+
+  <p class="text-sm opacity-70 mb-4"><%= t(current_user.admin? ? '.intro_admin' : '.intro_self') %></p>
+
+  <%= form_with url: transit_devices_path, method: :get, local: true, class: 'flex flex-wrap items-end gap-3 mb-6' do %>
+    <label class="form-control">
+      <span class="label-text"><%= t('.period') %></span>
+      <%= select_tag :days, options_for_select(TransitDevicesController::PERIODS.map { |d| [t('.days', count: d), d] }, @days),
+                     class: 'select select-bordered min-h-11' %>
+    </label>
+    <%= submit_tag t('.filter'), class: 'btn btn-primary min-h-11', name: nil %>
+  <% end %>
+
+  <div class="flex flex-col gap-4">
+    <% @people.each do |user, devices| %>
+      <section class="card bg-base-200 shadow" aria-labelledby="person-<%= user.id %>">
+        <div class="card-body p-4 gap-3">
+          <h2 id="person-<%= user.id %>" class="font-semibold text-lg flex flex-wrap items-baseline gap-2">
+            <%= user.display_name %>
+            <% if user.display_name != user.email %><span class="text-sm font-normal opacity-60"><%= user.email %></span><% end %>
+          </h2>
+
+          <% if devices.empty? %>
+            <p class="text-sm opacity-70"><%= t('.no_reports', count: @days) %></p>
+          <% else %>
+            <div class="overflow-x-auto">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th><%= t('.device') %></th>
+                    <th><%= t('.last_report') %></th>
+                    <th class="hidden md:table-cell"><%= t('.received') %></th>
+                    <th><%= t('.battery') %></th>
+                    <th class="hidden md:table-cell"><%= t('.place') %></th>
+                    <th class="text-right"><%= t('.points') %></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% devices.each do |row| %>
+                    <%
+                      reported = @zone.at(row['timestamp'].to_i)
+                      received = row['received_at'] && @zone.at(row['received_at'].to_i)
+                      age = Time.current - reported
+                      badge = if age <= TransitDevicesController::FRESH then 'badge-success'
+                              elsif age <= TransitDevicesController::STALE then 'badge-warning'
+                              else 'badge-ghost'
+                              end
+                      place = [row['city'], row['country_name']].map(&:presence).compact.join(', ')
+                      battery = row['battery'].to_i if row['battery'].present? && row['battery'].to_i >= 0
+                    %>
+                    <tr>
+                      <td>
+                        <div class="font-medium"><%= row['tracker_id'].presence || t('.unknown_device') %></div>
+                        <% if row['topic'].present? && row['topic'] != row['tracker_id'] %>
+                          <div class="text-xs opacity-60 break-all"><%= row['topic'] %></div>
+                        <% end %>
+                      </td>
+                      <td>
+                        <span class="badge <%= badge %> badge-sm whitespace-nowrap"><%= t('.ago', time: time_ago_in_words(reported)) %></span>
+                        <div class="text-xs opacity-70 whitespace-nowrap"><%= l(reported, format: '%Y-%m-%d %H:%M') %></div>
+                      </td>
+                      <td class="hidden md:table-cell text-xs opacity-70 whitespace-nowrap">
+                        <%= received ? l(received, format: '%Y-%m-%d %H:%M') : '–' %>
+                      </td>
+                      <td class="whitespace-nowrap"><%= battery ? "#{battery}%" : '–' %></td>
+                      <td class="hidden md:table-cell text-sm"><%= place.presence || '–' %></td>
+                      <td class="text-right tabular-nums"><%= number_with_delimiter(row['points_count'].to_i) %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+  </div>
+</div>

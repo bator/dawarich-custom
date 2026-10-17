@@ -1,0 +1,26 @@
+en:
+  transit_segments:
+    index:
+      devices_link: Devices
+  transit_devices:
+    index:
+      title: Last reports by device
+      intro_admin: When each person's devices last sent a live location point. Imported points are not counted.
+      intro_self: When your devices last sent a live location point. Imported points are not counted.
+      rides_link: Rides
+      period: Period
+      days:
+        one: Last day
+        other: "Last %{count} days"
+      filter: Filter
+      no_reports:
+        one: No live report in the last day.
+        other: "No live report in the last %{count} days."
+      device: Device
+      unknown_device: unknown device
+      last_report: Last report
+      received: Received
+      battery: Battery
+      place: Place
+      points: Points
+      ago: "%{time} ago"

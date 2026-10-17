@@ -47,6 +47,7 @@ Rails.application.routes.draw do
                         '/'
                       }, via: :get
 
+  get 'transit/devices', to: 'transit_devices#index', as: :transit_devices
   resources :transit_segments, only: %i[index update], path: 'transit'
 
   namespace :settings do

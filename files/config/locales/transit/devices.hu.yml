@@ -1,0 +1,26 @@
+hu:
+  transit_segments:
+    index:
+      devices_link: Eszközök
+  transit_devices:
+    index:
+      title: Eszközök utolsó jelentése
+      intro_admin: Mikor küldött utoljára élő helyzetpontot az egyes emberek eszköze. Az importált pontok nem számítanak.
+      intro_self: Mikor küldött utoljára élő helyzetpontot az eszközöd. Az importált pontok nem számítanak.
+      rides_link: Utazások
+      period: Időszak
+      days:
+        one: Az elmúlt nap
+        other: "Az elmúlt %{count} nap"
+      filter: Szűrés
+      no_reports:
+        one: Az elmúlt napban nem jelentett élő pontot.
+        other: "Az elmúlt %{count} napban nem jelentett élő pontot."
+      device: Eszköz
+      unknown_device: ismeretlen eszköz
+      last_report: Utolsó jelentés
+      received: Beérkezett
+      battery: Akku
+      place: Hely
+      points: Pontok
+      ago: "%{time} ezelőtt"

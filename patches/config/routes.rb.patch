@@ -1,15 +1,16 @@
 --- a/config/routes.rb
 +++ b/config/routes.rb
-@@ -47,6 +47,8 @@
+@@ -47,6 +47,9 @@
                          '/'
                        }, via: :get
  
++  get 'transit/devices', to: 'transit_devices#index', as: :transit_devices
 +  resources :transit_segments, only: %i[index update], path: 'transit'
 +
    namespace :settings do
      resources :general, only: [:index]
      patch 'general', to: 'general#update'
-@@ -66,6 +68,9 @@
+@@ -66,6 +69,9 @@
      resources :background_jobs, only: %i[index create]
      patch 'background_jobs', to: 'background_jobs#update'
      resource :visits, only: %i[show update]
@@ -19,7 +20,7 @@
      resources :users, only: %i[index show create destroy edit update] do
        member do
          post 'regenerate_api_key'
-@@ -424,6 +429,18 @@
+@@ -424,6 +430,18 @@
  
        resources :flights, only: %i[index]
  
