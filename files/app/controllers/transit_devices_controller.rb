@@ -25,24 +25,34 @@ class TransitDevicesController < ApplicationController
 
   private
 
-  # One row per (user, tracker_id): the newest point and the point count of
-  # the period. Uses index_points_on_user_id_timestamp_lonlat.
+  # One row per (user, tracker_id): point count and newest timestamp from a
+  # GROUP BY, then the newest point itself from a LATERAL lookup at that
+  # (user_id, timestamp) on index_points_on_user_id_timestamp_lonlat, instead
+  # of sorting every live point of the period (DISTINCT ON + window count).
   def last_reports(user_ids, since)
     sql = <<~SQL.squish
-      SELECT DISTINCT ON (r.user_id, r.tracker_id)
-             r.user_id, r.tracker_id, r.topic, r.timestamp,
-             extract(epoch FROM r.created_at)::bigint AS received_at, r.battery, r.city, r.country_name,
-             count(*) OVER (PARTITION BY r.user_id, r.tracker_id) AS points_count
+      SELECT g.user_id, g.tracker_id, g.points_count,
+             l.topic, l.timestamp, extract(epoch FROM l.created_at)::bigint AS received_at,
+             l.battery, l.city, l.country_name
       FROM (
         SELECT p.user_id,
                CASE WHEN p.source_id IS NULL THEN p.tracker_id ELSE ps.tracker_id END AS tracker_id,
-               CASE WHEN p.source_id IS NULL THEN p.topic ELSE ps.topic END AS topic,
-               p.timestamp, p.created_at, p.battery, p.city, p.country_name
+               count(*) AS points_count, max(p.timestamp) AS last_timestamp
         FROM points p
         LEFT JOIN point_sources ps ON ps.id = p.source_id
         WHERE p.user_id IN (:user_ids) AND p.import_id IS NULL AND p.timestamp >= :since
-      ) r
-      ORDER BY r.user_id, r.tracker_id, r.timestamp DESC, r.created_at DESC
+        GROUP BY 1, 2
+      ) g
+      CROSS JOIN LATERAL (
+        SELECT CASE WHEN p.source_id IS NULL THEN p.topic ELSE ps.topic END AS topic,
+               p.timestamp, p.created_at, p.battery, p.city, p.country_name
+        FROM points p
+        LEFT JOIN point_sources ps ON ps.id = p.source_id
+        WHERE p.user_id = g.user_id AND p.timestamp = g.last_timestamp AND p.import_id IS NULL
+          AND (CASE WHEN p.source_id IS NULL THEN p.tracker_id ELSE ps.tracker_id END) IS NOT DISTINCT FROM g.tracker_id
+        ORDER BY p.created_at DESC
+        LIMIT 1
+      ) l
     SQL
     rows = ActiveRecord::Base.connection.select_all(
       ActiveRecord::Base.sanitize_sql_array([sql, { user_ids:, since: }])
