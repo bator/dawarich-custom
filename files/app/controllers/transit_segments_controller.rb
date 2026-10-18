@@ -7,6 +7,14 @@
 class TransitSegmentsController < ApplicationController
   PERIODS = [7, 14, 30, 90, 365].freeze
   PER_PAGE = 50
+  # The columns the summary strip and the uncertain filter need; the rows
+  # themselves (with their debug jsonb) are only loaded for the current page.
+  SUMMARY_COLUMNS = [
+    :id, :status, :confidence, :route_type, :started_at, :ended_at, :distance_m,
+    Arel.sql("transit_segments.debug->>'ambiguous'"),
+    Arel.sql("transit_segments.debug->>'trip_ambiguous'"),
+    Arel.sql("transit_segments.debug->'caps'")
+  ].freeze
 
   before_action :authenticate_user!
 
@@ -14,16 +22,18 @@ class TransitSegmentsController < ApplicationController
     @enabled = Gtfs::UserSettings.new(current_user).enabled?
     @days = PERIODS.include?(params[:days].to_i) ? params[:days].to_i : 14
     @only_uncertain = params[:uncertain] == '1'
-    @page = [params[:page].to_i, 1].max
     @zone = ActiveSupport::TimeZone[current_user.timezone_iana] || Time.zone
-    # One load for the summary strip and the list. TransitSegment#uncertain?
-    # is computed in Ruby (thresholds and debug flags), so the "only
-    # uncertain" filter and the review count need the rows anyway.
-    all = Gtfs::SegmentQuery.new(current_user, start_at: @days.days.ago.to_i).scope.to_a
-    @summary = summary(all)
-    listed = @only_uncertain ? all.select(&:uncertain?) : all
-    @total = listed.size
-    @segments = listed.slice((@page - 1) * PER_PAGE, PER_PAGE) || []
+    scope = Gtfs::SegmentQuery.new(current_user, start_at: @days.days.ago.to_i).scope
+    # TransitSegment#uncertain? is computed in Ruby (thresholds and debug
+    # flags), so the summary and the "only uncertain" filter work from a
+    # pluck of the needed columns; the list itself is paged in SQL.
+    rows = scope.pluck(*SUMMARY_COLUMNS)
+    uncertain_ids = rows.select { |row| uncertain_row?(row) }.map(&:first)
+    @summary = summary(rows, uncertain_ids.size)
+    listed = @only_uncertain ? scope.where(id: uncertain_ids) : scope
+    @total = @only_uncertain ? uncertain_ids.size : rows.size
+    @page = params[:page].to_i.clamp(1, [(@total - 1) / PER_PAGE + 1, 1].max)
+    @segments = listed.offset((@page - 1) * PER_PAGE).limit(PER_PAGE).to_a
     @by_day = @segments.group_by { |segment| @zone.at(segment.started_at).to_date }
     @colors = Api::TransitSegmentSerializer.colors_for(@segments)
   end
@@ -45,13 +55,22 @@ class TransitSegmentsController < ApplicationController
 
   private
 
-  def summary(segments)
+  # Mirrors TransitSegment#uncertain? on a plucked row.
+  def uncertain_row?(row)
+    _id, status, confidence, _route_type, _started_at, _ended_at, _distance_m, ambiguous, trip_ambiguous, caps = row
+    return false unless status == 'auto'
+
+    caps = JSON.parse(caps) if caps.is_a?(String)
+    confidence < Gtfs::Config::AUTO_ACCEPT || ambiguous == 'true' || trip_ambiguous == 'true' || Array(caps).any?
+  end
+
+  def summary(rows, uncertain_count)
     {
-      count: segments.size,
-      duration_s: segments.sum { |s| s.ended_at - s.started_at },
-      distance_m: segments.sum { |s| s.distance_m.to_f },
-      by_mode: segments.map(&:mode).tally.sort_by { |mode, count| [-count, mode] },
-      uncertain: segments.count(&:uncertain?)
+      count: rows.size,
+      duration_s: rows.sum { |row| row[5] - row[4] },
+      distance_m: rows.sum { |row| row[6].to_f },
+      by_mode: rows.map { |row| TransitSegment.mode_for(row[3]) }.tally.sort_by { |mode, count| [-count, mode] },
+      uncertain: uncertain_count
     }
   end
 end
