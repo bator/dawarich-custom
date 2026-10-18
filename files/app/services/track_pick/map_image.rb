@@ -2,7 +2,7 @@
 
 # PNG maps of a day, reusing the GTFS Discord tile renderer without changing it:
 # build_sheet: everything in one image for the Discord message, per GTFS ride (see below).
-# Line (5 px, white outline), every fix as a small dark dot, start = green, end = red.
+# Thin anti-aliased line with a soft white halo, every fix as a small soft dot, start = green, end = red.
 # CT 146 (Atlas) serves no raster tiles / static map to the LAN (only
 # /api/v1/map-match|coverage|version, data/tiles empty), so tiles stay OSM raster;
 # crispness comes from a large canvas at native tile scale.
@@ -14,7 +14,6 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
   MAX_POINTS = 6000
   WIDTH = 1600
   HEIGHT = 1200
-  DOT = ChunkyPNG::Color.from_hex('#1e1e1e')
 
   # One PNG for the whole choice. One row per ride the GTFS matcher found that day (any of
   # the three users; the same route overlapping in time is one ride): panels 1-3 = each
@@ -117,17 +116,14 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
     nil
   end
 
-  # RideMap result drawn by the GTFS renderer, forced onto the shared bbox
-  BoxedRide = Struct.new(:line, :gps, :board, :alight, :bbox) do
-    def coordinates = bbox
-    def empty? = bbox.blank?
-  end
-
+  # the timetable line in its route colour, same anti-aliased style as the GPS (no fixes)
   def self.render_line(segment, map, bbox)
-    w, h = canvas_size
-    Gtfs::Discord::MapRenderer.new(width: w, height: h)
-                              .render(BoxedRide.new(map.line, [], map.board, map.alight, bbox),
-                                      style: :line, color: Gtfs::RouteColors.for_segment(segment).color)
+    hex = Gtfs::RouteColors.hex(Gtfs::RouteColors.for_segment(segment).color) || '#333333'
+    layers = map.line.select { |run| run.size >= 2 }
+                .map { |run| { coords: run, color: hex, width: 2.6, halo: 5.0, dots: false } }
+    return nil if layers.empty?
+
+    new(width: canvas_size[0], height: canvas_size[1]).render(Layers.new(layers, bbox))
   rescue StandardError => e
     Rails.logger.warn("[track_pick] gtfs panel of segment #{segment.id} failed: #{e.class}: #{e.message}")
     nil
@@ -244,19 +240,68 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
 
   def line_style(_color, _style) = {}
 
+  # Anti-aliased: every pixel gets the colour at the share of it the shape covers.
+  LINE_WIDTH = 1.8
+  HALO_WIDTH = 4.2
+  HALO = ChunkyPNG::Color.rgba(255, 255, 255, 190)
+  FIX_RADIUS = 1.1
+  FIX = ChunkyPNG::Color.rgba(30, 30, 30, 170)
+
   def draw_ride(canvas, map, _style)
-    map.layers.each { |l| stroke(canvas, l[:coords], COLORS[:casing], 3) }
+    map.layers.each { |l| aa_polyline(canvas, l[:coords], HALO, l[:halo] || HALO_WIDTH) }
     map.layers.each do |l|
-      stroke(canvas, l[:coords], ChunkyPNG::Color.from_hex(l[:color]), 2)
-      l[:coords].each { |lon, lat| x, y = pixel(lon, lat); stamp(canvas, x, y, 1, DOT) }
+      aa_polyline(canvas, l[:coords], ChunkyPNG::Color.from_hex(l[:color]), l[:width] || LINE_WIDTH)
+      l[:coords].each { |lon, lat| aa_disc(canvas, pixel(lon, lat), FIX_RADIUS, FIX) } unless l[:dots] == false
     end
     marker(canvas, map.layers.first[:coords].first, ChunkyPNG::Color.from_hex('#1A9E3F'))
     marker(canvas, map.layers.last[:coords].last, ChunkyPNG::Color.from_hex('#E4002B'))
   end
 
   def marker(canvas, (lon, lat), color)
-    x, y = pixel(lon, lat)
-    stamp(canvas, x, y, 9, ChunkyPNG::Color::WHITE)
-    stamp(canvas, x, y, 7, color)
+    at = pixel(lon, lat)
+    aa_disc(canvas, at, 6.5, ChunkyPNG::Color::WHITE)
+    aa_disc(canvas, at, 5.0, color)
+  end
+
+  # One polyline: per pixel the largest coverage of any segment (joints do not darken).
+  def aa_polyline(canvas, coords, color, width)
+    pts = coords.map { |lon, lat| pixel(lon, lat) }
+    return if pts.size < 2
+
+    half = width / 2.0
+    cover = {}
+    pts.each_cons(2) do |(x0, y0), (x1, y1)|
+      dx = x1 - x0
+      dy = y1 - y0
+      len2 = (dx * dx) + (dy * dy)
+      xs = ([x0, x1].min - half - 1).floor.clamp(0, @width - 1)..([x0, x1].max + half + 1).ceil.clamp(0, @width - 1)
+      ys = ([y0, y1].min - half - 1).floor.clamp(0, @height - 1)..([y0, y1].max + half + 1).ceil.clamp(0, @height - 1)
+      ys.each do |py|
+        xs.each do |px|
+          t = len2.zero? ? 0.0 : ((((px - x0) * dx) + ((py - y0) * dy)) / len2).clamp(0.0, 1.0)
+          c = half + 0.5 - Math.hypot(px - (x0 + (t * dx)), py - (y0 + (t * dy)))
+          next if c <= 0
+
+          key = (py * @width) + px
+          c = 1.0 if c > 1
+          cover[key] = c if c > (cover[key] || 0)
+        end
+      end
+    end
+    cover.each do |key, c|
+      y, x = key.divmod(@width)
+      canvas.compose_pixel(x, y, ChunkyPNG::Color.fade(color, (c * 255).round))
+    end
+  end
+
+  def aa_disc(canvas, (cx, cy), radius, color)
+    ((cy - radius - 1).floor..(cy + radius + 1).ceil).each do |py|
+      ((cx - radius - 1).floor..(cx + radius + 1).ceil).each do |px|
+        c = radius + 0.5 - Math.hypot(px - cx, py - cy)
+        next if c <= 0
+
+        canvas.compose_pixel(px, py, ChunkyPNG::Color.fade(color, ([c, 1.0].min * 255).round))
+      end
+    end
   end
 end
