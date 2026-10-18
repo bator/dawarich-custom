@@ -29,6 +29,7 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
   RIDE_JOIN = 120 # the same route starting within this of another ride's end is the same ride
   SHEET_BG = ChunkyPNG::Color.from_hex('#ffffff')
   EMPTY_BG = ChunkyPNG::Color.from_hex('#d9d9d9')
+  EMPTY_TEXT = ChunkyPNG::Color.from_hex('#7a7a7a')
   RIDE_LABELS = %w[A B C D].freeze
   Ride = Struct.new(:label, :segment, :from, :to, :line_source, keyword_init: true) # line_source: set by #sheet
 
@@ -132,6 +133,7 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
     left = left0 + (col * (width + GUTTER))
     panel = png ? ChunkyPNG::Image.from_blob(png) : ChunkyPNG::Image.new(width, height, EMPTY_BG)
     canvas.replace!(panel, left, top)
+    Label.text(canvas, 'nincs adat', left + (width / 2), top + (height / 2), EMPTY_TEXT) unless png
     Label.draw(canvas, label, left + 10, top + 10, badge)
   end
 
@@ -147,10 +149,39 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
       'A' => %w[.###. #...# #...# ##### #...# #...# #...#],
       'B' => %w[####. #...# #...# ####. #...# #...# ####.],
       'C' => %w[.###. #...# #.... #.... #.... #...# .###.],
-      'D' => %w[####. #...# #...# #...# #...# #...# ####.]
+      'D' => %w[####. #...# #...# #...# #...# #...# ####.],
+      'n' => %w[..... ..... #.##. ##..# #...# #...# #...#],
+      'i' => %w[..#.. ..... .##.. ..#.. ..#.. ..#.. .###.],
+      'c' => %w[..... ..... .###. #.... #.... #...# .###.],
+      's' => %w[..... ..... .#### #.... .###. ....# ####.],
+      'a' => %w[..... ..... .###. ....# .#### #...# .####],
+      'd' => %w[....# ....# .##.# #..## #...# #...# .####],
+      't' => %w[.#... .#... ###.. .#... .#... .#..# ..##.],
+      ' ' => %w[..... ..... ..... ..... ..... ..... .....]
     }.freeze
+    TEXT_SCALE = 4
 
     module_function
+
+    # plain text (no badge), centred on (cx, cy)
+    def text(canvas, text, cx, cy, color, scale: TEXT_SCALE)
+      glyphs = text.each_char.filter_map { |c| GLYPHS[c] }
+      w = (glyphs.size * 6 * scale) - scale
+      x = cx - (w / 2)
+      top = cy - (7 * scale / 2)
+      glyphs.each do |rows|
+        rows.each_with_index do |row, gy|
+          row.each_char.with_index do |cell, gx|
+            next unless cell == '#'
+
+            px = x + (gx * scale)
+            py = top + (gy * scale)
+            canvas.rect(px, py, px + scale - 1, py + scale - 1, color, color)
+          end
+        end
+        x += 6 * scale
+      end
+    end
 
     def draw(canvas, text, left, top, color)
       glyphs = text.each_char.filter_map { |c| GLYPHS[c] }
