@@ -7,20 +7,24 @@
   started = zone.at(segment.started_at)
   ended = zone.at(segment.ended_at)
   icon = Gtfs::Discord::MessageBuilder::EMOJI.fetch(segment.mode)
-  alternatives = (Array(debug['alternatives']) + Array(debug['trip_alternatives'])).select { |a| a.key?('started_at') }
+  # Only alternatives with a time window can be chosen and shown (older matcher runs stored none).
+  alternatives = (Array(debug['alternatives']) + Array(debug['trip_alternatives'])).select { |a| a['started_at'].present? && a['ended_at'].present? }
   map_link = "/map/v2?#{URI.encode_www_form(start_at: zone.at(segment.started_at - 600).iso8601, end_at: zone.at(segment.ended_at + 600).iso8601)}"
   minutes = ((segment.ended_at - segment.started_at) / 60.0).round
-  status = if segment.uncertain? then :uncertain
+  # A trip the user switched to is "chosen" (awaiting approval) even when its
+  # confidence alone would make it uncertain; it is still opened like one.
+  status = if segment.auto? && segment.user_chosen? then :chosen
+           elsif segment.uncertain? then :uncertain
            elsif segment.confirmed? then :confirmed
-           elsif segment.user_chosen? then :chosen
            else :auto
            end
+  attention = %i[uncertain chosen].include?(status)
   status_badge = {
     uncertain: ['badge-warning', '⚠'], confirmed: ['badge-success', '✔'], chosen: ['badge-info', '🔁'], auto: ['badge-ghost', '·']
   }.fetch(status)
 %>
-<li id="<%= dom_id(segment) %>" class="border-b border-base-200 last:border-b-0 <%= 'bg-warning/5 rounded-box' if status == :uncertain %>">
-  <details class="group" <%= 'open' if status == :uncertain %>>
+<li id="<%= dom_id(segment) %>" class="border-b border-base-200 last:border-b-0 <%= 'bg-warning/5 rounded-box' if attention %>">
+  <details class="group" <%= 'open' if attention %>>
     <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer rounded-box px-2 py-2 hover:bg-base-200
                     grid grid-cols-[4.5rem_auto_1fr_auto] sm:grid-cols-[6.5rem_auto_1fr_auto_auto] items-center gap-x-3 min-h-11">
       <span class="tabular-nums text-sm leading-tight">

@@ -83,9 +83,12 @@ class Gtfs::SegmentReview
     key = ->(a) { [a['feed_id'].to_s, a['trip_gtfs_id']] }
     alternatives = [previous] + Array(debug['alternatives']).reject { |a| key[a] == key[alt] }
     trip_alternatives = Array(debug['trip_alternatives']).reject { |a| key[a] == key[alt] }
+    # The scorer's caps (no intermediate stop, no dwell) belong to the old
+    # trip; cleared with the ambiguity flags so the ride shows as "chosen",
+    # not "uncertain", until the user approves it.
     merged = debug.merge(alt.slice('service_date', 'scheduled_departure_secs', 'scheduled_arrival_secs', 'delay_secs'))
                   .merge('alternatives' => alternatives, 'trip_alternatives' => trip_alternatives,
-                         'ambiguous' => false, 'trip_ambiguous' => false, 'chosen_by_user' => true)
+                         'ambiguous' => false, 'trip_ambiguous' => false, 'caps' => [], 'chosen_by_user' => true)
     with_review(merged, :auto).tap { |d| d['review']['action'] = 'choose' }
   end
 
