@@ -44,6 +44,9 @@
           <% end %>
         </div>
       </div>
+      <% if @summary[:uncertain].positive? %>
+        <p class="text-xs opacity-70"><%= t('.uncertain_note', count: @summary[:uncertain]) %></p>
+      <% end %>
       <% if @summary[:by_mode].any? %>
         <ul class="flex flex-wrap gap-2" role="list">
           <% @summary[:by_mode].each do |mode, count| %>

@@ -78,12 +78,15 @@ class TransitSegmentsController < ApplicationController
     confidence < Gtfs::Config::AUTO_ACCEPT || ambiguous == 'true' || trip_ambiguous == 'true' || Array(caps).any?
   end
 
+  # Counts and totals of the counted rides only, like /transit/stats: an
+  # uncertain ride is waiting for a decision, so it is only "to review".
   def summary(rows, uncertain_count)
+    counted = rows.reject { |row| uncertain_row?(row) }
     {
-      count: rows.size,
-      duration_s: rows.sum { |row| row[5] - row[4] },
-      distance_m: rows.sum { |row| row[6].to_f },
-      by_mode: rows.map { |row| TransitSegment.mode_for(row[3]) }.tally.sort_by { |mode, count| [-count, mode] },
+      count: counted.size,
+      duration_s: counted.sum { |row| row[5] - row[4] },
+      distance_m: counted.sum { |row| row[6].to_f },
+      by_mode: counted.map { |row| TransitSegment.mode_for(row[3]) }.tally.sort_by { |mode, count| [-count, mode] },
       uncertain: uncertain_count
     }
   end

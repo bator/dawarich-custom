@@ -7,7 +7,7 @@
   km = ->(meters) { "#{number_with_precision(meters / 1000.0, precision: meters < 10_000 ? 1 : 0, delimiter: ' ')} km" }
   emoji = Gtfs::Discord::MessageBuilder::EMOJI
   defaults = Api::TransitSegmentSerializer::DEFAULT_COLORS
-  max_bar = [@histogram.map(&:last).max.to_i, 1].max
+  max_bar = [@histogram.map { |_date, count, _partial| count }.max.to_i, 1].max
 %>
 
 <div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
@@ -60,21 +60,29 @@
   </section>
 
   <% if @stats.count.zero? %>
-    <p class="opacity-70"><%= t('transit_segments.index.empty') %></p>
+    <p class="opacity-70"><%= t(@stats.to_review.positive? ? '.all_uncertain' : 'transit_segments.index.empty', count: @stats.to_review) %></p>
   <% else %>
     <section class="card bg-base-200 shadow mb-4" aria-labelledby="stats-histogram">
       <div class="card-body p-4 gap-3">
         <h2 id="stats-histogram" class="font-semibold"><%= t(@bucket == :month ? '.per_month' : '.per_week') %></h2>
         <ol class="flex items-end gap-1 h-36" role="list">
-          <% @histogram.each do |date, count| %>
-            <% label = @bucket == :month ? l(date, format: '%Y-%m') : l(date, format: '%m.%d') %>
+          <% @histogram.each do |date, count, partial| %>
+            <%
+              label = @bucket == :month ? l(date, format: '%Y-%m') : l(date, format: '%m.%d')
+              detail = t('transit_segments.index.day_rides', count:)
+              detail = "#{detail} (#{t('.partial_bucket', date: l(@zone.at(@since.to_i).to_date, format: '%m.%d'))})" if partial
+              bar = if count.zero? then 'bg-primary opacity-20'
+                    elsif partial then 'bg-primary/40 border-2 border-dashed border-primary'
+                    else 'bg-primary'
+                    end
+            %>
             <li class="flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1"
-                title="<%= label %>: <%= t('transit_segments.index.day_rides', count:) %>">
+                title="<%= label %>: <%= detail %>">
               <span class="text-[10px] tabular-nums opacity-70"><%= count if count.positive? %></span>
-              <span class="w-full rounded-t bg-primary <%= 'opacity-20' if count.zero? %>"
+              <span class="w-full rounded-t <%= bar %>"
                     style="height: <%= count.zero? ? 2 : (count * 100.0 / max_bar).round(1) %>%"></span>
-              <span class="text-[10px] tabular-nums opacity-60 truncate w-full text-center"><%= label %></span>
-              <span class="sr-only"><%= t('transit_segments.index.day_rides', count:) %></span>
+              <span class="text-[10px] tabular-nums opacity-60 truncate w-full text-center"><%= partial ? '…' : '' %><%= label %></span>
+              <span class="sr-only"><%= detail %></span>
             </li>
           <% end %>
         </ol>

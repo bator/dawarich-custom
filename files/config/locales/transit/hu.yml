@@ -63,6 +63,9 @@ hu:
         one: "%{count} ellenőrizendő"
         other: "%{count} ellenőrizendő"
       all_reviewed: Nincs ellenőrizendő
+      uncertain_note:
+        one: "Az összesítés nem tartalmazza a %{count} bizonytalan utazást, amíg nem döntesz róla."
+        other: "Az összesítés nem tartalmazza a %{count} bizonytalan utazást, amíg nem döntesz róluk."
       empty_uncertain: Ebben az időszakban nincs bizonytalan utazás.
       today: Ma
       yesterday: Tegnap

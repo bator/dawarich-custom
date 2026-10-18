@@ -9,6 +9,10 @@ hu:
       rides_link: Utazások
       devices_link: Eszközök
       counted_note: Csak a megerősített és az automatikusan elfogadott utazások. A bizonytalanok az „ellenőrizendő” számban szerepelnek.
+      all_uncertain:
+        one: "Nincs számolt utazás az időszakban: az egyetlen utazás még bizonytalan, a döntésedre vár."
+        other: "Nincs számolt utazás az időszakban: mind a %{count} utazás még bizonytalan, a döntésedre vár."
+      partial_bucket: "részleges, %{date}-tól"
       totals: Az időszak összesítése
       per_week: Utazások hetente
       per_month: Utazások havonta

@@ -63,6 +63,9 @@ en:
         one: "%{count} to review"
         other: "%{count} to review"
       all_reviewed: Nothing to review
+      uncertain_note:
+        one: "The totals leave out the %{count} uncertain ride until you decide about it."
+        other: "The totals leave out the %{count} uncertain rides until you decide about them."
       empty_uncertain: No uncertain rides in this period.
       today: Today
       yesterday: Yesterday

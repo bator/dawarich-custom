@@ -43,16 +43,18 @@ class Gtfs::PeriodStats
   def top_alighting = top(rides.map(&:alighting_stop_name))
 
   # Ride counts per local week (Monday) or per month, oldest first, with
-  # empty buckets filled in: [[Date, count], ...]
+  # empty buckets filled in: [[Date, count, partial], ...]. The first bucket
+  # is partial when the period starts inside it (only rides from `from` are
+  # counted), so the view can mark its bar.
   def histogram(from:, by:)
     step = by == :month ? ->(d) { d.next_month } : ->(d) { d + 7 }
-    start = by == :month ? from.beginning_of_month : from.beginning_of_week
+    start = bucket(from, by)
     counts = rides.map { |s| bucket(@zone.at(s.started_at).to_date, by) }.tally
     buckets = []
     date = start
     today = @zone.today
     while date <= today
-      buckets << [date, counts.fetch(date, 0)]
+      buckets << [date, counts.fetch(date, 0), date == start && start < from]
       date = step.call(date)
     end
     buckets
