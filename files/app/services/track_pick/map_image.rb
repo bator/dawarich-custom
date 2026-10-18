@@ -2,7 +2,7 @@
 
 # PNG maps of a day, reusing the GTFS Discord tile renderer without changing it:
 # build_sheet: everything in one image for the Discord message, per GTFS ride (see below).
-# Thin line (3 px, white outline), every fix as a small dark dot, start = green, end = red.
+# Line (5 px, white outline), every fix as a small dark dot, start = green, end = red.
 # CT 146 (Atlas) serves no raster tiles / static map to the LAN (only
 # /api/v1/map-match|coverage|version, data/tiles empty), so tiles stay OSM raster;
 # crispness comes from a large canvas at native tile scale.
@@ -21,8 +21,8 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
   # user's GPS in the ride's time window, 4 (A, B, ...) = the timetable line with its two
   # stops, all four with the same bounding box so they compare. Without a ride: one row,
   # the three whole days with a common bounding box. A user without points gets a grey panel.
-  PANEL = [600, 450].freeze
-  SMALL_PANEL = [480, 360].freeze
+  # panel sizes, largest first: the first sheet under the upload limit is sent
+  PANELS = [[1200, 900], [1000, 750], [800, 600], [600, 450]].freeze
   GUTTER = 6
   MAX_RIDES = 4
   RIDE_MARGIN = 180 # seconds of GPS shown before and after a ride
@@ -54,10 +54,14 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
   end
 
   def self.build_sheet(comparison, rides = self.rides(comparison))
-    png = sheet(comparison, rides, *PANEL)
-    return png if png.bytesize <= UPLOAD_LIMIT - UPLOAD_MARGIN
+    png = nil
+    PANELS.each do |w, h|
+      png = sheet(comparison, rides, w, h)
+      return png if png.bytesize <= UPLOAD_LIMIT - UPLOAD_MARGIN
 
-    sheet(comparison, rides, *SMALL_PANEL)
+      warn "track_pick: sheet at #{w}x#{h} panels is #{png.bytesize / 1024} KB, trying smaller"
+    end
+    png
   end
 
   def self.sheet(comparison, rides, panel_w, panel_h)
@@ -133,8 +137,9 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
     left = left0 + (col * (width + GUTTER))
     panel = png ? ChunkyPNG::Image.from_blob(png) : ChunkyPNG::Image.new(width, height, EMPTY_BG)
     canvas.replace!(panel, left, top)
-    Label.text(canvas, 'nincs adat', left + (width / 2), top + (height / 2), EMPTY_TEXT) unless png
-    Label.draw(canvas, label, left + 10, top + 10, badge)
+    scale = [width / 120, 4].max # badge ~ 8 % of the panel height at any panel size
+    Label.text(canvas, 'nincs adat', left + (width / 2), top + (height / 2), EMPTY_TEXT, scale:) unless png
+    Label.draw(canvas, label, left + (2 * scale), top + (2 * scale), badge, scale:)
   end
 
   # Big panel label ("1", "2b"): 5x7 glyphs scaled up on a coloured badge with a white border.
@@ -183,26 +188,27 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
       end
     end
 
-    def draw(canvas, text, left, top, color)
+    def draw(canvas, text, left, top, color, scale: SCALE)
       glyphs = text.each_char.filter_map { |c| GLYPHS[c] }
       return if glyphs.empty?
 
-      w = (glyphs.size * 5 * SCALE) + ((glyphs.size - 1) * SCALE) + (2 * PAD)
-      h = (7 * SCALE) + (2 * PAD)
+      pad = scale * PAD / SCALE
+      w = (glyphs.size * 5 * scale) + ((glyphs.size - 1) * scale) + (2 * pad)
+      h = (7 * scale) + (2 * pad)
       canvas.rect(left - 3, top - 3, left + w + 2, top + h + 2, ChunkyPNG::Color::WHITE, ChunkyPNG::Color::WHITE)
       canvas.rect(left, top, left + w - 1, top + h - 1, color, color)
-      x = left + PAD
+      x = left + pad
       glyphs.each do |rows|
         rows.each_with_index do |row, gy|
           row.each_char.with_index do |cell, gx|
             next unless cell == '#'
 
-            px = x + (gx * SCALE)
-            py = top + PAD + (gy * SCALE)
-            canvas.rect(px, py, px + SCALE - 1, py + SCALE - 1, ChunkyPNG::Color::WHITE, ChunkyPNG::Color::WHITE)
+            px = x + (gx * scale)
+            py = top + pad + (gy * scale)
+            canvas.rect(px, py, px + scale - 1, py + scale - 1, ChunkyPNG::Color::WHITE, ChunkyPNG::Color::WHITE)
           end
         end
-        x += 6 * SCALE
+        x += 6 * scale
       end
     end
   end
@@ -239,9 +245,9 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
   def line_style(_color, _style) = {}
 
   def draw_ride(canvas, map, _style)
-    map.layers.each { |l| stroke(canvas, l[:coords], COLORS[:casing], 2) }
+    map.layers.each { |l| stroke(canvas, l[:coords], COLORS[:casing], 3) }
     map.layers.each do |l|
-      stroke(canvas, l[:coords], ChunkyPNG::Color.from_hex(l[:color]), 1)
+      stroke(canvas, l[:coords], ChunkyPNG::Color.from_hex(l[:color]), 2)
       l[:coords].each { |lon, lat| x, y = pixel(lon, lat); stamp(canvas, x, y, 1, DOT) }
     end
     marker(canvas, map.layers.first[:coords].first, ChunkyPNG::Color.from_hex('#1A9E3F'))
