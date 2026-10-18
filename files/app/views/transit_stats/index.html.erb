@@ -11,10 +11,8 @@
 %>
 
 <div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
-  <%= render layout: 'shared/page_header', locals: { title: t('.title') } do %>
-    <%= link_to t('transit_stats.index.rides_link'), transit_segments_path(days: @days), class: 'btn btn-sm' %>
-    <%= link_to t('transit_stats.index.devices_link'), transit_devices_path, class: 'btn btn-sm btn-ghost' %>
-  <% end %>
+  <%= render 'shared/page_header', title: t('.title') %>
+  <%= render 'shared/transit_tabs', active: :stats, days: @days %>
 
   <% unless @enabled %>
     <div role="alert" class="alert alert-info mb-6">

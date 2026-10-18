@@ -1,0 +1,23 @@
+<%#
+  Tabs of the transit pages, same order everywhere; only the current page is
+  highlighted. Full i18n keys: this partial is rendered from several views.
+    render 'shared/transit_tabs', active: :rides, days: @days
+%>
+<%
+  days = local_assigns[:days]
+  tabs = [
+    [:rides, t('transit_tabs.rides'), transit_segments_path(days:)],
+    [:stats, t('transit_tabs.stats'), transit_stats_path(days:)],
+    [:devices, t('transit_tabs.devices'), transit_devices_path]
+  ]
+  tabs << [:feeds, t('transit_tabs.feeds'), transit_feeds_path] if current_user.admin?
+  tabs << [:settings, t('transit_tabs.settings'), settings_transit_path]
+%>
+<nav class="overflow-x-auto -mt-3 mb-6" aria-label="<%= t('transit_tabs.label') %>">
+  <div class="tabs tabs-boxed w-fit flex-nowrap">
+    <% tabs.each do |key, label, path| %>
+      <%= link_to label, path, class: "tab whitespace-nowrap #{'tab-active' if key == active}",
+                               aria: { current: (key == active ? 'page' : nil) } %>
+    <% end %>
+  </div>
+</nav>

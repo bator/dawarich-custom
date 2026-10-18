@@ -1,9 +1,8 @@
 <% content_for :title, t('.title') %>
 
-<div class="min-h-content w-full my-5 max-w-5xl mx-auto px-2">
-  <%= render layout: 'shared/page_header', locals: { title: t('.title') } do %>
-    <%= link_to t('transit_devices.index.rides_link'), transit_segments_path, class: 'btn btn-sm' %>
-  <% end %>
+<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+  <%= render 'shared/page_header', title: t('.title') %>
+  <%= render 'shared/transit_tabs', active: :devices %>
 
   <p class="text-sm opacity-70 mb-4"><%= t(current_user.admin? ? '.intro_admin' : '.intro_self') %></p>
 

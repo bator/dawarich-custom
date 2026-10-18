@@ -1,0 +1,8 @@
+en:
+  transit_tabs:
+    label: Transit pages
+    rides: Rides
+    stats: Statistics
+    devices: Devices
+    feeds: Timetables
+    settings: Settings
