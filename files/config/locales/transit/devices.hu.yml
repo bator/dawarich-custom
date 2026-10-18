@@ -1,13 +1,9 @@
 hu:
-  transit_segments:
-    index:
-      devices_link: Eszközök
   transit_devices:
     index:
       title: Eszközök utolsó jelentése
       intro_admin: Mikor küldött utoljára élő helyzetpontot az egyes emberek eszköze. Az importált pontok nem számítanak.
       intro_self: Mikor küldött utoljára élő helyzetpontot az eszközöd. Az importált pontok nem számítanak.
-      rides_link: Utazások
       period: Időszak
       days:
         one: Az elmúlt nap

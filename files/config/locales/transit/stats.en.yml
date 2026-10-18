@@ -1,13 +1,7 @@
 en:
-  transit_segments:
-    index:
-      stats_link: Statistics
-      feeds_link: Timetables
   transit_stats:
     index:
       title: Transit statistics
-      rides_link: Rides
-      devices_link: Devices
       counted_note: Confirmed and automatically accepted rides only. Uncertain rides are shown as "to review".
       all_uncertain:
         one: "No counted ride in this period: the only ride is still uncertain and waits for your decision."

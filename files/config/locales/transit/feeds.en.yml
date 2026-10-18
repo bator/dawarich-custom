@@ -2,7 +2,6 @@ en:
   transit_feeds:
     index:
       title: Timetables (GTFS)
-      rides_link: Rides
       intro: Read-only status of the timetable feeds, the background jobs and the history matching. Red means the timetable has expired, yellow that it ends within %{days} days.
       feeds:
         one: "%{count} feed"

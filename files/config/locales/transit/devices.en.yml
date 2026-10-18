@@ -1,13 +1,9 @@
 en:
-  transit_segments:
-    index:
-      devices_link: Devices
   transit_devices:
     index:
       title: Last reports by device
       intro_admin: When each person's devices last sent a live location point. Imported points are not counted.
       intro_self: When your devices last sent a live location point. Imported points are not counted.
-      rides_link: Rides
       period: Period
       days:
         one: Last day
