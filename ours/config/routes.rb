@@ -48,6 +48,8 @@ Rails.application.routes.draw do
                       }, via: :get
 
   get 'transit/devices', to: 'transit_devices#index', as: :transit_devices
+  get 'transit/stats', to: 'transit_stats#index', as: :transit_stats
+  get 'transit/feeds', to: 'transit_feeds#index', as: :transit_feeds
   resources :transit_segments, only: %i[index update], path: 'transit'
 
   namespace :settings do

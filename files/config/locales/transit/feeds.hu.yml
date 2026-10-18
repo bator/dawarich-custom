@@ -1,0 +1,52 @@
+hu:
+  transit_feeds:
+    index:
+      title: Menetrendek (GTFS)
+      rides_link: Utazások
+      intro: A menetrend-források, a háttérfeladatok és az előzmények illesztésének állapota (csak olvasható). Piros, ha a menetrend lejárt, sárga, ha %{days} napon belül lejár.
+      feeds:
+        one: "%{count} forrás"
+        other: "%{count} forrás"
+      feed: Forrás
+      state: Állapot
+      version: Verzió
+      last_checked: Utolsó ellenőrzés
+      last_imported: Utolsó import
+      valid: Érvényes eddig
+      rows: Sorok
+      enabled: bekapcsolva
+      disabled: kikapcsolva
+      status_importing: importálás
+      status_failed: hiba
+      expired_ago:
+        one: 1 napja lejárt
+        other: "%{count} napja lejárt"
+      days_left:
+        one: még 1 nap
+        other: "még %{count} nap"
+      row_stops: megálló
+      row_routes: vonal
+      row_trips: járat
+      row_stop_times: megállási idő
+      jobs_title: "Háttérfeladatok (%{queue} sor)"
+      running:
+        one: 1 fut
+        other: "%{count} fut"
+      queued:
+        one: 1 vár
+        other: "%{count} vár"
+      retries:
+        one: 1 újrapróbálás
+        other: "%{count} újrapróbálás"
+      no_jobs: Nincs futó vagy várakozó feladat.
+      since: "%{time} óta"
+      more_queued: "és még %{count}"
+      backfills_title: Előzmények illesztése felhasználónként
+      backfill_running: fut
+      backfill_done: kész
+      backfill_cancelled: megszakítva
+      backfill_never: még nem futott
+      progress: "%{percent}% kész"
+      backfill_detail: "most: %{cursor} · %{from} → %{until} · %{done}/%{total} nap"
+      finished: "befejezve: %{time}"
+      updated: "frissítve %{time} ezelőtt"

@@ -1,0 +1,164 @@
+<% content_for :title, t('.title') %>
+<%
+  hours_minutes = lambda do |seconds|
+    minutes = (seconds / 60.0).round
+    minutes >= 60 ? t('transit_segments.index.hours_minutes', hours: minutes / 60, minutes: minutes % 60) : t('transit_segments.card.minutes', count: minutes)
+  end
+  km = ->(meters) { "#{number_with_precision(meters / 1000.0, precision: meters < 10_000 ? 1 : 0, delimiter: ' ')} km" }
+  emoji = Gtfs::Discord::MessageBuilder::EMOJI
+  defaults = Api::TransitSegmentSerializer::DEFAULT_COLORS
+  max_bar = [@histogram.map(&:last).max.to_i, 1].max
+%>
+
+<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+  <%= render layout: 'shared/page_header', locals: { title: t('.title') } do %>
+    <%= link_to t('transit_stats.index.rides_link'), transit_segments_path(days: @days), class: 'btn btn-sm' %>
+    <%= link_to t('transit_stats.index.devices_link'), transit_devices_path, class: 'btn btn-sm btn-ghost' %>
+  <% end %>
+
+  <% unless @enabled %>
+    <div role="alert" class="alert alert-info mb-6">
+      <span><%= t('transit_segments.index.disabled') %></span>
+      <%= link_to t('transit_segments.index.settings_link'), settings_transit_path, class: 'btn btn-sm' %>
+    </div>
+  <% end %>
+
+  <%= form_with url: transit_stats_path, method: :get, local: true, class: 'flex flex-wrap items-end gap-3 mb-4' do %>
+    <label class="form-control">
+      <span class="label-text"><%= t('transit_segments.index.period') %></span>
+      <%= select_tag :days, options_for_select(TransitStatsController::PERIODS.map { |d| [t('transit_segments.index.days', count: d), d] }, @days),
+                     class: 'select select-bordered select-sm min-h-11' %>
+    </label>
+    <%= submit_tag t('transit_segments.index.filter'), class: 'btn btn-primary btn-sm min-h-11', name: nil %>
+    <p class="text-xs opacity-70 ml-auto max-w-xs"><%= t('.counted_note') %></p>
+  <% end %>
+
+  <section class="card bg-base-200 shadow mb-4" aria-label="<%= t('.totals') %>">
+    <div class="card-body p-4">
+      <div class="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+        <div>
+          <div class="text-3xl font-bold tabular-nums"><%= @stats.count %></div>
+          <div class="text-xs opacity-70"><%= t('transit_segments.index.rides', count: @stats.count) %></div>
+        </div>
+        <div>
+          <div class="text-3xl font-bold tabular-nums"><%= hours_minutes.call(@stats.duration_s) %></div>
+          <div class="text-xs opacity-70"><%= t('transit_segments.index.on_board') %></div>
+        </div>
+        <div>
+          <div class="text-3xl font-bold tabular-nums"><%= km.call(@stats.distance_m) %></div>
+          <div class="text-xs opacity-70"><%= t('transit_segments.index.distance') %></div>
+        </div>
+        <div class="ml-auto self-center">
+          <% if @stats.to_review.positive? %>
+            <%= link_to transit_segments_path(days: @days, uncertain: '1'), class: 'btn btn-sm btn-outline btn-warning' do %>
+              ⚠ <%= t('transit_segments.index.to_review', count: @stats.to_review) %>
+            <% end %>
+          <% else %>
+            <span class="badge badge-success badge-outline gap-1">✔ <%= t('transit_segments.index.all_reviewed') %></span>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <% if @stats.count.zero? %>
+    <p class="opacity-70"><%= t('transit_segments.index.empty') %></p>
+  <% else %>
+    <section class="card bg-base-200 shadow mb-4" aria-labelledby="stats-histogram">
+      <div class="card-body p-4 gap-3">
+        <h2 id="stats-histogram" class="font-semibold"><%= t(@bucket == :month ? '.per_month' : '.per_week') %></h2>
+        <ol class="flex items-end gap-1 h-36" role="list">
+          <% @histogram.each do |date, count| %>
+            <% label = @bucket == :month ? l(date, format: '%Y-%m') : l(date, format: '%m.%d') %>
+            <li class="flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1"
+                title="<%= label %>: <%= t('transit_segments.index.day_rides', count:) %>">
+              <span class="text-[10px] tabular-nums opacity-70"><%= count if count.positive? %></span>
+              <span class="w-full rounded-t bg-primary <%= 'opacity-20' if count.zero? %>"
+                    style="height: <%= count.zero? ? 2 : (count * 100.0 / max_bar).round(1) %>%"></span>
+              <span class="text-[10px] tabular-nums opacity-60 truncate w-full text-center"><%= label %></span>
+              <span class="sr-only"><%= t('transit_segments.index.day_rides', count:) %></span>
+            </li>
+          <% end %>
+        </ol>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <section class="card bg-base-200 shadow" aria-labelledby="stats-modes">
+        <div class="card-body p-4 gap-2">
+          <h2 id="stats-modes" class="font-semibold"><%= t('.by_mode') %></h2>
+          <table class="table table-sm">
+            <tbody>
+              <% @stats.by_mode.each do |mode, row| %>
+                <tr>
+                  <td><span aria-hidden="true"><%= emoji.fetch(mode) %></span> <%= t("transit_modes.#{mode}") %></td>
+                  <td class="text-right tabular-nums"><%= row[:count] %></td>
+                  <td class="text-right tabular-nums whitespace-nowrap"><%= hours_minutes.call(row[:duration_s]) %></td>
+                  <td class="text-right tabular-nums whitespace-nowrap opacity-70"><%= km.call(row[:distance_m]) %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card bg-base-200 shadow" aria-labelledby="stats-feeds">
+        <div class="card-body p-4 gap-2">
+          <h2 id="stats-feeds" class="font-semibold"><%= t('.by_feed') %></h2>
+          <table class="table table-sm">
+            <tbody>
+              <% @stats.by_feed.each do |feed, row| %>
+                <tr>
+                  <td><%= feed&.name || '–' %></td>
+                  <td class="text-right tabular-nums"><%= row[:count] %></td>
+                  <td class="text-right tabular-nums whitespace-nowrap"><%= hours_minutes.call(row[:duration_s]) %></td>
+                  <td class="text-right tabular-nums whitespace-nowrap opacity-70"><%= km.call(row[:distance_m]) %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="card bg-base-200 shadow mb-4" aria-labelledby="stats-lines">
+      <div class="card-body p-4 gap-2">
+        <h2 id="stats-lines" class="font-semibold"><%= t('.top_lines') %></h2>
+        <ol class="flex flex-col gap-1" role="list">
+          <% @stats.top_lines.each do |row| %>
+            <%
+              segment = row[:segment]
+              color, text_color = @colors[[segment.feed_id, segment.route_gtfs_id]]
+              hex = ->(value) { (v = value.to_s.delete_prefix('#')).match?(/\A\h{6}\z/) ? "##{v.upcase}" : nil }
+              color = hex.call(color) || defaults.fetch(segment.mode)
+              text_color = hex.call(text_color) || '#FFFFFF'
+            %>
+            <li class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 py-1 border-b border-base-300 last:border-b-0">
+              <span class="badge font-bold min-w-12 justify-center gap-1 border-0" style="background-color: <%= color %>; color: <%= text_color %>">
+                <span aria-hidden="true" class="text-xs"><%= emoji.fetch(segment.mode) %></span><%= row[:line] %>
+              </span>
+              <span class="text-sm truncate opacity-80"><%= t("transit_modes.#{segment.mode}") %> · <%= segment.feed&.name %></span>
+              <span class="text-sm tabular-nums whitespace-nowrap"><%= t('transit_segments.index.day_rides', count: row[:count]) %></span>
+              <span class="text-sm tabular-nums whitespace-nowrap opacity-70"><%= hours_minutes.call(row[:duration_s]) %></span>
+            </li>
+          <% end %>
+        </ol>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <% { boarding: @stats.top_boarding, alighting: @stats.top_alighting }.each do |kind, stops| %>
+        <section class="card bg-base-200 shadow" aria-labelledby="stats-<%= kind %>">
+          <div class="card-body p-4 gap-2">
+            <h2 id="stats-<%= kind %>" class="font-semibold"><%= t(".top_#{kind}") %></h2>
+            <ol class="flex flex-col gap-1 list-decimal ml-5 text-sm">
+              <% stops.each do |name, count| %>
+                <li><span class="flex justify-between gap-2"><span class="truncate"><%= name %></span><span class="tabular-nums opacity-70"><%= count %></span></span></li>
+              <% end %>
+            </ol>
+          </div>
+        </section>
+      <% end %>
+    </div>
+  <% end %>
+</div>

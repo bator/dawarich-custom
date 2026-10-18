@@ -1,0 +1,19 @@
+en:
+  transit_segments:
+    index:
+      stats_link: Statistics
+      feeds_link: Timetables
+  transit_stats:
+    index:
+      title: Transit statistics
+      rides_link: Rides
+      devices_link: Devices
+      counted_note: Confirmed and automatically accepted rides only. Uncertain rides are shown as "to review".
+      totals: Totals of the period
+      per_week: Rides per week
+      per_month: Rides per month
+      by_mode: By vehicle
+      by_feed: By operator
+      top_lines: Most used lines
+      top_boarding: Most frequent boarding stops
+      top_alighting: Most frequent alighting stops
