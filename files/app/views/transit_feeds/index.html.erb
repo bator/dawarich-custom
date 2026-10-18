@@ -1,6 +1,17 @@
 <% content_for :title, t('.title') %>
 <%
   stamp = ->(time) { time ? l(time.in_time_zone(@zone), format: '%Y-%m-%d %H:%M') : '–' }
+  # The backfill state is free-form jsonb written by jobs; a bad date must not break the page.
+  date = lambda do |value|
+    value.present? ? Date.iso8601(value.to_s) : nil
+  rescue ArgumentError, TypeError
+    nil
+  end
+  time = lambda do |value|
+    value.present? ? Time.zone.iso8601(value.to_s) : nil
+  rescue ArgumentError, TypeError
+    nil
+  end
   row_labels = %w[gtfs_stops gtfs_routes gtfs_trips gtfs_stop_times]
 %>
 
@@ -96,7 +107,7 @@
         <div class="flex flex-wrap gap-2 text-sm">
           <span class="badge badge-info badge-outline"><%= t('.running', count: @running.size) %></span>
           <span class="badge badge-outline"><%= t('.queued', count: @queue_size) %></span>
-          <span class="badge <%= @retries.positive? ? 'badge-warning' : 'badge-outline' %>"><%= t('.retries', count: @retries) %></span>
+          <span class="badge <%= @retries.positive? ? 'badge-warning' : 'badge-outline' %>"><%= t('.retries', count: @retries) %><%= '+' if @retries_capped %></span>
         </div>
         <% if @running.empty? && @queued.empty? %>
           <p class="text-sm opacity-70"><%= t('.no_jobs') %></p>
@@ -128,8 +139,8 @@
         <ul class="flex flex-col gap-3" role="list">
           <% @backfills.each do |user, state| %>
             <%
-              from = state['from'] && Date.parse(state['from'])
-              oldest = state['until'] && Date.parse(state['until'])
+              from = date.call(state['from'])
+              oldest = date.call(state['until'])
               total = from && oldest ? [(from - oldest).to_i + 1, 1].max : nil
               done = state['days_done'].to_i
               percent = total ? [(done * 100.0 / total).round, 100].min : nil
@@ -147,8 +158,8 @@
                 <div class="text-xs opacity-70 tabular-nums">
                   <%= t('.backfill_detail', cursor: state['cursor'] || '–', from: state['from'] || '–', until: state['until'] || '–',
                                             done:, total: total || '?') %>
-                  <% if state['finished_at'] %> · <%= t('.finished', time: stamp.call(Time.zone.parse(state['finished_at']))) %>
-                  <% elsif state['updated_at'] %> · <%= t('.updated', time: time_ago_in_words(Time.zone.parse(state['updated_at']))) %><% end %>
+                  <% if (finished = time.call(state['finished_at'])) %> · <%= t('.finished', time: stamp.call(finished)) %>
+                  <% elsif (updated = time.call(state['updated_at'])) %> · <%= t('.updated', time: time_ago_in_words(updated)) %><% end %>
                 </div>
               <% end %>
             </li>
