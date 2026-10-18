@@ -109,7 +109,7 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
 
   # the timetable line and the two stops only (no GPS), or nil
   def self.ride_line(segment)
-    map = Gtfs::Discord::RideMap.new(segment).call
+    map = TrackPick::RideLine.new(segment).call # RideMap + shape of a current trip for older rides
     map.line.flatten(1).size >= 2 ? map : nil
   rescue StandardError => e
     Rails.logger.warn("[track_pick] ride map of segment #{segment.id} failed: #{e.class}: #{e.message}")

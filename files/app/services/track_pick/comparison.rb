@@ -73,6 +73,7 @@ class TrackPick::Comparison
         FROM points
         WHERE user_id = ? AND timestamp >= ? AND timestamp < ? AND lonlat IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM track_pick_copies tc WHERE tc.target_point_id = points.id) -- K1: copied by a pick
+          AND points.tracker_id IS DISTINCT FROM 'track-pick-gtfs' -- written from a timetable line by a pick
         ORDER BY timestamp
       SQL
     ).map { |ts, lon, lat| [ts.to_i, lon.to_f, lat.to_f] }
@@ -94,8 +95,10 @@ class TrackPick::Comparison
 
   def copied_count(user, from, to)
     ActiveRecord::Base.connection.select_value(
-      "SELECT count(*) FROM track_pick_copies tc JOIN points p ON p.id = tc.target_point_id " \
-      "WHERE tc.target_user_id = #{user.id.to_i} AND p.timestamp >= #{from.to_i} AND p.timestamp < #{to.to_i}"
+      "SELECT (SELECT count(*) FROM track_pick_copies tc JOIN points p ON p.id = tc.target_point_id " \
+      "WHERE tc.target_user_id = #{user.id.to_i} AND p.timestamp >= #{from.to_i} AND p.timestamp < #{to.to_i}) + " \
+      "(SELECT count(*) FROM points p WHERE p.user_id = #{user.id.to_i} AND p.tracker_id = 'track-pick-gtfs' " \
+      "AND p.timestamp >= #{from.to_i} AND p.timestamp < #{to.to_i})"
     ).to_i
   end
 

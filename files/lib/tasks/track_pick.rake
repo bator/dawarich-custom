@@ -97,4 +97,11 @@ namespace :track_pick do
         end
     puts "#{dry ? 'would insert' : 'inserted'} #{n} points"
   end
+
+  desc 'Show again the target points a pick hid for a ride: track_pick:unhide[YYYY-MM-DD]'
+  task :unhide, [:date] => :environment do |_, args|
+    date = Date.iso8601(args[:date])
+    n = TrackPick::Hider.new(date).unhide
+    puts "#{n} points shown again for #{date} (the decision itself stays; copied points stay)"
+  end
 end

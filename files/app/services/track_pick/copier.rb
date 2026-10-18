@@ -5,7 +5,8 @@
 # skipped when the target already has a point with the same timestamp
 # (and ON CONFLICT DO NOTHING for the unique (user_id, timestamp, lonlat)).
 # scope: :all, :inside or :outside the fixed inner-city bbox (TrackPick::Comparison::BUDAPEST),
-# so "whole day from A, inner city from B" is two copies in one transaction.
+# so "whole day from A, inner city from B" is two copies in one transaction; window/except
+# split the day by rides (a ride from another user or from the timetable, TrackPick::GtfsPoints).
 class TrackPick::Copier
   SCOPES = %i[all inside outside].freeze
 
@@ -13,13 +14,18 @@ class TrackPick::Copier
                country_id country_name course course_accuracy geodata lonlat mode ssid topic tracker_id
                trigger velocity vertical_accuracy reverse_geocoded_at].freeze
 
-  def initialize(date, source_user, target_user = TrackPick::Config.target_user, scope: :all)
+  # window: [from, to] epoch seconds, only points inside it (a ride copied from this user);
+  # except: [[from, to], ...] windows left out (rides that come from another source)
+  def initialize(date, source_user, target_user = TrackPick::Config.target_user, scope: :all, window: nil,
+                 except: [])
     raise ArgumentError, "unknown scope #{scope}" unless SCOPES.include?(scope)
 
     @date = date
     @source = source_user
     @target = target_user
     @scope = scope
+    @window = window
+    @except = except
   end
 
   # number of points that would be / were inserted
@@ -32,8 +38,9 @@ class TrackPick::Copier
       SELECT DISTINCT ON (s.timestamp) s.*
       FROM points s
       WHERE s.user_id = #{@source.id.to_i} AND s.timestamp >= #{from.to_i} AND s.timestamp < #{to.to_i}
-        AND s.lonlat IS NOT NULL#{scope_sql}
-        AND NOT EXISTS (SELECT 1 FROM points t WHERE t.user_id = #{@target.id.to_i} AND t.timestamp = s.timestamp)
+        AND s.lonlat IS NOT NULL#{scope_sql}#{window_sql}
+        AND NOT EXISTS (SELECT 1 FROM points t WHERE t.user_id = #{@target.id.to_i} AND t.timestamp = s.timestamp
+                        AND t.anomaly IS NOT TRUE) -- a hidden point (TrackPick::Hider, GPS noise) frees its second
       ORDER BY s.timestamp, s.id
     SQL
     return conn.select_value("SELECT count(*) FROM (#{candidates}) c").to_i if dry_run
@@ -70,6 +77,13 @@ class TrackPick::Copier
   end
 
   private
+
+  def window_sql
+    sql = +''
+    sql << "\n        AND s.timestamp BETWEEN #{@window[0].to_i} AND #{@window[1].to_i}" if @window
+    @except.each { |from, to| sql << "\n        AND s.timestamp NOT BETWEEN #{from.to_i} AND #{to.to_i}" }
+    sql
+  end
 
   def scope_sql
     return '' if @scope == :all
