@@ -3,6 +3,7 @@
 <div class="min-h-content w-full my-5">
   <%= render 'shared/page_header', title: t('.title') %>
   <%= render 'settings/navigation' %>
+  <%= render 'shared/transit_tabs', active: :settings %>
 
   <% unless Gtfs.enabled? %>
     <div role="alert" class="alert alert-warning mb-6"><span><%= t('.disabled_globally') %></span></div>
