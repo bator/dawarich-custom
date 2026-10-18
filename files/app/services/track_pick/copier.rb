@@ -4,15 +4,22 @@
 # INSERT only: never UPDATE or DELETE points. Dedup: a source point is
 # skipped when the target already has a point with the same timestamp
 # (and ON CONFLICT DO NOTHING for the unique (user_id, timestamp, lonlat)).
+# scope: :all, :inside or :outside the fixed inner-city bbox (TrackPick::Comparison::BUDAPEST),
+# so "whole day from A, inner city from B" is two copies in one transaction.
 class TrackPick::Copier
+  SCOPES = %i[all inside outside].freeze
+
   COLUMNS = %w[accuracy altitude altitude_decimal battery battery_status bssid city connection country
                country_id country_name course course_accuracy geodata lonlat mode ssid topic tracker_id
                trigger velocity vertical_accuracy reverse_geocoded_at].freeze
 
-  def initialize(date, source_user, target_user = TrackPick::Config.target_user)
+  def initialize(date, source_user, target_user = TrackPick::Config.target_user, scope: :all)
+    raise ArgumentError, "unknown scope #{scope}" unless SCOPES.include?(scope)
+
     @date = date
     @source = source_user
     @target = target_user
+    @scope = scope
   end
 
   # number of points that would be / were inserted
@@ -25,7 +32,7 @@ class TrackPick::Copier
       SELECT DISTINCT ON (s.timestamp) s.*
       FROM points s
       WHERE s.user_id = #{@source.id.to_i} AND s.timestamp >= #{from.to_i} AND s.timestamp < #{to.to_i}
-        AND s.lonlat IS NOT NULL
+        AND s.lonlat IS NOT NULL#{scope_sql}
         AND NOT EXISTS (SELECT 1 FROM points t WHERE t.user_id = #{@target.id.to_i} AND t.timestamp = s.timestamp)
       ORDER BY s.timestamp, s.id
     SQL
@@ -60,5 +67,16 @@ class TrackPick::Copier
       User.update_counters(@target.id, points_count: inserted) if inserted.positive?
       inserted
     end
+  end
+
+  private
+
+  def scope_sql
+    return '' if @scope == :all
+
+    bp = TrackPick::Comparison::BUDAPEST # same inclusive bounds as Comparison.budapest?
+    inside = "ST_Y(s.lonlat::geometry) BETWEEN #{bp[:lat].begin.to_f} AND #{bp[:lat].end.to_f} " \
+             "AND ST_X(s.lonlat::geometry) BETWEEN #{bp[:lon].begin.to_f} AND #{bp[:lon].end.to_f}"
+    @scope == :inside ? "\n        AND (#{inside})" : "\n        AND NOT (#{inside})"
   end
 end

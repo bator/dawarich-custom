@@ -14,9 +14,15 @@ module TrackPick
     SOURCE_EMAILS = %w[minekte@crusand.org toth.bator@crusand.org register@crusand.org].freeze
     # only crusand may click, independent of the GTFS allow-list
     ALLOWED_DISCORD_USER_IDS = %w[212980510203314177].freeze
-    # select menu: trackpick:<date> (+ value); old buttons: trackpick:<date>:<user id|skip>
-    CUSTOM_ID = /\Atrackpick:(\d{4}-\d{2}-\d{2})(?::(\d+|skip))?\z/
+    # trackpick:<date>:<action>. Actions (the selection state travels in the custom_ids):
+    #   d:<bp>         whole-day select (value = user id), <bp> = current inner-city pick
+    #   b:<day>        inner-city select (value = user id | same), <day> = current whole-day pick
+    #   ok:<day>:<bp>  confirm; skip = skip the day
+    # Older messages: trackpick:<date> select (value = user id | skip), trackpick:<date>:<user id|skip> buttons.
+    CUSTOM_ID = /\Atrackpick:(\d{4}-\d{2}-\d{2})(?::(.+))?\z/
     CHOICE = /\A(\d+|skip)\z/
+    PICK = /\A(\d+|-)\z/ # a user id, or "-" for nothing picked yet
+    BP_PICK = /\A(\d+|same)\z/
     GAP_SECONDS = 600 # a pause longer than this counts as a gap
     COLORS = ['#E4002B', '#0057B8', '#1A9E3F'].freeze
 

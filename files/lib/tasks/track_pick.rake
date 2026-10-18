@@ -19,33 +19,29 @@ namespace :track_pick do
       n = TrackPick::Copier.new(date, s.user, target).call(dry_run: true)
       puts "  ha #{TrackPick::Config.handle(s.user)} lesz kiválasztva: #{n} új pont kerülne #{TrackPick::Config.handle(target)} fiókjába"
     end
-    images = begin
-      TrackPick::MapImage.build_each(comparison)
+    sheet = begin
+      TrackPick::MapImage.build_sheet(comparison) # one image: 1-3 whole day, 1b-3b inner city
     rescue StandardError => e
-      warn "map images failed: #{e.class}: #{e.message}"
-      []
+      warn "map sheet failed: #{e.class}: #{e.message}"
+      nil
     end
-    budapest = begin
-      TrackPick::MapImage.build_budapest(comparison)
-    rescue StandardError => e
-      warn "budapest maps failed: #{e.class}: #{e.message}"
-      []
-    end
-    images, budapest = TrackPick::MapImage.fit_upload_limit(comparison, images, budapest) # A8
-    payload = TrackPick::Message.payload(comparison, images:, budapest:)
+    payload = TrackPick::Message.payload(comparison, sheet:)
     if (decided = TrackPick::Config.decision(date))
       puts "#{TrackPick::Message.decided_line(decided)} -> no choice offered, nothing posted"
       next
     end
     if dry
       dir = ENV['TRACK_PICK_MAP_DIR'].presence || '/tmp'
-      paths = images.map { |s, png| [s, png, nil] }.concat(budapest.map { |s, png| [s, png, 'bp'] }).map do |s, png, sfx|
-        path = File.join(dir, "#{date.iso8601}-#{TrackPick::Message.filename(s, sfx)}")
-        File.binwrite(path, png)
-        path
+      path = sheet && File.join(dir, TrackPick::Message.sheet_filename(date))
+      File.binwrite(path, sheet) if path
+      puts "DRY RUN: nothing sent, nothing written to the database (map sheet: #{path || 'none'})"
+      puts payload[:embeds].first[:description]
+      payload[:components].each do |row|
+        row[:components].each do |c|
+          items = c[:options]&.map { |o| "#{o[:label]}=#{o[:value]}" } || [c[:label]]
+          puts "#{c[:custom_id]}: #{items.join(' | ')}"
+        end
       end
-      puts "DRY RUN: nothing sent, nothing written to the database (maps: #{paths.join(', ')})"
-      puts "menu: #{payload[:components].first[:components].first[:options].map { |o| "#{o[:label]}=#{o[:value]} (#{o[:description]})" }.join(' | ')}"
       next
     end
     abort 'Discord bot not configured' if TrackPick::Config.token.blank? || TrackPick::Config.channel_id.blank?
@@ -66,7 +62,7 @@ namespace :track_pick do
       next
     end
     begin
-      files = TrackPick::Message.files(images, budapest)
+      files = TrackPick::Message.files(date, sheet)
       msg = Gtfs::Discord::Client.new.post_message(TrackPick::Config.channel_id, payload, files:)
       File.write(marker, "#{msg['id']}\n")
       puts "posted message #{msg['id']}"
@@ -76,12 +72,23 @@ namespace :track_pick do
     end
   end
 
-  desc 'Manual copy without Discord: track_pick:copy[YYYY-MM-DD,SOURCE_USER_ID] (DRY_RUN=1 counts only)'
-  task :copy, %i[date source_id] => :environment do |_, args|
+  desc 'Manual copy without Discord: track_pick:copy[YYYY-MM-DD,SOURCE_USER_ID,BP_USER_ID] ' \
+       '(BP_USER_ID optional: inner city from that user; DRY_RUN=1 counts only)'
+  task :copy, %i[date source_id bp_id] => :environment do |_, args|
     date = Date.iso8601(args[:date])
-    source = TrackPick::Config.source_users.find { |u| u.id == args[:source_id].to_i } or abort 'unknown source'
+    users = TrackPick::Config.source_users.index_by(&:id)
+    source = users[args[:source_id].to_i] or abort 'unknown source'
+    bp = args[:bp_id].present? ? (users[args[:bp_id].to_i] or abort 'unknown inner-city source') : nil
+    bp = nil if bp&.id == source.id
     dry = ENV['DRY_RUN'].present? && ENV['DRY_RUN'] != '0'
-    n = TrackPick::Copier.new(date, source).call(dry_run: dry)
+    n = if bp
+          ActiveRecord::Base.transaction do
+            TrackPick::Copier.new(date, source, scope: :outside).call(dry_run: dry) +
+              TrackPick::Copier.new(date, bp, scope: :inside).call(dry_run: dry)
+          end
+        else
+          TrackPick::Copier.new(date, source).call(dry_run: dry)
+        end
     puts "#{dry ? 'would insert' : 'inserted'} #{n} points"
   end
 end
