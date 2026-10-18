@@ -5,6 +5,8 @@
 # changes go through Gtfs::SegmentReview. A ride that was matched again
 # meanwhile (review A2) gives a notice and a reloaded list.
 class TransitSegmentsController < ApplicationController
+  include ActionView::RecordIdentifier
+
   PERIODS = [7, 14, 30, 90, 365].freeze
   PER_PAGE = 50
   # The columns the summary strip and the uncertain filter need; the rows
@@ -46,14 +48,26 @@ class TransitSegmentsController < ApplicationController
                 review.call(params[:id], params[:review_action])
               end
     notice = params[:trip_gtfs_id].present? ? t('.chosen') : t(".#{segment.status}")
-    redirect_back_or_to transit_segments_path, notice:, status: :see_other
+    redirect_to list_path(anchor: dom_id(segment)), notice:, status: :see_other
   rescue Gtfs::SegmentReview::NotFound
-    redirect_back_or_to transit_segments_path, alert: t('.reload'), status: :see_other
+    redirect_to list_path, alert: t('.reload'), status: :see_other
   rescue Gtfs::SegmentReview::Invalid => e
-    redirect_back_or_to transit_segments_path, alert: t('.invalid', message: e.message), status: :see_other
+    redirect_to list_path(anchor: row_anchor(params[:id])), alert: t('.invalid', message: e.message), status: :see_other
   end
 
   private
+
+  # Back to the filter and page the button was pressed on (the card carries
+  # days / uncertain / page in its forms), scrolled to the changed row, so the
+  # list does not jump to the top.
+  def list_path(anchor: nil)
+    transit_segments_path(params.slice(:days, :uncertain, :page).permit!.to_h.merge(anchor:).compact)
+  end
+
+  # Same as dom_id(segment) for a ride that could not be loaded.
+  def row_anchor(id)
+    "#{TransitSegment.model_name.param_key}_#{id.to_i}"
+  end
 
   # Mirrors TransitSegment#uncertain? on a plucked row.
   def uncertain_row?(row)

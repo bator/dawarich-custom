@@ -1,4 +1,7 @@
 <%
+  # filter: days / uncertain / page of the list, sent back with each review
+  # form so the controller can return to the same page and row.
+  filter = (local_assigns[:filter] || {}).to_h
   data = Api::TransitSegmentSerializer.new(segment, colors:).call
   debug = segment.debug || {}
   started = zone.at(segment.started_at)
@@ -73,12 +76,12 @@
       <div class="flex flex-wrap gap-2">
         <% if segment.auto? %>
           <%= button_to t('transit_segments.card.confirm'), transit_segment_path(segment), method: :patch,
-                        params: { review_action: 'confirm' }, class: 'btn btn-success btn-sm min-h-11' %>
+                        params: filter.merge(review_action: 'confirm'), class: 'btn btn-success btn-sm min-h-11' %>
           <%= button_to t('transit_segments.card.reject'), transit_segment_path(segment), method: :patch,
-                        params: { review_action: 'reject' }, class: 'btn btn-error btn-outline btn-sm min-h-11' %>
+                        params: filter.merge(review_action: 'reject'), class: 'btn btn-error btn-outline btn-sm min-h-11' %>
         <% else %>
           <%= button_to t('transit_segments.card.undo'), transit_segment_path(segment), method: :patch,
-                        params: { review_action: 'reset' }, class: 'btn btn-ghost btn-sm min-h-11' %>
+                        params: filter.merge(review_action: 'reset'), class: 'btn btn-ghost btn-sm min-h-11' %>
         <% end %>
         <%= link_to t('transit_segments.card.on_map'), map_link, class: 'btn btn-ghost btn-sm min-h-11' %>
       </div>
@@ -99,7 +102,7 @@
                   · <%= (alt['confidence'].to_f * 100).round %>%
                 </span>
                 <%= button_to t('transit_segments.card.choose'), transit_segment_path(segment), method: :patch,
-                              params: { trip_gtfs_id: alt['trip_gtfs_id'], feed_id: alt['feed_id'] }, class: 'btn btn-xs min-h-11 sm:min-h-0' %>
+                              params: filter.merge(trip_gtfs_id: alt['trip_gtfs_id'], feed_id: alt['feed_id']), class: 'btn btn-xs min-h-11 sm:min-h-0' %>
               </li>
             <% end %>
           </ul>

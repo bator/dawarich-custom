@@ -89,7 +89,7 @@
           </header>
           <ul class="flex flex-col" role="list">
             <% segments.sort_by(&:started_at).each do |segment| %>
-              <%= render 'card', segment:, colors: @colors, zone: @zone %>
+              <%= render 'card', segment:, colors: @colors, zone: @zone, filter: filter_params.call(page: @page) %>
             <% end %>
           </ul>
         </section>
