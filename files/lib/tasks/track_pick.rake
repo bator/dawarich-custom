@@ -19,13 +19,19 @@ namespace :track_pick do
       n = TrackPick::Copier.new(date, s.user, target).call(dry_run: true)
       puts "  ha #{TrackPick::Config.handle(s.user)} lesz kiválasztva: #{n} új pont kerülne #{TrackPick::Config.handle(target)} fiókjába"
     end
+    rides = begin
+      TrackPick::MapImage.rides(comparison)
+    rescue StandardError => e
+      warn "gtfs rides failed: #{e.class}: #{e.message}"
+      []
+    end
     sheet = begin
-      TrackPick::MapImage.build_sheet(comparison) # one image: 1-3 whole day, 1b-3b inner city
+      TrackPick::MapImage.build_sheet(comparison, rides) # one image, one row per GTFS ride
     rescue StandardError => e
       warn "map sheet failed: #{e.class}: #{e.message}"
       nil
     end
-    payload = TrackPick::Message.payload(comparison, sheet:)
+    payload = TrackPick::Message.payload(comparison, sheet:, rides:)
     if (decided = TrackPick::Config.decision(date))
       puts "#{TrackPick::Message.decided_line(decided)} -> no choice offered, nothing posted"
       next

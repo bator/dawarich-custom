@@ -1,10 +1,7 @@
 # frozen_string_literal: true
 
 # PNG maps of a day, reusing the GTFS Discord tile renderer without changing it:
-# - build_sheet: everything in one image for the Discord message (see below);
-# - build_each: one per user, own bounding box over all of the day's points;
-# - build_budapest: one per user with Budapest points, all with the SAME bbox
-#   (union of the three users' Budapest points) so they are comparable.
+# build_sheet: everything in one image for the Discord message, per GTFS ride (see below).
 # Thin line (3 px, white outline), every fix as a small dark dot, start = green, end = red.
 # CT 146 (Atlas) serves no raster tiles / static map to the LAN (only
 # /api/v1/map-match|coverage|version, data/tiles empty), so tiles stay OSM raster;
@@ -19,73 +16,138 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
   HEIGHT = 1200
   DOT = ChunkyPNG::Color.from_hex('#1e1e1e')
 
-  def self.build_each(comparison)
-    comparison.call.each_with_index.filter_map do |s, i|
-      next if s.coords.size < 2
-
-      [s, render_one(s.coords, i)]
-    end
-  end
-
-  # fixed inner-city bbox, same for every user
-  def self.build_budapest(comparison)
-    bp = TrackPick::Comparison::BUDAPEST
-    bbox = [[bp[:lon].begin, bp[:lat].begin], [bp[:lon].end, bp[:lat].end]]
-    comparison.call.each_with_index.filter_map do |s, i|
-      next if s.bp_coords.size < 2
-
-      [s, render_runs(s.bp_runs, i, bbox:)]
-    end
-  end
-
-  # One PNG for the whole choice: whole-day maps (1, 2, 3) on top, inner-city maps (1b, 2b, 3b)
-  # below, same column = same user. A user without (inner-city) points gets a grey panel.
-  PANEL = [800, 600].freeze
-  SMALL_PANEL = [600, 450].freeze
+  # One PNG for the whole choice. One row per ride the GTFS matcher found that day (any of
+  # the three users; the same route overlapping in time is one ride): panels 1-3 = each
+  # user's GPS in the ride's time window, 4 (A, B, ...) = the timetable line with its two
+  # stops, all four with the same bounding box so they compare. Without a ride: one row,
+  # the three whole days with a common bounding box. A user without points gets a grey panel.
+  PANEL = [600, 450].freeze
+  SMALL_PANEL = [480, 360].freeze
   GUTTER = 6
+  MAX_RIDES = 4
+  RIDE_MARGIN = 180 # seconds of GPS shown before and after a ride
+  RIDE_JOIN = 120 # the same route starting within this of another ride's end is the same ride
   SHEET_BG = ChunkyPNG::Color.from_hex('#ffffff')
   EMPTY_BG = ChunkyPNG::Color.from_hex('#d9d9d9')
+  RIDE_LABELS = %w[A B C D].freeze
+  Ride = Struct.new(:label, :segment, :from, :to, :line_source, keyword_init: true) # line_source: set by #sheet
 
-  def self.build_sheet(comparison)
-    png = sheet(comparison, *PANEL)
-    return png if png.bytesize <= UPLOAD_LIMIT - UPLOAD_MARGIN
-
-    sheet(comparison, *SMALL_PANEL)
+  # rides of the day, oldest first, at most MAX_RIDES; segment = the best match of the ride
+  def self.rides(comparison)
+    from, to = TrackPick::Config.day_range(comparison.date)
+    segs = TransitSegment.where(user_id: comparison.call.map { |s| s.user.id })
+                         .where(started_at: from...to).where.not(status: 'rejected').order(:started_at).to_a
+    groups = []
+    segs.each do |seg|
+      group = groups.find do |g|
+        g.first.route_short_name == seg.route_short_name &&
+          seg.started_at <= g.map(&:ended_at).max + RIDE_JOIN && seg.ended_at + RIDE_JOIN >= g.map(&:started_at).min
+      end
+      group ? group << seg : groups << [seg]
+    end
+    groups.first(MAX_RIDES).each_with_index.map do |g, i|
+      best = g.max_by { |s| [s.status == 'confirmed' ? 1 : 0, s.confidence.to_f] }
+      Ride.new(label: RIDE_LABELS[i], segment: best,
+               from: g.map(&:started_at).min - RIDE_MARGIN, to: g.map(&:ended_at).max + RIDE_MARGIN)
+    end
   end
 
-  def self.sheet(comparison, panel_w, panel_h)
+  def self.build_sheet(comparison, rides = self.rides(comparison))
+    png = sheet(comparison, rides, *PANEL)
+    return png if png.bytesize <= UPLOAD_LIMIT - UPLOAD_MARGIN
+
+    sheet(comparison, rides, *SMALL_PANEL)
+  end
+
+  def self.sheet(comparison, rides, panel_w, panel_h)
     stats = comparison.call.first(3)
-    bp = TrackPick::Comparison::BUDAPEST
-    bbox = [[bp[:lon].begin, bp[:lat].begin], [bp[:lon].end, bp[:lat].end]]
-    cols = [stats.size, 1].max
-    canvas = ChunkyPNG::Image.new((cols * panel_w) + ((cols + 1) * GUTTER), (2 * panel_h) + (3 * GUTTER), SHEET_BG)
+    cols = rides.empty? ? [stats.size, 1].max : stats.size + 1
+    rows = [rides.size, 1].max
+    canvas = ChunkyPNG::Image.new((cols * panel_w) + ((cols + 1) * GUTTER), (rows * panel_h) + ((rows + 1) * GUTTER),
+                                  SHEET_BG)
     with_size(panel_w, panel_h) do
-      stats.each_with_index do |s, i|
-        x = GUTTER + (i * (panel_w + GUTTER))
-        whole = s.coords.size >= 2 ? render_one(s.coords, i) : nil
-        inner = s.bp_coords.size >= 2 ? render_runs(s.bp_runs, i, bbox:) : nil
-        paste(canvas, whole, x, GUTTER, panel_w, panel_h, (i + 1).to_s, i)
-        paste(canvas, inner, x, (2 * GUTTER) + panel_h, panel_w, panel_h, "#{i + 1}b", i)
+      if rides.empty?
+        bbox = bbox_of(stats.flat_map(&:coords))
+        stats.each_with_index do |s, i|
+          png = s.coords.size >= 2 && bbox ? render_one(s.coords, i, bbox:) : nil
+          paste(canvas, png, GUTTER, GUTTER, panel_w, panel_h, (i + 1).to_s, color(i), col: i)
+        end
+      else
+        rides.each_with_index do |ride, r|
+          top = GUTTER + (r * (panel_h + GUTTER))
+          line = ride_line(ride.segment)
+          ride.line_source = line&.line_source
+          windows = stats.map { |s| s.times.zip(s.coords).select { |ts, _| ts.between?(ride.from, ride.to) }.map(&:last) }
+          bbox = bbox_of(windows.flatten(1) + (line ? line.coordinates : []))
+          stats.each_with_index do |_s, i|
+            png = windows[i].size >= 2 && bbox ? render_one(windows[i], i, bbox:) : nil
+            paste(canvas, png, GUTTER, top, panel_w, panel_h, (i + 1).to_s, color(i), col: i)
+          end
+          gtfs = line && bbox ? render_line(ride.segment, line, bbox) : nil
+          paste(canvas, gtfs, GUTTER, top, panel_w, panel_h, ride.label, ChunkyPNG::Color.from_hex('#333333'),
+                col: stats.size)
+        end
       end
     end
     canvas.to_blob(color_mode: ChunkyPNG::COLOR_TRUECOLOR, compression: Zlib::BEST_COMPRESSION)
   end
 
-  def self.paste(canvas, png, left, top, width, height, label, index)
+  def self.color(index) = ChunkyPNG::Color.from_hex(TrackPick::Config::COLORS[index % 3])
+
+  # [[min lon, min lat], [max lon, max lat]] or nil
+  def self.bbox_of(coords)
+    return nil if coords.size < 2
+
+    lons = coords.map(&:first)
+    lats = coords.map(&:last)
+    [[lons.min, lats.min], [lons.max, lats.max]]
+  end
+
+  # the timetable line and the two stops only (no GPS), or nil
+  def self.ride_line(segment)
+    map = Gtfs::Discord::RideMap.new(segment).call
+    map.line.flatten(1).size >= 2 ? map : nil
+  rescue StandardError => e
+    Rails.logger.warn("[track_pick] ride map of segment #{segment.id} failed: #{e.class}: #{e.message}")
+    nil
+  end
+
+  # RideMap result drawn by the GTFS renderer, forced onto the shared bbox
+  BoxedRide = Struct.new(:line, :gps, :board, :alight, :bbox) do
+    def coordinates = bbox
+    def empty? = bbox.blank?
+  end
+
+  def self.render_line(segment, map, bbox)
+    w, h = canvas_size
+    Gtfs::Discord::MapRenderer.new(width: w, height: h)
+                              .render(BoxedRide.new(map.line, [], map.board, map.alight, bbox),
+                                      style: :line, color: Gtfs::RouteColors.for_segment(segment).color)
+  rescue StandardError => e
+    Rails.logger.warn("[track_pick] gtfs panel of segment #{segment.id} failed: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def self.paste(canvas, png, left0, top, width, height, label, badge, col:)
+    left = left0 + (col * (width + GUTTER))
     panel = png ? ChunkyPNG::Image.from_blob(png) : ChunkyPNG::Image.new(width, height, EMPTY_BG)
     canvas.replace!(panel, left, top)
-    Label.draw(canvas, label, left + 12, top + 12, ChunkyPNG::Color.from_hex(TrackPick::Config::COLORS[index % 3]))
+    Label.draw(canvas, label, left + 10, top + 10, badge)
   end
 
   # Big panel label ("1", "2b"): 5x7 glyphs scaled up on a coloured badge with a white border.
   module Label
-    SCALE = 6
-    PAD = 10
+    SCALE = 5
+    PAD = 8
     GLYPHS = {
       '1' => %w[..#.. .##.. ..#.. ..#.. ..#.. ..#.. .###.],
       '2' => %w[.###. #...# ....# ...#. ..#.. .#... #####],
       '3' => %w[####. ....# ....# .###. ....# ....# ####.],
-      'b' => %w[#.... #.... ####. #...# #...# #...# ####.]
+      'b' => %w[#.... #.... ####. #...# #...# #...# ####.],
+      'A' => %w[.###. #...# #...# ##### #...# #...# #...#],
+      'B' => %w[####. #...# #...# ####. #...# #...# ####.],
+      'C' => %w[.###. #...# #.... #.... #.... #...# .###.],
+      'D' => %w[####. #...# #...# #...# #...# #...# ####.]
     }.freeze
 
     module_function
@@ -116,18 +178,6 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
 
   UPLOAD_LIMIT = 10 * 1024 * 1024 # bot upload limit per message
   UPLOAD_MARGIN = 256 * 1024 # payload_json + multipart overhead
-
-  # A8: if the PNGs exceed the limit, re-render at 1200x900; if still too big, drop the inner-city maps.
-  def self.fit_upload_limit(comparison, images, budapest)
-    fits = ->(list) { list.sum { |_, png| png.bytesize } <= UPLOAD_LIMIT - UPLOAD_MARGIN }
-    return [images, budapest] if fits.call(images + budapest)
-
-    small = with_size(1200, 900) { [build_each(comparison), build_budapest(comparison)] }
-    return small if fits.call(small.flatten(1))
-
-    warn 'track_pick: maps over 10 MB even at 1200x900, inner-city maps dropped'
-    [small.first, []]
-  end
 
   def self.with_size(width, height)
     old = [@width, @height]

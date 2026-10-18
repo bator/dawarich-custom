@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 # Discord payload of the daily comparison: one compact embed with one sheet image
-# (whole-day maps 1-3 on top, inner-city maps 1b-3b below), a whole-day select, an
-# inner-city select, Confirm and Skip. Picking in a select only re-renders the
-# controls (UPDATE_MESSAGE); nothing is copied until Confirm. After a decision the
-# message collapses to one line (no embed, no image, no controls), like the GTFS
-# ride panel.
+# (one row per GTFS-matched ride: the three users' GPS in that time window + the
+# timetable line, same bounding box), a whole-day select, an inner-city select,
+# Confirm and Skip. Picking in a select only re-renders the controls
+# (UPDATE_MESSAGE); nothing is copied until Confirm. After a decision the message
+# collapses to one line (no embed, no image, no controls), like the GTFS ride panel.
 module TrackPick::Message
   module_function
 
@@ -17,14 +17,19 @@ module TrackPick::Message
   ROW = 1
   SHEET_SUFFIX = 'sheet'
 
-  def payload(comparison, sheet: nil)
+  def payload(comparison, sheet: nil, rides: [])
     stats = comparison.call
     date = comparison.date
+    footer = if rides.any?
+               'Soronként egy út: 1–3 a GPS abban az időablakban, A/B/… a menetrendi útvonal, közös kivágás. ' \
+                 'Zöld pötty = kezdés, piros = vége.'
+             else
+               'Aznap nincs GTFS-szel azonosított út: 1–3 az egész nap, közös kivágás.'
+             end
     embed = { title: "Track-választás – #{date.iso8601} → #{TrackPick::Config.handle(TrackPick::Config.target_user)}",
-              description: summary(comparison),
+              description: [summary(comparison), ride_lines(rides)].reject(&:blank?).join("\n\n"),
               color: 0x0057B8,
-              footer: { text: 'Felül egész nap (1–3), alul belváros (1b–3b, közös bbox). ' \
-                              'Zöld pötty = kezdés, piros = vége.' } }
+              footer: { text: footer } }
     embed[:image] = { url: "attachment://#{sheet_filename(date)}" } if sheet
     { content: nil, embeds: [embed], components: components(date, stats), allowed_mentions: { parse: [] } }
   end
@@ -42,6 +47,18 @@ module TrackPick::Message
       bp = s.bp_times.size
       bp_text = bp > 1 ? "#{bp} p, #{s.bp_median_gap} s" : 'nincs'
       "#{name} – #{s.count} p, #{format('%.1f', s.km)} km, #{span}, #{s.gaps} szünet · belv.: #{bp_text}"
+    end.join("\n")
+  end
+
+  def ride_lines(rides)
+    zone = TrackPick::Config.zone
+    rides.map do |r|
+      s = r.segment
+      span = "#{Time.zone.at(s.started_at).in_time_zone(zone).strftime('%H:%M')}–" \
+             "#{Time.zone.at(s.ended_at).in_time_zone(zone).strftime('%H:%M')}"
+      note = { 'straight' => ' (nincs menetrendi alak: egyenes a két megálló között)',
+               'stops' => ' (a megállókon át, alak nélkül)', nil => ' (nincs útvonal)' }[r.line_source]
+      "**#{r.label}** #{s.route_short_name}, #{s.boarding_stop_name} → #{s.alighting_stop_name}, #{span}#{note}"
     end.join("\n")
   end
 
