@@ -1,0 +1,93 @@
+<% content_for :title, t('.title') %>
+<%
+  late_s = Gtfs::PunctualityStats::LATE_S
+  tone = lambda do |seconds|
+    if seconds.nil? then ''
+    elsif seconds > late_s then 'text-error'
+    elsif seconds > 120 then 'text-warning'
+    else 'text-success'
+    end
+  end
+  # Bar position of a delay on a -5 .. +15 min scale.
+  scale = ->(seconds) { ((seconds.clamp(-300, 900) + 300) / 1200.0 * 100).round(1) }
+%>
+
+<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+  <%= render 'shared/page_header', title: t('.title') %>
+  <%= render 'shared/transit_tabs', active: :punctuality, days: @days %>
+  <%= render 'shared/transit_period_form', path: transit_punctuality_path, periods: TransitPunctualityController::PERIODS,
+                                           note: t('transit_punctuality.index.note', minutes: late_s / 60) %>
+
+  <% if @punctuality.measured.empty? %>
+    <p class="opacity-70 py-6"><%= t('.empty', count: @days) %></p>
+  <% else %>
+    <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" aria-label="<%= t('.summary') %>">
+      <div class="rounded-box bg-base-200 p-4">
+        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.measured') %></div>
+        <div class="text-2xl sm:text-3xl font-bold tabular-nums mt-1"><%= @punctuality.measured.size %></div>
+        <div class="text-xs opacity-60"><%= t('.of_rides', count: @period_stats.count) %></div>
+      </div>
+      <div class="rounded-box bg-base-200 p-4">
+        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.median') %></div>
+        <div class="text-2xl sm:text-3xl font-bold tabular-nums mt-1 <%= tone.call(@punctuality.median_s) %>"><%= transit_delay(@punctuality.median_s) %></div>
+      </div>
+      <div class="rounded-box bg-base-200 p-4">
+        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.late', minutes: late_s / 60) %></div>
+        <div class="text-2xl sm:text-3xl font-bold tabular-nums mt-1"><%= (@punctuality.late_share * 100).round %>%</div>
+      </div>
+      <div class="rounded-box bg-base-200 p-4">
+        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.lines') %></div>
+        <div class="text-2xl sm:text-3xl font-bold tabular-nums mt-1"><%= @punctuality.lines.size %></div>
+      </div>
+    </section>
+
+    <% if @punctuality.by_daypart.any? %>
+      <section class="card bg-base-200 shadow-sm mb-6" aria-labelledby="punct-daypart">
+        <div class="card-body p-4 gap-2">
+          <h2 id="punct-daypart" class="font-semibold"><%= t('.by_daypart') %></h2>
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <% @punctuality.by_daypart.each do |key, count, median| %>
+              <div class="rounded-box bg-base-100 p-2">
+                <div class="text-xs opacity-70"><%= t(".daypart_#{key}") %></div>
+                <div class="text-lg font-semibold tabular-nums <%= tone.call(median) %>"><%= transit_delay(median) %></div>
+                <div class="text-[11px] opacity-60"><%= t('transit_segments.index.day_rides', count:) %></div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </section>
+    <% end %>
+
+    <section class="card bg-base-200 shadow-sm" aria-labelledby="punct-lines">
+      <div class="card-body p-4 gap-2">
+        <h2 id="punct-lines" class="font-semibold"><%= t('.per_line', min: Gtfs::PunctualityStats::MIN_RIDES) %></h2>
+        <% if @punctuality.lines.empty? %>
+          <p class="text-sm opacity-70"><%= t('.no_lines', min: Gtfs::PunctualityStats::MIN_RIDES) %></p>
+        <% else %>
+          <div class="flex justify-between text-[10px] opacity-50 tabular-nums pl-[7.5rem] pr-[6.5rem] max-sm:hidden">
+            <span>−5</span><span>0</span><span>+5</span><span>+10</span><span>+15 min</span>
+          </div>
+          <ul class="flex flex-col divide-y divide-base-300" role="list">
+            <% @punctuality.lines.each do |line| %>
+              <li class="grid grid-cols-[7rem_1fr] sm:grid-cols-[7rem_1fr_6rem] items-center gap-x-2 gap-y-1 py-2">
+                <span class="flex items-center gap-1"><%= transit_line_badge(line.segment, @colors) %><span class="text-xs opacity-60">×<%= line.count %></span></span>
+                <span class="relative h-3 rounded-full bg-base-100" title="<%= t('.bar_title', median: transit_delay(line.median_s), p90: transit_delay(line.p90_s)) %>">
+                  <span class="absolute inset-y-0 w-px bg-base-content/40" style="left: <%= scale.call(0) %>%"></span>
+                  <span class="absolute inset-y-0 rounded-full bg-warning/40"
+                        style="left: <%= [scale.call(line.median_s), scale.call(line.p90_s)].min %>%; width: <%= (scale.call(line.p90_s) - scale.call(line.median_s)).abs %>%"></span>
+                  <span class="absolute -top-0.5 w-2 h-4 rounded <%= line.median_s > late_s ? 'bg-error' : 'bg-primary' %>"
+                        style="left: calc(<%= scale.call(line.median_s) %>% - 0.25rem)"></span>
+                </span>
+                <span class="text-sm tabular-nums col-start-2 sm:col-start-auto">
+                  <span class="font-semibold <%= tone.call(line.median_s) %>"><%= transit_delay(line.median_s) %></span>
+                  <span class="text-xs opacity-60">· <%= (line.late_share * 100).round %>% &gt;<%= late_s / 60 %>′</span>
+                </span>
+              </li>
+            <% end %>
+          </ul>
+          <p class="text-xs opacity-60"><%= t('.legend') %></p>
+        <% end %>
+      </div>
+    </section>
+  <% end %>
+</div>

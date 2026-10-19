@@ -1,0 +1,15 @@
+<% content_for :title, t('.title') %>
+
+<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+  <%= render 'shared/page_header', title: t('.title') %>
+  <%= render 'shared/transit_tabs', active: :coverage, days: @days %>
+  <%= render 'shared/transit_period_form', path: transit_coverage_path, periods: TransitCoverageController::PERIODS,
+                                           note: t('transit_coverage.index.note') %>
+
+  <%= turbo_frame_tag TransitCoverageController::FRAME, src: transit_coverage_path(days: @days), loading: :lazy do %>
+    <div class="flex items-center gap-3 py-10 justify-center opacity-70" role="status">
+      <span class="loading loading-spinner loading-md"></span>
+      <span><%= t('transit_coverage.index.loading') %></span>
+    </div>
+  <% end %>
+</div>

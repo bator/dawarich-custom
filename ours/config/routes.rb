@@ -50,6 +50,10 @@ Rails.application.routes.draw do
   get 'transit/devices', to: 'transit_devices#index', as: :transit_devices
   get 'transit/stats', to: 'transit_stats#index', as: :transit_stats
   get 'transit/feeds', to: 'transit_feeds#index', as: :transit_feeds
+  get 'transit/commute', to: 'transit_commute#index', as: :transit_commute
+  get 'transit/punctuality', to: 'transit_punctuality#index', as: :transit_punctuality
+  get 'transit/savings', to: 'transit_savings#index', as: :transit_savings
+  get 'transit/coverage', to: 'transit_coverage#index', as: :transit_coverage
   resources :transit_segments, only: %i[index update], path: 'transit'
 
   namespace :settings do

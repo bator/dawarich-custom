@@ -1,0 +1,81 @@
+<% content_for :title, t('.title') %>
+<%
+  s = @savings
+  kg = ->(value) { value.abs >= 100 ? number_with_precision(value, precision: 0, delimiter: ' ') : number_with_precision(value, precision: 1) }
+  ft = ->(value) { "#{number_with_precision(value, precision: 0, delimiter: ' ')} Ft" }
+  emoji = Gtfs::Discord::MessageBuilder::EMOJI
+%>
+
+<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+  <%= render 'shared/page_header', title: t('.title') %>
+  <%= render 'shared/transit_tabs', active: :savings, days: @days %>
+  <%= render 'shared/transit_period_form', path: transit_savings_path, periods: TransitSavingsController::PERIODS,
+                                           note: t('transit_savings.index.note') %>
+
+  <% if s.rides_count.zero? %>
+    <p class="opacity-70 py-6"><%= t('transit_segments.index.empty') %></p>
+  <% else %>
+    <section class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      <div class="rounded-box bg-success/10 border border-success/30 p-5">
+        <div class="text-xs uppercase tracking-wide text-success"><%= t('.co2_saved') %></div>
+        <div class="text-4xl font-bold tabular-nums mt-1"><%= kg.call(s.saved_kg) %> kg</div>
+        <div class="text-sm opacity-70 mt-1"><%= t('.co2_detail', transit: kg.call(s.transit_kg), car: kg.call(s.car_kg), km: number_with_precision(s.km, precision: 0, delimiter: ' ')) %></div>
+        <% transit_pct = s.car_kg.positive? ? (s.transit_kg / s.car_kg * 100).clamp(0, 100) : 0 %>
+        <div class="mt-3 flex flex-col gap-1 text-xs">
+          <div class="flex items-center gap-2"><span class="w-20 opacity-70"><%= t('.transit') %></span><span class="h-2 rounded-full bg-success" style="width: <%= transit_pct.round(1) %>%"></span></div>
+          <div class="flex items-center gap-2"><span class="w-20 opacity-70"><%= t('.car') %></span><span class="h-2 rounded-full bg-base-content/40 flex-1"></span></div>
+        </div>
+      </div>
+      <div class="rounded-box <%= s.saved_ft.positive? ? 'bg-primary/10 border border-primary/30' : 'bg-base-200' %> p-5">
+        <div class="text-xs uppercase tracking-wide <%= 'text-primary' if s.saved_ft.positive? %>"><%= t(s.saved_ft.positive? ? '.money_saved' : '.money_more') %></div>
+        <div class="text-4xl font-bold tabular-nums mt-1"><%= ft.call(s.saved_ft.abs) %></div>
+        <div class="text-sm opacity-70 mt-1">
+          <%= t('.money_detail', car: ft.call(s.car_cost_ft), transit: ft.call(s.transit_cost_ft),
+                                 option: t(s.cheaper_option == :pass ? '.option_pass' : '.option_tickets')) %>
+        </div>
+        <div class="text-xs opacity-60 mt-2">
+          <%= t('.tickets_vs_pass', rides: s.rides_count, tickets: ft.call(s.tickets_ft), passes: s.passes, pass_total: ft.call(s.passes_ft)) %>
+        </div>
+      </div>
+    </section>
+
+    <section class="card bg-base-200 shadow-sm mb-6" aria-labelledby="savings-modes">
+      <div class="card-body p-4 gap-2">
+        <h2 id="savings-modes" class="font-semibold"><%= t('.by_mode') %></h2>
+        <table class="table table-sm">
+          <thead>
+            <tr><th></th><th class="text-right">km</th><th class="text-right"><%= t('.transit_kg') %></th><th class="text-right"><%= t('.car_kg') %></th></tr>
+          </thead>
+          <tbody>
+            <% s.by_mode.each do |mode, km, transit_kg, car_kg| %>
+              <tr>
+                <td><span aria-hidden="true"><%= emoji.fetch(mode) %></span> <%= t("transit_modes.#{mode}") %></td>
+                <td class="text-right tabular-nums"><%= number_with_precision(km, precision: 0, delimiter: ' ') %></td>
+                <td class="text-right tabular-nums"><%= kg.call(transit_kg) %></td>
+                <td class="text-right tabular-nums opacity-70"><%= kg.call(car_kg) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  <% end %>
+
+  <details class="card bg-base-200 shadow-sm">
+    <summary class="card-body p-4 cursor-pointer font-semibold list-none [&::-webkit-details-marker]:hidden"><%= t('.assumptions') %> ▾</summary>
+    <div class="px-4 pb-4 text-sm flex flex-col gap-2">
+      <p class="opacity-70"><%= t('.assumptions_intro') %></p>
+      <table class="table table-xs">
+        <tbody>
+          <tr><td><%= t('.a_car_co2') %></td><td class="tabular-nums"><%= s.car_g_km.round %> g/km</td><td class="text-xs opacity-60">TRANSIT_CO2_CAR_G_KM</td></tr>
+          <% Gtfs::SavingsEstimate::DEFAULT_CO2_G_PKM.each_key do |mode| %>
+            <tr><td><%= emoji.fetch(mode) %> <%= t("transit_modes.#{mode}") %></td><td class="tabular-nums"><%= s.co2_g_pkm(mode).round %> g/<%= t('.pkm') %></td><td class="text-xs opacity-60">TRANSIT_CO2_<%= mode.upcase %>_G_PKM</td></tr>
+          <% end %>
+          <tr><td><%= t('.a_car_cost') %></td><td class="tabular-nums"><%= ft.call(s.car_ft_km) %>/km</td><td class="text-xs opacity-60">TRANSIT_CAR_FT_KM</td></tr>
+          <tr><td><%= t('.a_ticket') %></td><td class="tabular-nums"><%= ft.call(s.ticket_ft) %></td><td class="text-xs opacity-60">TRANSIT_TICKET_FT</td></tr>
+          <tr><td><%= t('.a_pass', days: Gtfs::SavingsEstimate::PASS_DAYS) %></td><td class="tabular-nums"><%= ft.call(s.pass_ft) %></td><td class="text-xs opacity-60">TRANSIT_PASS_FT</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>

@@ -1,0 +1,13 @@
+<%#
+  Period filter of the transit analysis pages.
+    render 'shared/transit_period_form', path: transit_commute_path, periods: TransitPeriodRides::ANALYSIS_PERIODS
+%>
+<%= form_with url: path, method: :get, local: true, class: 'flex flex-wrap items-end gap-3 mb-4' do %>
+  <label class="form-control">
+    <span class="label-text"><%= t('transit_segments.index.period') %></span>
+    <%= select_tag :days, options_for_select(periods.map { |d| [t('transit_segments.index.days', count: d), d] }, @days),
+                   class: 'select select-bordered select-sm min-h-11' %>
+  </label>
+  <%= submit_tag t('transit_segments.index.filter'), class: 'btn btn-primary btn-sm min-h-11', name: nil %>
+  <% if local_assigns[:note] %><p class="text-xs opacity-70 ml-auto max-w-sm"><%= note %></p><% end %>
+<% end %>

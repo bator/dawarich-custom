@@ -11,6 +11,10 @@
   tabs = [
     [:rides, t('transit_tabs.rides'), transit_segments_path(days: period.call(TransitSegmentsController::PERIODS))],
     [:stats, t('transit_tabs.stats'), transit_stats_path(days: period.call(TransitStatsController::PERIODS))],
+    [:commute, t('transit_tabs.commute'), transit_commute_path(days: period.call(TransitCommuteController::PERIODS))],
+    [:punctuality, t('transit_tabs.punctuality'), transit_punctuality_path(days: period.call(TransitPunctualityController::PERIODS))],
+    [:savings, t('transit_tabs.savings'), transit_savings_path(days: period.call(TransitSavingsController::PERIODS))],
+    [:coverage, t('transit_tabs.coverage'), transit_coverage_path(days: period.call(TransitCoverageController::PERIODS))],
     [:devices, t('transit_tabs.devices'), transit_devices_path(days: period.call(TransitDevicesController::PERIODS))]
   ]
   tabs << [:feeds, t('transit_tabs.feeds'), transit_feeds_path] if current_user.admin?

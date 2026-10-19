@@ -1,0 +1,82 @@
+hu:
+  transit_commute:
+    index:
+      title: Ingázás
+      note: "Rendszeres utak: ugyanaz a fel- és leszálló megálló legalább %{min} alkalommal. Csak megerősített és automatikusan elfogadott utak."
+      empty:
+        one: Az elmúlt napban nincs rendszeres út.
+        other: "Az elmúlt %{count} napban nincs rendszeres út."
+      coverage: "Az alábbi %{count} út adja az utazásaid %{percent}%-át."
+      median: Jellemző menetidő
+      range: Leggyorsabb – leglassabb
+      delay: Jellemző késés
+      late_share: "%{percent}% több mint 5 percet késett"
+      usual: Szokásos indulás
+      usual_detail:
+        one: "1 út, jellemzően %{time}"
+        other: "%{count} út, jellemzően %{time}"
+      by_hour: Indulások óránként
+      by_weekday: Napok szerint
+      weekdays: [H, K, Sze, Cs, P, Szo, V]
+  transit_punctuality:
+    index:
+      title: Vonalak pontossága
+      note: "Késés = mért idő a menetrendhez képest, csak olyan utakból, ahol más járat nem illeszkedik ugyanilyen jól. Késett = %{minutes} percnél több."
+      empty:
+        one: Az elmúlt napban nincs mért késésű út.
+        other: "Az elmúlt %{count} napban nincs mért késésű út."
+      summary: Összesítő
+      measured: Mért utak
+      of_rides:
+        one: "1 útból"
+        other: "%{count} útból"
+      median: Jellemző késés
+      late: "Késett (> %{minutes} perc)"
+      lines: Vonalak
+      by_daypart: Napszak szerint
+      daypart_morning: Reggel 6–9
+      daypart_midday: Napközben 9–15
+      daypart_afternoon: Délután 15–19
+      daypart_evening: Este 19–24
+      daypart_night: Éjjel 0–6
+      per_line: "Vonalanként (legalább %{min} mért út)"
+      no_lines: "Még egyik vonalnak sincs %{min} mért útja."
+      bar_title: "jellemzően %{median}, 90% ezen belül: %{p90}"
+      legend: "Jelölő: jellemző (medián) késés. Sávozott: a 90. percentilisig. Skála −5 … +15 perc."
+  transit_savings:
+    index:
+      title: Megtakarítás (becslés)
+      note: Becslés ugyanarra a távolságra autóval. A feltételezések lent láthatók és állíthatók.
+      co2_saved: Megtakarított CO₂
+      co2_detail: "%{transit} kg közösségi közlekedéssel %{car} kg helyett autóval, %{km} km-en."
+      transit: Közösségi
+      car: Autó
+      money_saved: Megtakarított pénz
+      money_more: Többe került, mint az autó
+      money_detail: "Autó üzemanyag %{car}, ehelyett %{transit} (%{option})."
+      option_pass: havi bérlettel
+      option_tickets: vonaljeggyel
+      tickets_vs_pass: "%{rides} vonaljegy %{tickets} lenne, %{passes} havi bérlet %{pass_total}."
+      by_mode: Jármű szerint
+      transit_kg: Közösségi kg CO₂
+      car_kg: Autó kg CO₂
+      assumptions: Feltételezések
+      assumptions_intro: "Kerekített átlagértékek, nem a saját járműveidre mérve. A megadott környezeti változókkal felülírhatók (pl. /opt/dawarich/gtfs.env), utána újraindítás kell."
+      a_car_co2: Autó CO₂
+      pkm: utaskm
+      a_car_cost: Autó költsége (csak üzemanyag)
+      a_ticket: Vonaljegy
+      a_pass: "Bérlet (%{days} nap)"
+  transit_coverage:
+    index:
+      title: Követés lefedettsége
+      note: Naponta hány órában jött legalább egy élő pont (importált pontok nélkül), és a hosszú csendek.
+      loading: Lefedettség betöltése…
+      legend: "Órák ponttal:"
+      summary: "%{covered}/%{total} napon volt pont, átlag %{hours} óra/nap"
+      last: "utolsó pont %{time} ezelőtt"
+      no_points:
+        one: Az elmúlt napban nem jött élő pont.
+        other: "Az elmúlt %{count} napban nem jött élő pont."
+      cell: "%{hours} óra, %{points} pont"
+      gaps: "Leghosszabb csendek (legalább %{hours} óra)"

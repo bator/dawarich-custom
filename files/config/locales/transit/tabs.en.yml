@@ -6,3 +6,7 @@ en:
     devices: Devices
     feeds: Timetables
     settings: Settings
+    commute: Commute
+    punctuality: Punctuality
+    savings: Savings
+    coverage: Coverage

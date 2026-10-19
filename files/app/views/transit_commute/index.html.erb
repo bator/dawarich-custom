@@ -1,0 +1,89 @@
+<% content_for :title, t('.title') %>
+<% weekdays = t('transit_commute.index.weekdays') %>
+
+<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+  <%= render 'shared/page_header', title: t('.title') %>
+  <%= render 'shared/transit_tabs', active: :commute, days: @days %>
+  <%= render 'shared/transit_period_form', path: transit_commute_path, periods: TransitCommuteController::PERIODS,
+                                           note: t('transit_commute.index.note', min: Gtfs::CommuteStats::MIN_RIDES) %>
+
+  <% if @commute.trips.empty? %>
+    <p class="opacity-70 py-6"><%= t('.empty', count: @days) %></p>
+  <% else %>
+    <p class="text-sm opacity-70 mb-4">
+      <%= t('.coverage', percent: (@commute.coverage * 100).round, count: @commute.trips.size) %>
+    </p>
+    <ol class="flex flex-col gap-4" role="list">
+      <% @commute.trips.each_with_index do |trip, index| %>
+        <% usual = trip.usual_departure %>
+        <% max_hour = [trip.by_hour.max, 1].max %>
+        <li class="card bg-base-200 shadow-sm">
+          <div class="card-body p-4 gap-3">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <h2 class="font-semibold text-lg leading-snug">
+                <span class="opacity-50 mr-1">#<%= index + 1 %></span>
+                <%= trip.from %> <span class="opacity-50">→</span> <%= trip.to %>
+              </h2>
+              <span class="badge badge-lg badge-primary badge-outline tabular-nums whitespace-nowrap"><%= t('transit_segments.index.day_rides', count: trip.count) %></span>
+            </div>
+
+            <div class="flex flex-wrap gap-1.5">
+              <% trip.lines.each do |segment, n| %>
+                <span class="flex items-center gap-1"><%= transit_line_badge(segment, @colors) %><span class="text-xs opacity-60 tabular-nums">×<%= n %></span></span>
+              <% end %>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div class="rounded-box bg-base-100 p-2">
+                <div class="text-[11px] uppercase tracking-wide opacity-60"><%= t('.median') %></div>
+                <div class="text-lg font-semibold tabular-nums"><%= transit_duration(trip.median_s) %></div>
+              </div>
+              <div class="rounded-box bg-base-100 p-2">
+                <div class="text-[11px] uppercase tracking-wide opacity-60"><%= t('.range') %></div>
+                <div class="text-lg font-semibold tabular-nums"><%= transit_duration(trip.fastest_s) %> – <%= transit_duration(trip.slowest_s) %></div>
+              </div>
+              <div class="rounded-box bg-base-100 p-2">
+                <div class="text-[11px] uppercase tracking-wide opacity-60"><%= t('.delay') %></div>
+                <div class="text-lg font-semibold tabular-nums"><%= transit_delay(trip.median_delay_s) %></div>
+                <% if trip.late_share %><div class="text-[11px] opacity-60"><%= t('.late_share', percent: (trip.late_share * 100).round) %></div><% end %>
+              </div>
+              <div class="rounded-box bg-base-100 p-2">
+                <div class="text-[11px] uppercase tracking-wide opacity-60"><%= t('.usual') %></div>
+                <% if usual %>
+                  <div class="text-lg font-semibold tabular-nums"><%= format('%02d:00–%02d:59', usual[:hour], usual[:hour]) %></div>
+                  <div class="text-[11px] opacity-60"><%= t('.usual_detail', count: usual[:count], time: transit_duration(usual[:median_s])) %></div>
+                <% else %>–<% end %>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end">
+              <div>
+                <div class="text-[11px] uppercase tracking-wide opacity-60 mb-1"><%= t('.by_hour') %></div>
+                <ol class="flex items-end gap-px h-12" role="list">
+                  <% trip.by_hour.each_with_index do |count, hour| %>
+                    <li class="flex-1 h-full flex items-end" title="<%= format('%02d', hour) %>: <%= count %>">
+                      <span class="w-full rounded-t <%= count.zero? ? 'bg-base-content/10' : 'bg-primary' %>"
+                            style="height: <%= count.zero? ? 4 : (count * 100.0 / max_hour).round(1) %>%"></span>
+                    </li>
+                  <% end %>
+                </ol>
+                <div class="flex justify-between text-[10px] opacity-50 tabular-nums mt-0.5"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div>
+              </div>
+              <div>
+                <div class="text-[11px] uppercase tracking-wide opacity-60 mb-1"><%= t('.by_weekday') %></div>
+                <ol class="flex gap-1" role="list">
+                  <% trip.by_weekday.each_with_index do |count, i| %>
+                    <li class="flex flex-col items-center w-7" title="<%= weekdays[i] %>: <%= count %>">
+                      <span class="w-7 h-7 rounded flex items-center justify-center text-xs tabular-nums <%= count.zero? ? 'bg-base-content/10 opacity-50' : 'bg-primary text-primary-content' %>"><%= count %></span>
+                      <span class="text-[10px] opacity-60"><%= weekdays[i] %></span>
+                    </li>
+                  <% end %>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </li>
+      <% end %>
+    </ol>
+  <% end %>
+</div>

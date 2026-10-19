@@ -1,0 +1,82 @@
+en:
+  transit_commute:
+    index:
+      title: Commute
+      note: "Recurring trips: the same boarding and alighting stop at least %{min} times. Confirmed and auto-accepted rides only."
+      empty:
+        one: No recurring trip in the last day.
+        other: "No recurring trip in the last %{count} days."
+      coverage: "The %{count} trips below make up %{percent}% of your rides."
+      median: Typical time
+      range: Fastest – slowest
+      delay: Typical delay
+      late_share: "%{percent}% more than 5 min late"
+      usual: Usual departure
+      usual_detail:
+        one: "1 ride, typically %{time}"
+        other: "%{count} rides, typically %{time}"
+      by_hour: Departures by hour
+      by_weekday: By weekday
+      weekdays: [Mo, Tu, We, Th, Fr, Sa, Su]
+  transit_punctuality:
+    index:
+      title: Line punctuality
+      note: "Delay = observed vs timetable, only from rides where no other trip fits as well. Late = more than %{minutes} min."
+      empty:
+        one: No ride with a measured delay in the last day.
+        other: "No ride with a measured delay in the last %{count} days."
+      summary: Summary
+      measured: Measured rides
+      of_rides:
+        one: "of 1 ride"
+        other: "of %{count} rides"
+      median: Typical delay
+      late: "Late (> %{minutes} min)"
+      lines: Lines
+      by_daypart: By time of day
+      daypart_morning: Morning 6–9
+      daypart_midday: Midday 9–15
+      daypart_afternoon: Afternoon 15–19
+      daypart_evening: Evening 19–24
+      daypart_night: Night 0–6
+      per_line: "Per line (at least %{min} measured rides)"
+      no_lines: "No line has %{min} measured rides yet."
+      bar_title: "typical %{median}, 90% within %{p90}"
+      legend: "Marker: typical (median) delay. Shaded: up to the 90th percentile. Scale −5 … +15 min."
+  transit_savings:
+    index:
+      title: Savings estimate
+      note: Estimate for the same distance by car. The assumptions are listed at the bottom and can be changed.
+      co2_saved: CO₂ saved
+      co2_detail: "%{transit} kg by public transport instead of %{car} kg by car over %{km} km."
+      transit: Transit
+      car: Car
+      money_saved: Money saved
+      money_more: Costs more than the car
+      money_detail: "Car fuel %{car} vs %{transit} (%{option})."
+      option_pass: monthly passes
+      option_tickets: single tickets
+      tickets_vs_pass: "%{rides} single tickets would be %{tickets}; %{passes} monthly pass(es) %{pass_total}."
+      by_mode: By vehicle
+      transit_kg: Transit kg CO₂
+      car_kg: Car kg CO₂
+      assumptions: Assumptions
+      assumptions_intro: "Rounded average factors, not measured for your vehicles. Override them with the environment variables shown (e.g. in /opt/dawarich/gtfs.env) and restart the app."
+      a_car_co2: Car CO₂
+      pkm: pkm
+      a_car_cost: Car cost (fuel only)
+      a_ticket: Single ticket
+      a_pass: "Pass (%{days} days)"
+  transit_coverage:
+    index:
+      title: Tracking coverage
+      note: Hours per day with at least one live point (imported points not counted), and silent gaps.
+      loading: Loading coverage…
+      legend: "Hours with points:"
+      summary: "%{covered}/%{total} days with points, %{hours} h/day on average"
+      last: "last point %{time} ago"
+      no_points:
+        one: No live point in the last day.
+        other: "No live point in the last %{count} days."
+      cell: "%{hours} h, %{points} points"
+      gaps: "Longest gaps (%{hours} h or more)"
