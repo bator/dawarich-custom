@@ -11,6 +11,6 @@ class TransitSavingsController < ApplicationController
 
   def index
     load_period_rides
-    @savings = Gtfs::SavingsEstimate.new(@period_stats.rides, days: @days)
+    @savings = Gtfs::SavingsEstimate.new(@period_stats.rides, days: @days, since: @since, zone: @zone)
   end
 end

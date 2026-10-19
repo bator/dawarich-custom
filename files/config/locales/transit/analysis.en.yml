@@ -21,45 +21,62 @@ en:
   transit_punctuality:
     index:
       title: Line punctuality
-      note: "Delay = observed vs timetable, only from rides where no other trip fits as well. Late = more than %{minutes} min."
+      note: "Delay = observed vs timetable, only from rides where no other trip fits as well. Like railway figures, the headline is the share of rides within a tolerance."
       empty:
         one: No ride with a measured delay in the last day.
         other: "No ride with a measured delay in the last %{count} days."
       summary: Summary
+      within_5: On time (≤ 5 min)
+      within_1: Exact (± 1 min)
+      median: Typical delay
       measured: Measured rides
       of_rides:
         one: "of 1 ride"
         other: "of %{count} rides"
-      median: Typical delay
-      late: "Late (> %{minutes} min)"
-      lines: Lines
-      by_daypart: By time of day
-      daypart_morning: Morning 6–9
-      daypart_midday: Midday 9–15
-      daypart_afternoon: Afternoon 15–19
-      daypart_evening: Evening 19–24
-      daypart_night: Night 0–6
+      distribution: Delay distribution
+      cat_early: early
+      cat_on_time: on time
+      cat_slight: 1–5 min late
+      cat_late: "> 5 min late"
+      minutes_axis: minutes vs timetable
       per_line: "Per line (at least %{min} measured rides)"
       no_lines: "No line has %{min} measured rides yet."
-      bar_title: "typical %{median}, 90% within %{p90}"
-      legend: "Marker: typical (median) delay. Shaded: up to the 90th percentile. Scale −5 … +15 min."
+      lines_legend: "Bar: share of rides by category. Right: on time (≤ 5 min) and typical delay."
   transit_savings:
     index:
       title: Savings estimate
-      note: Estimate for the same distance by car. The assumptions are listed at the bottom and can be changed.
+      note: Estimate against the same distance by car. The assumptions are at the bottom and can be changed.
       co2_saved: CO₂ saved
-      co2_detail: "%{transit} kg by public transport instead of %{car} kg by car over %{km} km."
-      transit: Transit
+      trees:
+        one: "what 1 tree takes up in a year"
+        other: "what %{count} trees take up in a year"
+      car_km: "≈ %{km} km by car"
+      you: You
       car: Car
+      km_rides:
+        one: "%{km} km in 1 ride"
+        other: "%{km} km in %{count} rides"
       money_saved: Money saved
       money_more: Costs more than the car
       money_detail: "Car fuel %{car} vs %{transit} (%{option})."
       option_pass: monthly passes
       option_tickets: single tickets
-      tickets_vs_pass: "%{rides} single tickets would be %{tickets}; %{passes} monthly pass(es) %{pass_total}."
+      break_even:
+        one: "A %{days}-day pass pays off from 1 ride."
+        other: "A %{days}-day pass pays off from %{count} rides."
+      your_pace:
+        one: "you take 1 ride per 30 days"
+        other: "you take %{count} rides per 30 days"
+      pace_pass: the pass is the better deal
+      pace_tickets: single tickets are cheaper
+      cumulative: Cumulative cost in the period
+      series_car: Car (fuel)
+      series_tickets: Single tickets
+      series_pass: Pass
       by_mode: By vehicle
-      transit_kg: Transit kg CO₂
-      car_kg: Car kg CO₂
+      by_mode_legend: "Green: CO₂ by public transport; grey: the same distance by car."
+      by_month: CO₂ saved per month (kg)
+      by_month_legend: Saved compared with the same distance by car.
       assumptions: Assumptions
       assumptions_intro: "Rounded average factors, not measured for your vehicles. Override them with the environment variables shown (e.g. in /opt/dawarich/gtfs.env) and restart the app."
       a_car_co2: Car CO₂
@@ -67,6 +84,8 @@ en:
       a_car_cost: Car cost (fuel only)
       a_ticket: Single ticket
       a_pass: "Pass (%{days} days)"
+      a_tree: CO₂ a tree takes up
+      year: year
   transit_coverage:
     index:
       title: Tracking coverage
