@@ -26,12 +26,14 @@ Trigger: `dawarich-osrm-restore.path` (`/opt/dawarich/app/.app_version` changes)
 `dawarich-osrm-restore.service` → overlays, then `restore_custom.py`.
 
 1. Plan without writing: copy `files/`; 3-way merge each `ours/` file
-   (`git merge-file ours upstream/<base> <new upstream>`).
+   (`git merge-file ours upstream/<base> <new upstream>`). A custom file dropped from
+   `manifest.json` (still in `state.json`) is removed if it is unchanged since we wrote it;
+   if it differs, or was a patched upstream file, it stays and the plan gets a note.
 2. Guards that refuse the whole restore (Discord alert, nothing written):
    - any merge conflict (diff3 output in `/var/lib/dawarich-custom/conflicts/<version>/`)
    - a custom-only path that now exists upstream, or a live file edited without `capture`
    - a migration version used by both upstream and us (db:migrate silently skips the second one)
-3. Write (backup in `/var/lib/dawarich-custom/backup/<ts>/`), `bundle check || bundle install`
+3. Write and remove (backup in `/var/lib/dawarich-custom/backup/<ts>/`), `bundle check || bundle install`
    if the Gemfile changed, `db:migrate`, `assets:precompile`. A failure rolls the files back and
    does not restart.
 4. Restart `dawarich-web`, `dawarich-web-local`, `dawarich-worker`, `dawarich-gtfs-discord-bot`.

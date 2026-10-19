@@ -10,6 +10,9 @@ of truth for everything we add on top of upstream:
   upstream/<version>/<rel>     the pristine upstream file `ours` was made from
   manifest.json                base_version + the two file lists
 
+A custom file dropped from the manifest is removed from the app if it still has
+the content we wrote (state.json); otherwise it is left and reported.
+
 Modified upstream files are 3-way merged (git merge-file): ours vs
 upstream/<base_version> vs the new upstream file. Nothing is written to the app
 unless every file merges cleanly and no guard fires; on a conflict the merge
@@ -211,10 +214,10 @@ def pristine_path(version: str, rel: str) -> Path:
 
 
 def plan_restore(manifest: dict, state: dict, version: str):
-    """Returns (writes {rel: bytes}, archive {rel: bytes}, records, conflicts, notes)."""
+    """Returns (writes {rel: bytes, or None = remove}, archive {rel: bytes}, records, conflicts, notes)."""
     base_version = manifest["base_version"]
     records = dict(state.get("files", {}))
-    writes: dict[str, bytes] = {}
+    writes: dict[str, bytes | None] = {}
     archive: dict[str, bytes] = {}
     conflicts: list[str] = []
     conflict_output: dict[str, bytes] = {}
@@ -299,13 +302,31 @@ def plan_restore(manifest: dict, state: dict, version: str):
             writes[rel] = merged
         records[rel] = {"version": version, "written_sha": sha(merged), "ours_sha": sha(ours)}
 
+    # Dropped from the manifest: remove what we wrote, unless it changed since.
+    managed = custom | set(manifest["patched_files"])
+    for rel, rec in state.get("files", {}).items():
+        if rel in managed:
+            continue
+        cur = read(APP / rel)
+        if cur is None:
+            records.pop(rel, None)
+        elif "ours_sha" in rec:
+            # was a merged upstream file: deleting it would break the app
+            notes.append(f"`{rel}` no longer patched; put the upstream copy back by hand")
+            records.pop(rel, None)
+        elif sha(cur) == rec.get("written_sha"):
+            writes[rel] = None
+            records.pop(rel, None)
+        else:
+            notes.append(f"`{rel}` dropped from manifest but differs from what we wrote; left in place")
+
     return writes, archive, records, conflicts, conflict_output, notes
 
 
 # --- apply ----------------------------------------------------------------
 
-def apply_writes(writes: dict[str, bytes], stamp: str) -> dict[str, bytes | None]:
-    """Back up and write. Returns {rel: previous bytes or None} for rollback."""
+def apply_writes(writes: dict[str, bytes | None], stamp: str) -> dict[str, bytes | None]:
+    """Back up and write (None: remove). Returns {rel: previous bytes or None} for rollback."""
     backup_dir = VAR / "backup" / stamp
     previous: dict[str, bytes | None] = {}
     for rel, data in sorted(writes.items()):
@@ -316,7 +337,14 @@ def apply_writes(writes: dict[str, bytes], stamp: str) -> dict[str, bytes | None
             b = backup_dir / rel
             b.parent.mkdir(parents=True, exist_ok=True)
             b.write_bytes(prev)
-        atomic_write(dst, data)
+        if data is None:
+            dst.unlink(missing_ok=True)
+            d = dst.parent
+            while d != APP and d.is_dir() and not any(d.iterdir()):
+                d.rmdir()  # dirs only we used; rollback's atomic_write recreates them
+                d = d.parent
+        else:
+            atomic_write(dst, data)
     return previous
 
 
@@ -376,9 +404,11 @@ def restore(dry_run: bool) -> int:
     writes, archive, records, conflicts, conflict_output, notes = plan_restore(manifest, state, version)
 
     if dry_run:
-        log(f"app {version}, base {manifest['base_version']}: {len(writes)} write(s), {len(conflicts)} conflict(s)")
+        removes = sorted(r for r, d in writes.items() if d is None)
+        log(f"app {version}, base {manifest['base_version']}: {len(writes) - len(removes)} write(s), "
+            f"{len(removes)} removal(s), {len(conflicts)} conflict(s)")
         for rel in sorted(writes):
-            log(f"  write {rel}")
+            log(f"  {'remove' if writes[rel] is None else 'write '} {rel}")
         for n in notes:
             log(f"  note  {n}")
         for c in conflicts:
@@ -424,7 +454,8 @@ def restore(dry_run: bool) -> int:
             previous = apply_writes(writes, stamp)
             log(f"wrote {len(writes)} file(s), backup: {VAR / 'backup' / stamp}")
             lines.append(f"Visszatett fájlok: {sum(1 for r in writes if r in manifest['custom_files'])} custom, "
-                         f"{sum(1 for r in writes if r in manifest['patched_files'])} merge-elt upstream")
+                         f"{sum(1 for r in writes if r in manifest['patched_files'])} merge-elt upstream, "
+                         f"{sum(1 for d in writes.values() if d is None)} törölt (kikerült a manifestből)")
             lines.extend(f"• {n}" for n in notes)
             if any(r in GEM_FILES for r in writes):
                 try:
