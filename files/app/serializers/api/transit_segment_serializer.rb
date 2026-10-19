@@ -29,7 +29,7 @@ class Api::TransitSegmentSerializer
       route_type: s.route_type,
       mode: s.mode,
       route_color: color,
-      route_text_color: hex(text_color) || '#FFFFFF',
+      route_text_color: hex(text_color) || Gtfs::RouteColors.readable_text(color),
       route_casing_color: Gtfs::RouteColors.casing(color),
       headsign: s.headsign,
       boarding_stop: stop(s.boarding_stop_gtfs_id, s.boarding_stop_name, s.boarding_lonlat),

@@ -1,0 +1,46 @@
+--- a/config/tailwind.config.js
++++ b/config/tailwind.config.js
+@@ -9,9 +9,18 @@
+   theme: {
+     extend: {
+       fontFamily: {
+-        sans: ["Inter var", ...defaultTheme.fontFamily.sans],
++        sans: ["Inter", ...defaultTheme.fontFamily.sans],
+         display: ["Archivo", ...defaultTheme.fontFamily.sans],
+       },
++      // Coloured text that holds 4.5:1 on base-100/200 in both themes
++      // (dawarich-custom design system: text-*-ink instead of text-warning etc.)
++      colors: {
++        "primary-ink": "var(--primary-ink)",
++        "success-ink": "var(--success-ink)",
++        "warning-ink": "var(--warning-ink)",
++        "error-ink": "var(--error-ink)",
++        "info-ink": "var(--info-ink)",
++      },
+     },
+   },
+   plugins: [
+@@ -45,6 +54,11 @@
+           "warning-content": "#FFFFFF",
+           error: "#EF4444",
+           "error-content": "#FFFFFF",
++          "--primary-ink": "#1D4ED8",
++          "--success-ink": "#0F766E",
++          "--warning-ink": "#92400E",
++          "--error-ink": "#B91C1C",
++          "--info-ink": "#0E7490",
+           "--rounded-btn": "0.375rem",
+           "--rounded-box": "0.625rem",
+           "--rounded-badge": "9999px",
+@@ -71,6 +85,11 @@
+           "warning-content": "#1A1505",
+           error: "#F87171",
+           "error-content": "#1A0A0A",
++          "--primary-ink": "#60A5FA",
++          "--success-ink": "#2DD4BF",
++          "--warning-ink": "#FBBF24",
++          "--error-ink": "#F87171",
++          "--info-ink": "#22D3EE",
+           "--rounded-btn": "0.375rem",
+           "--rounded-box": "0.625rem",
+           "--rounded-badge": "9999px",

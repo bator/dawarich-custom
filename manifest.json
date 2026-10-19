@@ -187,6 +187,7 @@
     "config/initializers/sidekiq.rb",
     "config/routes.rb",
     "config/schedule.yml",
-    "config/sidekiq.yml"
+    "config/sidekiq.yml",
+    "config/tailwind.config.js"
   ]
 }

@@ -18,21 +18,21 @@
   <% else %>
     <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" aria-label="<%= t('.summary') %>">
       <div class="rounded-box bg-success/10 border border-success/30 p-4">
-        <div class="text-xs uppercase tracking-wide text-success"><%= t('.within_5') %></div>
+        <div class="text-xs uppercase tracking-wide text-success-ink"><%= t('.within_5') %></div>
         <div class="text-3xl font-bold tabular-nums mt-1"><%= pct.call(p.within_5) %></div>
       </div>
       <div class="rounded-box bg-base-200 p-4">
-        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.within_1') %></div>
+        <div class="text-xs uppercase tracking-wide opacity-70"><%= t('.within_1') %></div>
         <div class="text-3xl font-bold tabular-nums mt-1"><%= pct.call(p.within_1) %></div>
       </div>
       <div class="rounded-box bg-base-200 p-4">
-        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.median') %></div>
+        <div class="text-xs uppercase tracking-wide opacity-70"><%= t('.median') %></div>
         <div class="text-3xl font-bold tabular-nums mt-1"><%= transit_delay(p.median_s) %></div>
       </div>
       <div class="rounded-box bg-base-200 p-4">
-        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.measured') %></div>
+        <div class="text-xs uppercase tracking-wide opacity-70"><%= t('.measured') %></div>
         <div class="text-3xl font-bold tabular-nums mt-1"><%= p.measured.size %></div>
-        <div class="text-xs opacity-60"><%= t('.of_rides', count: @period_stats.count) %></div>
+        <div class="text-xs opacity-70"><%= t('.of_rides', count: @period_stats.count) %></div>
       </div>
     </section>
 
@@ -44,7 +44,7 @@
             <% Gtfs::PunctualityStats::CATEGORIES.each do |cat| %>
               <li class="flex items-center gap-1.5">
                 <span class="inline-block w-2.5 h-2.5 rounded-sm <%= colors[cat] %>"></span>
-                <%= t(".cat_#{cat}") %> <span class="opacity-60 tabular-nums"><%= pct.call(p.shares[cat]) %></span>
+                <%= t(".cat_#{cat}") %> <span class="opacity-70 tabular-nums"><%= pct.call(p.shares[cat]) %></span>
               </li>
             <% end %>
           </ul>
@@ -53,18 +53,18 @@
           <% hist.each do |minute, count, cat| %>
             <% label = if minute == Gtfs::PunctualityStats::HIST_FROM then "≤ #{minute}" elsif minute == Gtfs::PunctualityStats::HIST_TO then "#{minute}+" else (minute.positive? ? "+#{minute}" : minute.to_s) end %>
             <li class="flex-1 h-full flex flex-col justify-end items-center gap-0.5" title="<%= label %> min: <%= count %>">
-              <% if count.positive? %><span class="text-[10px] tabular-nums opacity-60"><%= count %></span><% end %>
+              <% if count.positive? %><span class="text-[10px] tabular-nums opacity-70"><%= count %></span><% end %>
               <span class="w-full rounded-t <%= count.zero? ? 'bg-base-content/10' : colors[cat] %>"
                     style="height: <%= count.zero? ? 3 : (count * 100.0 / max_bin).round(1) %>%"></span>
             </li>
           <% end %>
         </ol>
-        <div class="flex gap-1 text-[10px] opacity-50 tabular-nums -mt-1">
+        <div class="flex gap-1 text-[10px] opacity-70 tabular-nums -mt-1">
           <% hist.each do |minute, _, _| %>
             <span class="flex-1 text-center"><%= if minute == Gtfs::PunctualityStats::HIST_FROM then "≤#{minute}" elsif minute == Gtfs::PunctualityStats::HIST_TO then "#{minute}+" elsif (minute % 3).zero? then (minute.positive? ? "+#{minute}" : minute.to_s) end %></span>
           <% end %>
         </div>
-        <p class="text-xs opacity-60 text-center"><%= t('.minutes_axis') %></p>
+        <p class="text-xs opacity-70 text-center"><%= t('.minutes_axis') %></p>
       </div>
     </section>
 
@@ -78,7 +78,7 @@
             <% p.lines.each do |line| %>
               <% shares = line.shares %>
               <li class="grid grid-cols-[6.5rem_1fr_3.5rem] items-center gap-3">
-                <span class="flex items-center gap-1"><%= transit_line_badge(line.segment, @colors) %><span class="text-xs opacity-60 tabular-nums">×<%= line.count %></span></span>
+                <span class="flex items-center gap-1"><%= transit_line_badge(line.segment, @colors) %><span class="text-xs opacity-70 tabular-nums">×<%= line.count %></span></span>
                 <span class="flex h-3 rounded-full overflow-hidden bg-base-100"
                       title="<%= Gtfs::PunctualityStats::CATEGORIES.map { |c| "#{t(".cat_#{c}")} #{pct.call(shares[c])}" }.join(' · ') %> · <%= t('.median') %> <%= transit_delay(line.median_s) %>">
                   <% Gtfs::PunctualityStats::CATEGORIES.each do |cat| %>
@@ -88,12 +88,12 @@
                 </span>
                 <span class="text-right">
                   <span class="font-semibold tabular-nums"><%= pct.call(line.within_5) %></span>
-                  <span class="block text-[10px] opacity-60 tabular-nums"><%= transit_delay(line.median_s) %></span>
+                  <span class="block text-[10px] opacity-70 tabular-nums"><%= transit_delay(line.median_s) %></span>
                 </span>
               </li>
             <% end %>
           </ul>
-          <p class="text-xs opacity-60"><%= t('.lines_legend') %></p>
+          <p class="text-xs opacity-70"><%= t('.lines_legend') %></p>
         <% end %>
       </div>
     </section>

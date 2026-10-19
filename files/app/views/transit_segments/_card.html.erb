@@ -69,7 +69,7 @@
     </div>
 
     <% if status == :chosen %>
-      <p class="text-xs text-info">🔁 <%= t('transit_segments.card.chosen') %></p>
+      <p class="text-xs text-info-ink">🔁 <%= t('transit_segments.card.chosen') %></p>
     <% end %>
     <% if status == :uncertain %>
       <ul class="text-xs list-disc ml-5 opacity-80">
@@ -83,9 +83,9 @@
     <div class="flex flex-wrap items-center gap-1 border-t border-base-300 pt-3">
       <% if segment.auto? %>
         <%= button_to t('transit_segments.card.confirm'), transit_segment_path(segment), method: :patch,
-                      params: filter.merge(review_action: 'confirm'), class: "btn btn-sm min-h-11 sm:min-h-0 #{attention ? 'btn-success' : 'btn-ghost text-success'}" %>
+                      params: filter.merge(review_action: 'confirm'), class: "btn btn-sm min-h-11 sm:min-h-0 #{attention ? 'btn-success' : 'btn-ghost text-success-ink'}" %>
         <%= button_to t('transit_segments.card.reject'), transit_segment_path(segment), method: :patch,
-                      params: filter.merge(review_action: 'reject'), class: "btn btn-sm min-h-11 sm:min-h-0 #{attention ? 'btn-error btn-outline' : 'btn-ghost text-error'}" %>
+                      params: filter.merge(review_action: 'reject'), class: "btn btn-sm min-h-11 sm:min-h-0 #{attention ? 'btn-error btn-outline' : 'btn-ghost text-error-ink'}" %>
       <% else %>
         <%= button_to t('transit_segments.card.undo'), transit_segment_path(segment), method: :patch,
                       params: filter.merge(review_action: 'reset'), class: 'btn btn-ghost btn-sm min-h-11 sm:min-h-0' %>

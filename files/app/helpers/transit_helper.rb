@@ -30,7 +30,8 @@ module TransitHelper
   def transit_line_colors(segment, colors)
     color, text_color = colors[[segment.feed_id, segment.route_gtfs_id]]
     hex = ->(value) { (v = value.to_s.delete_prefix('#')).match?(/\A\h{6}\z/) ? "##{v.upcase}" : nil }
-    [hex.call(color) || Api::TransitSegmentSerializer::DEFAULT_COLORS.fetch(segment.mode), hex.call(text_color) || '#FFFFFF']
+    background = hex.call(color) || Api::TransitSegmentSerializer::DEFAULT_COLORS.fetch(segment.mode)
+    [background, hex.call(text_color) || Gtfs::RouteColors.readable_text(background)]
   end
 
   # Line badge in the route colour.

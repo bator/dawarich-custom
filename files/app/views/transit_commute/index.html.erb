@@ -37,7 +37,7 @@
                 <span class="flex justify-center self-stretch"><span class="w-1 min-h-5 h-full rounded-full" style="background-color: <%= main_color %>"></span></span>
                 <span class="flex flex-wrap gap-1 py-1">
                   <% trip.lines.each do |segment, n| %>
-                    <span class="flex items-center gap-1"><%= transit_line_badge(segment, @colors, extra_class: 'badge-sm') %><span class="text-[11px] opacity-60 tabular-nums">×<%= n %></span></span>
+                    <span class="flex items-center gap-1"><%= transit_line_badge(segment, @colors, extra_class: 'badge-sm') %><span class="text-[11px] opacity-70 tabular-nums">×<%= n %></span></span>
                   <% end %>
                 </span>
                 <span class="flex justify-center"><span class="w-3.5 h-3.5 rounded-full border-[3px] bg-base-100" style="border-color: <%= main_color %>"></span></span>
@@ -45,7 +45,7 @@
               </div>
               <div class="text-right shrink-0">
                 <div class="text-3xl font-bold tabular-nums leading-none"><%= transit_duration(trip.median_s) %></div>
-                <div class="text-xs opacity-60 mt-1"><%= t('.median_label', count: trip.count) %></div>
+                <div class="text-xs opacity-70 mt-1"><%= t('.median_label', count: trip.count) %></div>
               </div>
             </div>
 
@@ -75,7 +75,7 @@
                         title="<%= l(@zone.at(segment.started_at), format: '%Y-%m-%d %H:%M') %>"></span>
                 <% end %>
               </div>
-              <div class="flex justify-between text-[10px] opacity-50 tabular-nums mt-0.5"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+              <div class="flex justify-between text-[10px] opacity-70 tabular-nums mt-0.5"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
             </div>
 
             <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -84,14 +84,14 @@
                   <li class="flex flex-col items-center gap-0.5" title="<%= weekdays[i] %>: <%= count %>">
                     <span class="w-6 h-6 rounded-full flex items-center justify-center text-[11px] tabular-nums"
                           style="<%= count.zero? ? '' : "background-color: #{main_color}; opacity: #{(0.35 + 0.65 * count / max_day.to_f).round(2)}; color: #fff" %>"><%= count.zero? ? '·' : count %></span>
-                    <span class="text-[10px] opacity-60"><%= weekdays[i] %></span>
+                    <span class="text-[10px] opacity-70"><%= weekdays[i] %></span>
                   </li>
                 <% end %>
               </ol>
               <% if trip.median_delay_s %>
                 <span class="opacity-80">
                   <%= t('.delay') %>: <strong class="tabular-nums"><%= transit_delay(trip.median_delay_s) %></strong>
-                  <span class="opacity-60">· <%= t('.late_share', percent: (trip.late_share * 100).round) %></span>
+                  <span class="opacity-70">· <%= t('.late_share', percent: (trip.late_share * 100).round) %></span>
                 </span>
               <% end %>
             </div>

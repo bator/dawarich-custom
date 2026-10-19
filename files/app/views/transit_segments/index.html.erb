@@ -21,27 +21,27 @@
   <section class="mb-4" aria-label="<%= t('.summary_label') %>">
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div class="rounded-box bg-base-200 p-4">
-        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.rides', count: @summary[:count]) %></div>
+        <div class="text-xs uppercase tracking-wide opacity-70"><%= t('.rides', count: @summary[:count]) %></div>
         <div class="text-2xl sm:text-3xl font-bold tabular-nums mt-1"><%= @summary[:count] %></div>
       </div>
       <div class="rounded-box bg-base-200 p-4">
-        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.on_board') %></div>
+        <div class="text-xs uppercase tracking-wide opacity-70"><%= t('.on_board') %></div>
         <div class="text-2xl sm:text-3xl font-bold tabular-nums mt-1"><%= hours_minutes.call(@summary[:duration_s]) %></div>
       </div>
       <div class="rounded-box bg-base-200 p-4">
-        <div class="text-xs uppercase tracking-wide opacity-60"><%= t('.distance') %></div>
+        <div class="text-xs uppercase tracking-wide opacity-70"><%= t('.distance') %></div>
         <div class="text-2xl sm:text-3xl font-bold tabular-nums mt-1"><%= number_with_precision(@summary[:distance_m] / 1000.0, precision: 0, delimiter: ' ') %> km</div>
       </div>
       <% if @summary[:uncertain].positive? %>
         <%= link_to transit_segments_path(days: @days, uncertain: (@only_uncertain ? nil : '1')),
                     class: "rounded-box p-4 border-2 border-warning hover:bg-warning/10 #{@only_uncertain ? 'bg-warning/20' : 'bg-warning/5'}",
                     title: t('.uncertain_note', count: @summary[:uncertain]) do %>
-          <div class="text-xs uppercase tracking-wide text-warning">⚠ <%= t('.review_tile') %></div>
+          <div class="text-xs uppercase tracking-wide text-warning-ink">⚠ <%= t('.review_tile') %></div>
           <div class="text-2xl sm:text-3xl font-bold tabular-nums mt-1"><%= @summary[:uncertain] %></div>
         <% end %>
       <% else %>
         <div class="rounded-box bg-success/10 p-4">
-          <div class="text-xs uppercase tracking-wide text-success">✔ <%= t('.review_tile') %></div>
+          <div class="text-xs uppercase tracking-wide text-success-ink">✔ <%= t('.review_tile') %></div>
           <div class="text-lg font-semibold mt-2"><%= t('.all_reviewed') %></div>
         </div>
       <% end %>
@@ -82,7 +82,7 @@
           <header class="flex items-baseline justify-between gap-2 mb-3">
             <h2 id="day-<%= date.iso8601 %>" class="text-sm font-bold uppercase tracking-wide">
               <%= date == @zone.today ? t('.today') : (date == @zone.today - 1 ? t('.yesterday') : l(date, format: '%A')) %>
-              <span class="opacity-60 font-normal normal-case tracking-normal ml-1"><%= l(date, format: :long) %></span>
+              <span class="opacity-70 font-normal normal-case tracking-normal ml-1"><%= l(date, format: :long) %></span>
             </h2>
             <span class="text-xs opacity-70 whitespace-nowrap">
               <%= t('.day_rides', count: segments.size) %> · <%= hours_minutes.call(segments.sum { |s| s.ended_at - s.started_at }) %>

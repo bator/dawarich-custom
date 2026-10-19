@@ -31,7 +31,7 @@ module Gtfs::RouteColors
     [/\A(IR|ER|Gy|Sv|Sebes)\z/i, '#29803C', '#FFFFFF', 'interregio'],
     [/\A(Sz|VESz|S\d+)\z/, '#00A0E3', '#FFFFFF', 'szemely'],
     [/\AZ\d+\z/, '#FECC00', '#000000', 'zonazo'],
-    [/\AG\d+\z/, '#B0CB1F', '#FFFFFF', 'gyorsitott']
+    [/\AG\d+\z/, '#B0CB1F', '#000000', 'gyorsitott']
   ].freeze
   MAV_TRAIN_DEFAULT = Color.new(color: MAV_INTERCITY, text_color: '#FFFFFF', source: 'mav:train').freeze
 

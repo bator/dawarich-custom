@@ -81,7 +81,7 @@
               <span class="text-[10px] tabular-nums opacity-70"><%= count if count.positive? %></span>
               <span class="w-full rounded-t <%= bar %>"
                     style="height: <%= count.zero? ? 2 : (count * 100.0 / max_bar).round(1) %>%"></span>
-              <span class="text-[10px] tabular-nums opacity-60 truncate w-full text-center"><%= partial ? '…' : '' %><%= label %></span>
+              <span class="text-[10px] tabular-nums opacity-70 truncate w-full text-center"><%= partial ? '…' : '' %><%= label %></span>
               <span class="sr-only"><%= detail %></span>
             </li>
           <% end %>
@@ -137,7 +137,7 @@
               color, text_color = @colors[[segment.feed_id, segment.route_gtfs_id]]
               hex = ->(value) { (v = value.to_s.delete_prefix('#')).match?(/\A\h{6}\z/) ? "##{v.upcase}" : nil }
               color = hex.call(color) || defaults.fetch(segment.mode)
-              text_color = hex.call(text_color) || '#FFFFFF'
+              text_color = hex.call(text_color) || Gtfs::RouteColors.readable_text(color)
             %>
             <li class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 py-1 border-b border-base-300 last:border-b-0">
               <span class="badge font-bold min-w-12 justify-center gap-1 border-0" style="background-color: <%= color %>; color: <%= text_color %>">

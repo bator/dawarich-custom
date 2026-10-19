@@ -45,7 +45,7 @@
         <div class="flex items-start gap-4">
           <span class="text-5xl leading-none" aria-hidden="true">🌳</span>
           <div>
-            <div class="text-xs uppercase tracking-wide text-success"><%= t('.co2_saved') %></div>
+            <div class="text-xs uppercase tracking-wide text-success-ink"><%= t('.co2_saved') %></div>
             <div class="text-4xl font-bold tabular-nums leading-tight"><%= kg.call(s.saved_kg) %> kg CO₂</div>
             <div class="text-sm opacity-80 mt-1">
               <%= t('.trees', count: s.trees.round(1)) %> · <%= t('.car_km', km: number_with_precision(s.car_km_equivalent, precision: 0, delimiter: ' ')) %>
@@ -63,12 +63,12 @@
             <span class="h-3 rounded-full bg-base-100 overflow-hidden"><span class="block h-full bg-base-content/40 rounded-full" style="width: <%= (s.car_kg / max_kg * 100).clamp(1, 100).round(1) %>%"></span></span>
             <span class="text-right tabular-nums"><%= kg.call(s.car_kg) %> kg</span>
           </div>
-          <p class="text-xs opacity-60"><%= t('.km_rides', km: number_with_precision(s.km, precision: 0, delimiter: ' '), count: s.rides_count) %></p>
+          <p class="text-xs opacity-70"><%= t('.km_rides', km: number_with_precision(s.km, precision: 0, delimiter: ' '), count: s.rides_count) %></p>
         </div>
       </div>
       <div class="md:col-span-2 rounded-box bg-base-200 p-5 flex flex-col gap-3">
-        <div class="text-xs uppercase tracking-wide opacity-60"><%= t(s.saved_ft.positive? ? '.money_saved' : '.money_more') %></div>
-        <div class="text-4xl font-bold tabular-nums leading-tight <%= s.saved_ft.positive? ? 'text-primary' : 'text-warning' %>"><%= ft.call(s.saved_ft.abs) %></div>
+        <div class="text-xs uppercase tracking-wide opacity-70"><%= t(s.saved_ft.positive? ? '.money_saved' : '.money_more') %></div>
+        <div class="text-4xl font-bold tabular-nums leading-tight <%= s.saved_ft.positive? ? 'text-primary-ink' : 'text-warning-ink' %>"><%= ft.call(s.saved_ft.abs) %></div>
         <div class="text-sm opacity-80"><%= t('.money_detail', car: ft.call(s.car_cost_ft), transit: ft.call(s.transit_cost_ft), option: t(s.cheaper_option == :pass ? '.option_pass' : '.option_tickets')) %></div>
         <div class="mt-auto rounded-box bg-base-100 p-3 text-sm">
           <div class="font-medium"><%= t('.break_even', count: s.break_even_rides, days: Gtfs::SavingsEstimate::PASS_DAYS) %></div>
@@ -82,9 +82,9 @@
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="savings-cumulative" class="font-semibold"><%= t('.cumulative') %></h2>
           <ul class="flex flex-wrap gap-x-4 gap-y-1 text-xs" role="list">
-            <li class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5 bg-base-content/50"></span><%= t('.series_car') %> <span class="opacity-60 tabular-nums"><%= ft.call(last[1]) %></span></li>
-            <li class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5 bg-warning"></span><%= t('.series_tickets') %> <span class="opacity-60 tabular-nums"><%= ft.call(last[2]) %></span></li>
-            <li class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5 bg-primary"></span><%= t('.series_pass') %> <span class="opacity-60 tabular-nums"><%= ft.call(last[3]) %></span></li>
+            <li class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5 bg-base-content/50"></span><%= t('.series_car') %> <span class="opacity-70 tabular-nums"><%= ft.call(last[1]) %></span></li>
+            <li class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5 bg-warning"></span><%= t('.series_tickets') %> <span class="opacity-70 tabular-nums"><%= ft.call(last[2]) %></span></li>
+            <li class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5 bg-primary"></span><%= t('.series_pass') %> <span class="opacity-70 tabular-nums"><%= ft.call(last[3]) %></span></li>
           </ul>
         </div>
         <svg viewBox="0 0 <%= w.to_i %> <%= h.to_i %>" class="w-full h-auto" role="img" aria-label="<%= t('.cumulative') %>">
@@ -118,7 +118,7 @@
               </li>
             <% end %>
           </ul>
-          <p class="text-xs opacity-60"><%= t('.by_mode_legend') %></p>
+          <p class="text-xs opacity-70"><%= t('.by_mode_legend') %></p>
         </div>
       </section>
       <section class="card bg-base-200 shadow-sm" aria-labelledby="savings-months">
@@ -129,13 +129,13 @@
           <ol class="flex items-end gap-2 h-28" role="list">
             <% months.each do |month, saved, km| %>
               <li class="flex-1 h-full flex flex-col justify-end items-center gap-1" title="<%= l(month, format: '%Y-%m') %>: <%= kg.call(saved) %> kg, <%= number_with_precision(km, precision: 0) %> km">
-                <span class="text-[10px] tabular-nums opacity-60"><%= kg.call(saved) %></span>
+                <span class="text-[10px] tabular-nums opacity-70"><%= kg.call(saved) %></span>
                 <span class="w-full max-w-10 rounded-t bg-success" style="height: <%= (saved.clamp(0, Float::INFINITY) / max_month * 100).clamp(3, 100).round(1) %>%"></span>
-                <span class="text-[10px] opacity-60 tabular-nums"><%= l(month, format: '%m') %></span>
+                <span class="text-[10px] opacity-70 tabular-nums"><%= l(month, format: '%m') %></span>
               </li>
             <% end %>
           </ol>
-          <p class="text-xs opacity-60"><%= t('.by_month_legend') %></p>
+          <p class="text-xs opacity-70"><%= t('.by_month_legend') %></p>
         </div>
       </section>
     </div>
@@ -147,14 +147,14 @@
       <p class="opacity-70"><%= t('.assumptions_intro') %></p>
       <table class="table table-xs">
         <tbody>
-          <tr><td><%= t('.a_car_co2') %></td><td class="tabular-nums"><%= s.car_g_km.round %> g/km</td><td class="text-xs opacity-60">TRANSIT_CO2_CAR_G_KM</td></tr>
+          <tr><td><%= t('.a_car_co2') %></td><td class="tabular-nums"><%= s.car_g_km.round %> g/km</td><td class="text-xs opacity-70">TRANSIT_CO2_CAR_G_KM</td></tr>
           <% Gtfs::SavingsEstimate::DEFAULT_CO2_G_PKM.each_key do |mode| %>
-            <tr><td><%= emoji.fetch(mode) %> <%= t("transit_modes.#{mode}") %></td><td class="tabular-nums"><%= s.co2_g_pkm(mode).round %> g/<%= t('.pkm') %></td><td class="text-xs opacity-60">TRANSIT_CO2_<%= mode.upcase %>_G_PKM</td></tr>
+            <tr><td><%= emoji.fetch(mode) %> <%= t("transit_modes.#{mode}") %></td><td class="tabular-nums"><%= s.co2_g_pkm(mode).round %> g/<%= t('.pkm') %></td><td class="text-xs opacity-70">TRANSIT_CO2_<%= mode.upcase %>_G_PKM</td></tr>
           <% end %>
-          <tr><td><%= t('.a_car_cost') %></td><td class="tabular-nums"><%= ft.call(s.car_ft_km) %>/km</td><td class="text-xs opacity-60">TRANSIT_CAR_FT_KM</td></tr>
-          <tr><td><%= t('.a_ticket') %></td><td class="tabular-nums"><%= ft.call(s.ticket_ft) %></td><td class="text-xs opacity-60">TRANSIT_TICKET_FT</td></tr>
-          <tr><td><%= t('.a_pass', days: Gtfs::SavingsEstimate::PASS_DAYS) %></td><td class="tabular-nums"><%= ft.call(s.pass_ft) %></td><td class="text-xs opacity-60">TRANSIT_PASS_FT</td></tr>
-          <tr><td><%= t('.a_tree') %></td><td class="tabular-nums"><%= s.tree_kg_year.round %> kg/<%= t('.year') %></td><td class="text-xs opacity-60">TRANSIT_TREE_KG_YEAR</td></tr>
+          <tr><td><%= t('.a_car_cost') %></td><td class="tabular-nums"><%= ft.call(s.car_ft_km) %>/km</td><td class="text-xs opacity-70">TRANSIT_CAR_FT_KM</td></tr>
+          <tr><td><%= t('.a_ticket') %></td><td class="tabular-nums"><%= ft.call(s.ticket_ft) %></td><td class="text-xs opacity-70">TRANSIT_TICKET_FT</td></tr>
+          <tr><td><%= t('.a_pass', days: Gtfs::SavingsEstimate::PASS_DAYS) %></td><td class="tabular-nums"><%= ft.call(s.pass_ft) %></td><td class="text-xs opacity-70">TRANSIT_PASS_FT</td></tr>
+          <tr><td><%= t('.a_tree') %></td><td class="tabular-nums"><%= s.tree_kg_year.round %> kg/<%= t('.year') %></td><td class="text-xs opacity-70">TRANSIT_TREE_KG_YEAR</td></tr>
         </tbody>
       </table>
     </div>

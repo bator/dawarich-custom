@@ -36,14 +36,14 @@
   # Compact age of the last sync, coloured: up to 26 h fine, up to 72 h late, older stale.
   fresh = lambda do |feed|
     at = feed.last_checked_at || feed.last_imported_at
-    return ['opacity-50', '–'] unless at
+    return ['opacity-70', '–'] unless at
 
     age = Time.current - at
     text = if age < 3600 then t('.ago_min', count: (age / 60).round)
            elsif age < 48 * 3600 then t('.ago_h', count: (age / 3600).round)
            else t('.ago_d', count: (age / 86_400).round)
            end
-    [age <= 26.hours ? 'text-success' : (age <= 72.hours ? 'text-warning' : 'text-error'), text]
+    [age <= 26.hours ? 'text-success-ink' : (age <= 72.hours ? 'text-warning-ink' : 'text-error-ink'), text]
   end
   rows = ->(feed) { ((feed.import_stats || {})['rows'] || {}).slice('gtfs_stops', 'gtfs_routes', 'gtfs_trips').map { |k, v| "#{t(".row_#{k.delete_prefix('gtfs_')}")}: #{number_with_delimiter(v, delimiter: ' ')}" }.join(' · ') }
 %>
@@ -53,11 +53,11 @@
   <%= render 'shared/transit_tabs', active: :feeds %>
 
   <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" aria-label="<%= t('.summary') %>">
-    <% [[:ok, 'text-success', 'border-success/30 bg-success/10'], [:expiring, 'text-warning', 'border-warning/40 bg-warning/10'],
-        [:expired, 'text-error', 'border-error/40 bg-error/10'], [:failed, 'text-error', 'border-error/40 bg-error/10']].each do |key, text, box| %>
+    <% [[:ok, 'text-success-ink', 'border-success/30 bg-success/10'], [:expiring, 'text-warning-ink', 'border-warning/40 bg-warning/10'],
+        [:expired, 'text-error-ink', 'border-error/40 bg-error/10'], [:failed, 'text-error-ink', 'border-error/40 bg-error/10']].each do |key, text, box| %>
       <% n = counts.fetch(key, 0) %>
       <div class="rounded-box border p-4 <%= n.positive? ? box : 'border-transparent bg-base-200' %>">
-        <div class="text-xs uppercase tracking-wide <%= n.positive? ? text : 'opacity-60' %>"><%= t(".kpi_#{key}", days: warn_days) %></div>
+        <div class="text-xs uppercase tracking-wide <%= n.positive? ? text : 'opacity-70' %>"><%= t(".kpi_#{key}", days: warn_days) %></div>
         <div class="text-3xl font-bold tabular-nums mt-1"><%= n %></div>
       </div>
     <% end %>
@@ -74,7 +74,7 @@
         </ul>
       </div>
 
-      <div class="grid grid-cols-[minmax(0,9rem)_1fr_4.5rem] gap-x-3 text-[10px] opacity-60 tabular-nums">
+      <div class="grid grid-cols-[minmax(0,9rem)_1fr_4.5rem] gap-x-3 text-[10px] opacity-70 tabular-nums">
         <span></span>
         <span class="relative h-4">
           <% months.each do |m| %>
@@ -97,7 +97,7 @@
           <li class="grid grid-cols-[minmax(0,9rem)_1fr_4.5rem] gap-x-3 items-center py-1.5 border-b border-base-300 last:border-b-0">
             <span class="min-w-0" title="<%= [feed.key, rows.call(feed)].compact_blank.join(' · ') %>">
               <span class="block text-sm font-medium truncate"><%= feed.name %></span>
-              <span class="block text-[10px] opacity-60 tabular-nums"><%= feed.imported? ? "v#{feed.active_version}" : t('.not_imported') %></span>
+              <span class="block text-[10px] opacity-70 tabular-nums"><%= feed.imported? ? "v#{feed.active_version}" : t('.not_imported') %></span>
             </span>
 
             <span class="relative h-5 rounded bg-base-100"
@@ -113,16 +113,16 @@
                 <span class="absolute inset-y-1 <%= bar[vs] %> <%= 'rounded-r' if to <= win_to %> <%= 'rounded-l' if from > @today %>" style="left: <%= mid %>%; width: <%= (right - mid).round(2) %>%"></span>
                 <% if to > win_to %><span class="absolute right-0.5 inset-y-0 flex items-center text-[10px] font-bold text-success-content">→</span><% end %>
                 <% if to <= win_to %>
-                  <span class="absolute inset-y-0 flex items-center text-[10px] tabular-nums pl-1 whitespace-nowrap <%= vs == :ok ? 'opacity-60' : (vs == :expiring ? 'text-warning' : 'text-error') %>" style="left: <%= right %>%">
+                  <span class="absolute inset-y-0 flex items-center text-[10px] tabular-nums pl-1 whitespace-nowrap <%= vs == :ok ? 'opacity-70' : (vs == :expiring ? 'text-warning-ink' : 'text-error-ink') %>" style="left: <%= right %>%">
                     <%= l(to, format: '%m.%d') %>
                   </span>
                 <% end %>
               <% elsif to && to < win_from %>
-                <span class="absolute inset-y-0 left-1 flex items-center gap-1 text-[10px] text-error whitespace-nowrap">
+                <span class="absolute inset-y-0 left-1 flex items-center gap-1 text-[10px] text-error-ink whitespace-nowrap">
                   <span class="inline-block w-1.5 h-3 rounded-sm bg-error"></span><%= t('.expired_ago', count: (@today - to).to_i) %> (<%= to %>)
                 </span>
               <% else %>
-                <span class="absolute inset-y-0 left-1 flex items-center text-[10px] opacity-60"><%= t('.no_validity') %></span>
+                <span class="absolute inset-y-0 left-1 flex items-center text-[10px] opacity-70"><%= t('.no_validity') %></span>
               <% end %>
               <span class="absolute -inset-y-1 w-0.5 bg-primary" style="left: calc(<%= pos.call(@today) %>% - 1px)"></span>
             </span>
@@ -139,12 +139,12 @@
           </li>
         <% end %>
       </ul>
-      <div class="grid grid-cols-[minmax(0,9rem)_1fr_4.5rem] gap-x-3 text-[10px] opacity-60">
+      <div class="grid grid-cols-[minmax(0,9rem)_1fr_4.5rem] gap-x-3 text-[10px] opacity-70">
         <span></span>
-        <span class="relative h-3"><span class="absolute -translate-x-1/2 text-primary font-semibold" style="left: <%= pos.call(@today) %>%"><%= t('.today') %></span></span>
+        <span class="relative h-3"><span class="absolute -translate-x-1/2 text-primary-ink font-semibold" style="left: <%= pos.call(@today) %>%"><%= t('.today') %></span></span>
         <span></span>
       </div>
-      <p class="text-xs opacity-60"><%= t('.timeline_note', past: TransitFeedsController::WINDOW_PAST, future: TransitFeedsController::WINDOW_FUTURE) %></p>
+      <p class="text-xs opacity-70"><%= t('.timeline_note', past: TransitFeedsController::WINDOW_PAST, future: TransitFeedsController::WINDOW_FUTURE) %></p>
     </div>
   </section>
 
@@ -154,21 +154,21 @@
         <h2 id="feeds-jobs" class="font-semibold"><%= t('.jobs_title', queue: TransitFeedsController::QUEUE) %></h2>
         <div class="grid grid-cols-3 gap-2 text-center">
           <div class="rounded-box bg-base-100 p-2">
-            <div class="text-2xl font-bold tabular-nums <%= 'text-info' if @running.any? %>"><%= @running.size %></div>
-            <div class="text-[11px] opacity-60"><%= t('.running_label') %></div>
+            <div class="text-2xl font-bold tabular-nums <%= 'text-info-ink' if @running.any? %>"><%= @running.size %></div>
+            <div class="text-[11px] opacity-70"><%= t('.running_label') %></div>
           </div>
           <div class="rounded-box bg-base-100 p-2">
             <div class="text-2xl font-bold tabular-nums"><%= @queue_size %></div>
-            <div class="text-[11px] opacity-60"><%= t('.queued_label') %></div>
+            <div class="text-[11px] opacity-70"><%= t('.queued_label') %></div>
           </div>
           <div class="rounded-box bg-base-100 p-2">
-            <div class="text-2xl font-bold tabular-nums <%= 'text-warning' if @retries.positive? %>"><%= @retries %><%= '+' if @retries_capped %></div>
-            <div class="text-[11px] opacity-60"><%= t('.retries_label') %></div>
+            <div class="text-2xl font-bold tabular-nums <%= 'text-warning-ink' if @retries.positive? %>"><%= @retries %><%= '+' if @retries_capped %></div>
+            <div class="text-[11px] opacity-70"><%= t('.retries_label') %></div>
           </div>
         </div>
         <% jobs = @running.map { |w| [w.job.display_class, w.job.display_args, w.run_at, true] } + @queued.first(5).map { |j| [j.display_class, j.display_args, j.enqueued_at, false] } %>
         <% if jobs.empty? %>
-          <p class="text-sm opacity-60"><%= t('.no_jobs') %></p>
+          <p class="text-sm opacity-70"><%= t('.no_jobs') %></p>
         <% else %>
           <ul class="flex flex-col gap-1 text-xs" role="list">
             <% jobs.each do |klass, args, at, running| %>
@@ -177,10 +177,10 @@
                   <span class="inline-block w-1.5 h-1.5 rounded-full shrink-0 <%= running ? 'bg-info animate-pulse' : 'bg-base-content/30' %>"></span>
                   <span class="truncate"><%= klass.to_s.delete_prefix('Gtfs::') %></span>
                 </span>
-                <span class="opacity-60 whitespace-nowrap"><%= at ? t('.ago', time: time_ago_in_words(at)) : '' %></span>
+                <span class="opacity-70 whitespace-nowrap"><%= at ? t('.ago', time: time_ago_in_words(at)) : '' %></span>
               </li>
             <% end %>
-            <% if @queue_size > 5 %><li class="opacity-60"><%= t('.more_queued', count: @queue_size - [@queued.size, 5].min) %></li><% end %>
+            <% if @queue_size > 5 %><li class="opacity-70"><%= t('.more_queued', count: @queue_size - [@queued.size, 5].min) %></li><% end %>
           </ul>
         <% end %>
       </div>
@@ -206,7 +206,7 @@
                 title="<%= t('.backfill_detail', cursor: st['cursor'] || '–', from: st['from'] || '–', until: st['until'] || '–', done:, total: total || '?') %>">
               <div class="flex items-baseline justify-between gap-2">
                 <span class="font-medium truncate"><%= user.display_name %></span>
-                <span class="text-xs whitespace-nowrap <%= status == 'running' ? 'text-info' : 'opacity-60' %>">
+                <span class="text-xs whitespace-nowrap <%= status == 'running' ? 'text-info-ink' : 'opacity-70' %>">
                   <%= status ? t(".backfill_#{status}", default: status) : t('.backfill_never') %><%= " · #{percent}%" if percent && status != 'done' %>
                 </span>
               </div>
@@ -214,7 +214,7 @@
                 <div class="h-1.5 rounded-full bg-base-100 mt-1 overflow-hidden">
                   <span class="block h-full rounded-full <%= color %>" style="width: <%= status == 'done' ? 100 : (percent || 0) %>%"></span>
                 </div>
-                <div class="text-[11px] opacity-60 mt-0.5 tabular-nums">
+                <div class="text-[11px] opacity-70 mt-0.5 tabular-nums">
                   <% if status == 'done' && finished %><%= t('.finished', time: stamp.call(finished)) %>
                   <% elsif st['cursor'] %><%= t('.at_day', day: st['cursor']) %><%= " · #{t('.updated', time: time_ago_in_words(updated))}" if updated %><% end %>
                 </div>
