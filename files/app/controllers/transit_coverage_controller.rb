@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# /transit/coverage: per user and day, how many hours had live points, and
-# the longest silent gaps (Gtfs::CoverageReport). Admins see every user,
+# /transit/coverage: per user and day, the spans of time with live points
+# (a 24-hour strip per day) and the longest silent gaps (Gtfs::CoverageReport). Admins see every user,
 # everyone else only themselves. Like /transit/devices the shell renders at
 # once and the report comes in a lazy Turbo Frame, cached for CACHE_TTL.
 class TransitCoverageController < ApplicationController
@@ -19,7 +19,7 @@ class TransitCoverageController < ApplicationController
 
     @users = current_user.admin? ? User.order(:id).to_a : [current_user]
     @report_meta = Gtfs::CoverageReport.new([], since: @days.days.ago.beginning_of_day, zone: @zone)
-    @cached_at, @reports = Rails.cache.fetch(['transit-coverage/v1', @users.map(&:id), @days, @zone.name], expires_in: CACHE_TTL) do
+    @cached_at, @reports = Rails.cache.fetch(['transit-coverage/v2', @users.map(&:id), @days, @zone.name], expires_in: CACHE_TTL) do
       [Time.current, Gtfs::CoverageReport.new(@users.map(&:id), since: @days.days.ago.beginning_of_day, zone: @zone).call]
     end
     render partial: 'report'

@@ -70,18 +70,19 @@ hu:
   transit_coverage:
     index:
       title: Követés lefedettsége
-      note: Naponta hány órában jött legalább egy élő pont (importált pontok nélkül), és a hosszú csendek.
+      note: "Naponta mikor jöttek élő pontok (a 15 percen belüli pontok egy szakaszt alkotnak, az importált pontok nem számítanak), és a leghosszabb csendek."
       loading: Lefedettség betöltése…
-      legend: "Órák ponttal:"
       last: "utolsó pont %{time} ezelőtt"
       no_points:
         one: Az elmúlt napban nem jött élő pont.
         other: "Az elmúlt %{count} napban nem jött élő pont."
-      cell: "%{hours} óra, %{points} pont"
-      uptime: "az órák %{percent}%-a lefedve"
+      legend_tracked: követve
+      legend_gap: nincs adat
+      legend_now: most
+      points:
+        one: 1 pont
+        other: "%{count} pont"
       days_label: "%{covered}/%{total} nap"
-      start: "%{count} napja"
-      today: ma
       gaps_count:
         one: "1 hosszú csend"
         other: "%{count} hosszú csend"

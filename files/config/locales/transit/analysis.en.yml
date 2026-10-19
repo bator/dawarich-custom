@@ -70,18 +70,19 @@ en:
   transit_coverage:
     index:
       title: Tracking coverage
-      note: Hours per day with at least one live point (imported points not counted), and silent gaps.
+      note: "When live points came in, day by day (points less than 15 min apart form one span; imported points not counted), and the longest silences."
       loading: Loading coverage…
-      legend: "Hours with points:"
       last: "last point %{time} ago"
       no_points:
         one: No live point in the last day.
         other: "No live point in the last %{count} days."
-      cell: "%{hours} h, %{points} points"
-      uptime: "%{percent}% of hours covered"
+      legend_tracked: tracked
+      legend_gap: no data
+      legend_now: now
+      points:
+        one: 1 point
+        other: "%{count} points"
       days_label: "%{covered}/%{total} days"
-      start: "%{count} days ago"
-      today: today
       gaps_count:
         one: "1 long silence"
         other: "%{count} long silences"
