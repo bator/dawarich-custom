@@ -74,7 +74,9 @@ en:
       loading: Loading coverage…
       last: "last point %{time} ago"
       covered: of the time covered
-      typical_day: Typical day (share of days with data per hour)
+      typical_day: Typical day
+      typical_hint: "Bar height: average points in that hour; colour: on how many days there was data in that hour."
+      hour_title: "data on %{percent}% of days, %{points} points on average"
       days:
         one: Last day
         other: "Last %{count} days"
@@ -85,7 +87,7 @@ en:
       no_data: no data
       today: today
       longest_gap: "Longest silence: %{time} (%{from} → %{to})"
-      legend: "Day covered:"
+      legend: "Day covered (height: points that day):"
       no_points:
         one: No live point in the last day.
         other: "No live point in the last %{count} days."

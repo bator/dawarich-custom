@@ -1,8 +1,9 @@
 <%#
   Lazy part of /transit/coverage (Turbo Frame): one card per user with the
-  coverage share, a "typical day" (24 bars: share of days with a point in
-  that hour) and a tracker of the period (one bar per day, coloured by the
-  covered share of that day). Full i18n keys: this is a partial.
+  coverage share, a "typical day" (24 bars: height = average points in that
+  hour, colour = share of days with data) and a bar per day of the period
+  (height = points that day, colour = covered share of the day), so a fully
+  covered user still shows a shape. Full i18n keys: this is a partial.
 %>
 <%
   meta = @report_meta
@@ -53,12 +54,14 @@
             </header>
 
             <div>
-              <div class="text-[11px] uppercase tracking-wide opacity-60 mb-1.5"><%= t('transit_coverage.index.typical_day') %></div>
-              <ol class="flex items-end gap-[3px] h-14" role="list">
-                <% rhythm.each_with_index do |value, hour| %>
-                  <li class="flex-1 h-full flex items-end" title="<%= format('%02d:00–%02d:59', hour, hour) %>: <%= (value * 100).round %>%">
-                    <span class="w-full rounded-sm <%= value >= 0.9 ? 'bg-primary' : (value >= 0.5 ? 'bg-primary/70' : 'bg-primary/40') %>"
-                          style="height: <%= [(value * 100).round(1), 4].max %>%"></span>
+              <div class="text-[11px] uppercase tracking-wide opacity-60 mb-1.5 cursor-help w-fit" title="<%= t('transit_coverage.index.typical_hint') %>"><%= t('transit_coverage.index.typical_day') %> ⓘ</div>
+              <% max_mean = [rhythm.map { |r| r[:mean_points] }.max.to_f, 1].max %>
+              <ol class="flex items-end gap-1 h-16" role="list">
+                <% rhythm.each_with_index do |r, hour| %>
+                  <li class="flex-1 h-full flex items-end"
+                      title="<%= format('%02d:00–%02d:59', hour, hour) %>: <%= t('transit_coverage.index.hour_title', percent: (r[:share] * 100).round, points: r[:mean_points].round) %>">
+                    <span class="w-full rounded-t <%= r[:share] >= 0.9 ? 'bg-primary' : (r[:share] >= 0.5 ? 'bg-primary/60' : (r[:share].positive? ? 'bg-primary/30' : 'bg-base-content/10')) %>"
+                          style="height: <%= r[:share].positive? ? [(r[:mean_points] / max_mean * 100).round(1), 8].max : 4 %>%"></span>
                   </li>
                 <% end %>
               </ol>
@@ -70,15 +73,19 @@
                 <span class="uppercase tracking-wide"><%= t('transit_coverage.index.days', count: dates.size) %></span>
                 <span class="tabular-nums"><%= t('transit_coverage.index.days_label', covered: report.covered_days, total: dates.size) %></span>
               </div>
-              <ol class="flex gap-[2px] h-7" role="list">
+              <% max_points = [dates.map { |d| report.days[d]&.dig(:points).to_i }.max, 1].max %>
+              <ol class="flex items-end gap-[3px] h-10" role="list">
                 <% dates.each do |date| %>
                   <%
                     day = report.days[date]
                     possible = date == meta.to ? [today_minutes, 1].max : 1440
                     day_share = day && day[:minutes].fdiv(possible)
                   %>
-                  <li class="flex-1 rounded-[3px] <%= tier.call(day_share) %> <%= 'ring-1 ring-base-content/40 ring-offset-1 ring-offset-base-200' if date == meta.to %>"
-                      title="<%= l(date, format: '%Y-%m-%d') %>: <%= day ? "#{hm.call(day[:minutes])} · #{t('transit_coverage.index.points', count: day[:points])}" : t('transit_coverage.index.no_data') %>"></li>
+                  <li class="flex-1 h-full flex items-end"
+                      title="<%= l(date, format: '%Y-%m-%d') %>: <%= day ? "#{hm.call(day[:minutes])} · #{t('transit_coverage.index.points', count: day[:points])}" : t('transit_coverage.index.no_data') %>">
+                    <span class="w-full rounded-[3px] <%= tier.call(day_share) %> <%= 'outline outline-1 outline-offset-1 outline-base-content/50' if date == meta.to %>"
+                          style="height: <%= day ? [(day[:points] * 100.0 / max_points).round(1), 12].max : 12 %>%"></span>
+                  </li>
                 <% end %>
               </ol>
               <div class="flex justify-between text-[10px] opacity-50 tabular-nums mt-1">

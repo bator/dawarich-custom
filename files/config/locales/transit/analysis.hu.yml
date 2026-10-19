@@ -74,7 +74,9 @@ hu:
       loading: Lefedettség betöltése…
       last: "utolsó pont %{time} ezelőtt"
       covered: az idő lefedve
-      typical_day: Tipikus nap (a napok hány %-ában volt adat az adott órában)
+      typical_day: Tipikus nap
+      typical_hint: "Oszlopmagasság: átlagos pontszám az adott órában; szín: hány napon volt adat abban az órában."
+      hour_title: "a napok %{percent}%-án volt adat, átlag %{points} pont"
       days:
         one: Az elmúlt nap
         other: "Az elmúlt %{count} nap"
@@ -85,7 +87,7 @@ hu:
       no_data: nincs adat
       today: ma
       longest_gap: "Leghosszabb csend: %{time} (%{from} → %{to})"
-      legend: "Napi lefedettség:"
+      legend: "Napi lefedettség (magasság: aznapi pontok):"
       no_points:
         one: Az elmúlt napban nem jött élő pont.
         other: "Az elmúlt %{count} napban nem jött élő pont."

@@ -19,7 +19,7 @@ class TransitCoverageController < ApplicationController
 
     @users = current_user.admin? ? User.order(:id).to_a : [current_user]
     @report_meta = Gtfs::CoverageReport.new([], since: @days.days.ago.beginning_of_day, zone: @zone)
-    @cached_at, @reports = Rails.cache.fetch(['transit-coverage/v3', @users.map(&:id), @days, @zone.name], expires_in: CACHE_TTL) do
+    @cached_at, @reports = Rails.cache.fetch(['transit-coverage/v4', @users.map(&:id), @days, @zone.name], expires_in: CACHE_TTL) do
       [Time.current, Gtfs::CoverageReport.new(@users.map(&:id), since: @days.days.ago.beginning_of_day, zone: @zone).call]
     end
     render partial: 'report'

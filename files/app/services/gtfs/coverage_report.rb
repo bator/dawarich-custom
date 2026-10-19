@@ -12,7 +12,8 @@ class Gtfs::CoverageReport
   TOP_GAPS = 5
 
   # days: { Date => { minutes:, points:, hours: [0..23, ...] } } (local days)
-  Entry = Struct.new(:user_id, :days, :gaps, :last_ts, keyword_init: true) do
+  # hour_points: points per local hour of day over the whole period (24 ints)
+  Entry = Struct.new(:user_id, :days, :gaps, :last_ts, :hour_points, keyword_init: true) do
     def covered_days = days.count { |_, day| day[:minutes].positive? }
     def covered_minutes = days.sum { |_, day| day[:minutes] }
   end
@@ -35,15 +36,17 @@ class Gtfs::CoverageReport
     (total_days - 1) * 1440 + now.hour * 60 + now.min
   end
 
-  # "Typical day": for each local hour, the share of the period's days that
-  # had a point in that hour (today's hours count only once they began).
+  # "Typical day", per local hour: share = the share of the period's days
+  # that had a point in that hour (today's hours count only once they began),
+  # mean_points = the average number of points in that hour per such day.
   def rhythm(entry)
     now = Time.current.in_time_zone(@zone)
     counts = Array.new(24, 0)
     entry.days.each_value { |day| day[:hours].each { |h| counts[h] += 1 } }
     (0..23).map do |h|
       possible = total_days - (h > now.hour ? 1 : 0)
-      possible.positive? ? counts[h].fdiv(possible) : 0.0
+      share = possible.positive? ? counts[h].fdiv(possible) : 0.0
+      { share:, mean_points: counts[h].positive? ? entry.hour_points[h].fdiv(counts[h]) : 0.0 }
     end
   end
 
@@ -70,12 +73,14 @@ class Gtfs::CoverageReport
     end
     counts = Hash.new(0)
     hours = Hash.new { |h, k| h[k] = Set.new }
+    hour_points = Array.new(24, 0)
     timestamps.each do |ts|
       time = @zone.at(ts)
       counts[time.to_date] += 1
       hours[time.to_date] << time.hour
+      hour_points[time.hour] += 1
     end
-    Entry.new(user_id:, days: per_day(spans, counts, hours), gaps: gaps.sort_by { |a, b| a - b }.first(TOP_GAPS), last_ts: timestamps.last)
+    Entry.new(user_id:, days: per_day(spans, counts, hours), hour_points:, gaps: gaps.sort_by { |a, b| a - b }.first(TOP_GAPS), last_ts: timestamps.last)
   end
 
   # Covered minutes per local day (spans cut at midnight), with the point
