@@ -16,6 +16,7 @@ en:
         one: No live report in the last day.
         other: "No live report in the last %{count} days."
       unknown_device: unknown device
+      battery: Battery
       ago: "%{time} ago"
       late: "arrived %{time} late"
       points_title:

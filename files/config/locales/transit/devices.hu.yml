@@ -16,6 +16,7 @@ hu:
         one: Az elmúlt napban nem jött élő jelentés.
         other: "Az elmúlt %{count} napban nem jött élő jelentés."
       unknown_device: ismeretlen eszköz
+      battery: Akkumulátor
       ago: "%{time} ezelőtt"
       late: "%{time} késéssel érkezett"
       points_title:

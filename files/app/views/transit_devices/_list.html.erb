@@ -53,9 +53,9 @@
                     <div class="text-xs opacity-70 flex flex-wrap gap-x-2">
                       <span class="tabular-nums"><%= clock.call(row['timestamp']) %></span>
                       <% if battery %>
-                        <span class="<%= 'text-error-ink opacity-100' if battery < 20 %>">🔋 <%= battery %>%</span>
+                        <span class="inline-flex items-center gap-1 <%= 'text-error-ink opacity-100' if battery < 20 %>"><%= transit_battery_icon %><span class="sr-only"><%= t('transit_devices.index.battery') %></span><%= battery %>%</span>
                       <% end %>
-                      <% if place %><span class="truncate">📍 <%= place %></span><% end %>
+                      <% if place %><span class="inline-flex items-center gap-1 min-w-0"><%= transit_icon('map-pin', 'w-3.5 h-3.5') %><span class="truncate"><%= place %></span></span><% end %>
                       <% if delay > 300 %>
                         <span><%= t('transit_devices.index.late', time: distance_of_time_in_words(delay)) %></span>
                       <% end %>
