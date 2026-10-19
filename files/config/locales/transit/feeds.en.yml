@@ -2,50 +2,60 @@ en:
   transit_feeds:
     index:
       title: Timetables (GTFS)
-      intro: Read-only status of the timetable feeds, the background jobs and the history matching. Red means the timetable has expired, yellow that it ends within %{days} days.
-      feeds:
-        one: "%{count} feed"
-        other: "%{count} feeds"
-      feed: Feed
-      state: State
-      version: Version
-      last_checked: Last checked
-      last_imported: Last imported
-      valid: Valid until
-      rows: Rows
-      enabled: enabled
-      disabled: disabled
-      status_importing: importing
-      status_failed: failed
-      expired_ago:
-        one: expired 1 day ago
-        other: "expired %{count} days ago"
+      summary: Feed status
+      kpi_ok: Valid
+      kpi_expiring: "Ends within %{days} days"
+      kpi_expired: Expired
+      kpi_failed: Failed
+      timeline:
+        one: Validity of 1 enabled feed
+        other: "Validity of %{count} enabled feeds"
+      legend_ok: valid
+      legend_expiring: "ends within %{days} days"
+      legend_expired: expired
+      freshness: Last sync
+      ago: "%{time} ago"
+      ago_min:
+        one: 1 min ago
+        other: "%{count} min ago"
+      ago_h:
+        one: 1 h ago
+        other: "%{count} h ago"
+      ago_d:
+        one: 1 day ago
+        other: "%{count} days ago"
+      not_imported: not imported
       days_left:
         one: 1 day left
         other: "%{count} days left"
+      expired_ago:
+        one: expired 1 day ago
+        other: "expired %{count} days ago"
+      no_validity: no validity data
+      checked: last checked
+      imported: last imported
+      status_failed: failed
+      status_importing: importing
+      today: today
+      timeline_note: "Window: %{past} days back, %{future} days ahead. Faded part: already past. Most urgent feed first; hover a row for dates and row counts."
       row_stops: stops
       row_routes: routes
       row_trips: trips
-      row_stop_times: stop times
       jobs_title: "Background jobs (%{queue} queue)"
-      running:
-        one: 1 running
-        other: "%{count} running"
-      queued:
-        one: 1 queued
-        other: "%{count} queued"
-      retries:
-        one: 1 retry
-        other: "%{count} retries"
+      running_label: running
+      queued_label: queued
+      retries_label: retries
       no_jobs: No job is running or waiting.
-      since: "%{time} ago"
       more_queued: "and %{count} more"
       backfills_title: History matching per user
+      backfill_detail: "at %{cursor} · %{from} → %{until} · %{done}/%{total} days"
       backfill_running: running
       backfill_done: done
       backfill_cancelled: cancelled
       backfill_never: never ran
-      progress: "%{percent}% done"
-      backfill_detail: "at %{cursor} · %{from} → %{until} · %{done}/%{total} days"
       finished: "finished %{time}"
+      at_day: "at %{day}"
       updated: "updated %{time} ago"
+      disabled_feeds:
+        one: 1 disabled feed
+        other: "%{count} disabled feeds"

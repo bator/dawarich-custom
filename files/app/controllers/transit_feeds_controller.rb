@@ -8,6 +8,9 @@ require 'sidekiq/api'
 class TransitFeedsController < ApplicationController
   # A feed whose timetable ends within this many days gets a yellow badge.
   EXPIRY_WARNING_DAYS = 30
+  # Window of the validity timeline, in days before and after today.
+  WINDOW_PAST = 60
+  WINDOW_FUTURE = 120
   QUEUE = 'gtfs'
   MAX_JOBS = 50
   # The retry set is shared by every queue; only its newest entries are
