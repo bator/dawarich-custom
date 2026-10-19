@@ -12,106 +12,111 @@
   map_link = "/map/v2?#{URI.encode_www_form(start_at: zone.at(segment.started_at - 600).iso8601, end_at: zone.at(segment.ended_at + 600).iso8601)}"
   minutes = ((segment.ended_at - segment.started_at) / 60.0).round
   # A trip the user switched to is "chosen" (awaiting approval) even when its
-  # confidence alone would make it uncertain; it is still opened like one.
+  # confidence alone would make it uncertain.
   status = if segment.auto? && segment.user_chosen? then :chosen
            elsif segment.uncertain? then :uncertain
            elsif segment.confirmed? then :confirmed
            else :auto
            end
   attention = %i[uncertain chosen].include?(status)
-  status_badge = {
-    uncertain: ['badge-warning', '⚠'], confirmed: ['badge-success', '✔'], chosen: ['badge-info', '🔁'], auto: ['badge-ghost', '·']
+  chip = {
+    uncertain: ['badge-warning', '⚠'], confirmed: ['badge-success', '✔'], chosen: ['badge-info', '🔁'], auto: ['badge-ghost', '•']
   }.fetch(status)
+  border = { uncertain: 'border-warning', chosen: 'border-info' }.fetch(status, 'border-transparent')
+  line_color = data[:route_color]
+  delay = data[:delay_secs] && (data[:delay_secs] / 60.0).round
 %>
-<li id="<%= dom_id(segment) %>" class="border-b border-base-200 last:border-b-0 <%= 'bg-warning/5 rounded-box' if attention %>">
-  <details class="group" <%= 'open' if attention %>>
-    <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer rounded-box px-2 py-2 hover:bg-base-200
-                    grid grid-cols-[4.5rem_auto_1fr_auto] sm:grid-cols-[6.5rem_auto_1fr_auto_auto] items-center gap-x-3 min-h-11">
-      <span class="tabular-nums text-sm leading-tight">
-        <%= started.strftime('%H:%M') %><span class="hidden sm:inline">–<%= ended.strftime('%H:%M') %></span>
-      </span>
-      <span class="badge font-bold min-w-12 justify-center gap-1 border-0"
-            style="background-color: <%= data[:route_color] %>; color: <%= data[:route_text_color] %>"
+<li id="<%= dom_id(segment) %>" class="card bg-base-200 shadow-sm border-2 <%= border %>">
+  <div class="card-body p-4 gap-3">
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="badge badge-lg font-bold gap-1 border-0 min-w-14 justify-center"
+            style="background-color: <%= line_color %>; color: <%= data[:route_text_color] %>"
             title="<%= t("transit_modes.#{segment.mode}") %>">
-        <span aria-hidden="true" class="text-xs"><%= icon %></span>
+        <span aria-hidden="true" class="text-sm"><%= icon %></span>
         <span class="sr-only"><%= t("transit_modes.#{segment.mode}") %></span>
         <%= segment.route_short_name || segment.route_long_name %>
       </span>
-      <span class="text-sm line-clamp-2 sm:line-clamp-none sm:truncate">
-        <%= segment.boarding_stop_name %> <span class="opacity-50">→</span> <%= segment.alighting_stop_name %>
-      </span>
-      <span class="hidden sm:inline text-xs opacity-70 tabular-nums whitespace-nowrap">
+      <span class="text-sm opacity-80 tabular-nums">
         <%= t('transit_segments.card.minutes', count: minutes) %>
-      </span>
-      <span class="flex items-center gap-1">
-        <span class="badge badge-sm <%= status_badge[0] %>" title="<%= t("transit_segments.card.#{status}") %>"
-              <%= 'data-testid=transit-chosen' if status == :chosen %>>
-          <span aria-hidden="true"><%= status_badge[1] %></span>
-          <span class="sr-only"><%= t("transit_segments.card.#{status}") %></span>
-        </span>
-        <svg class="h-4 w-4 opacity-50 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-      </span>
-    </summary>
-
-    <div class="pl-2 sm:pl-[7.25rem] pr-2 pb-3 pt-1 flex flex-col gap-2 text-sm">
-      <p class="opacity-80">
-        <%= t("transit_modes.#{segment.mode}") %>
-        <% if segment.headsign.present? %> · → <%= segment.headsign %><% end %>
-        · <%= started.strftime('%H:%M') %>–<%= ended.strftime('%H:%M') %> (<%= t('transit_segments.card.minutes', count: minutes) %>)
         <% if segment.distance_m %> · <%= t('transit_segments.card.km', value: number_with_precision(segment.distance_m / 1000.0, precision: 1)) %><% end %>
-      </p>
-      <p class="opacity-80">
-        <span class="font-medium"><%= t("transit_segments.card.#{status}") %></span>
-        · <%= t('transit_segments.card.confidence', value: (segment.confidence * 100).round) %>
-        <% if data[:delay_secs] %>
-          <% delay = (data[:delay_secs] / 60.0).round %>
-          · <%= delay.zero? ? t('transit_segments.card.on_time') : t(delay.positive? ? 'transit_segments.card.delay_late' : 'transit_segments.card.delay_early', minutes: delay.abs) %>
-        <% end %>
-      </p>
-      <% if status == :uncertain %>
-        <ul class="text-xs list-disc ml-5 opacity-80">
-          <% Array(debug['caps']).each do |cap| %><li><%= t("transit_segments.card.reason_#{cap}", default: cap) %></li><% end %>
-          <% if debug['ambiguous'] %><li><%= t('transit_segments.card.reason_ambiguous') %></li><% end %>
-          <% if debug['trip_ambiguous'] %><li><%= t('transit_segments.card.reason_trip_ambiguous') %></li><% end %>
-        </ul>
+      </span>
+      <% if delay %>
+        <span class="badge badge-sm badge-outline <%= delay > 2 ? 'badge-warning' : 'badge-ghost' %> tabular-nums">
+          <%= delay.zero? ? t('transit_segments.card.on_time') : t(delay.positive? ? 'transit_segments.card.delay_late' : 'transit_segments.card.delay_early', minutes: delay.abs) %>
+        </span>
       <% end %>
+      <span class="badge <%= chip[0] %> gap-1 ml-auto" title="<%= t("transit_segments.card.#{status}") %> · <%= t('transit_segments.card.confidence', value: (segment.confidence * 100).round) %>"
+            <%= 'data-testid=transit-chosen' if status == :chosen %>>
+        <span aria-hidden="true"><%= chip[1] %></span>
+        <% if status == :uncertain %><%= t('transit_segments.card.uncertain') %><% else %><span class="sr-only"><%= t("transit_segments.card.#{status}") %></span><% end %>
+      </span>
+    </div>
 
-      <div class="flex flex-wrap gap-2">
-        <% if segment.auto? %>
-          <%= button_to t('transit_segments.card.confirm'), transit_segment_path(segment), method: :patch,
-                        params: filter.merge(review_action: 'confirm'), class: 'btn btn-success btn-sm min-h-11' %>
-          <%= button_to t('transit_segments.card.reject'), transit_segment_path(segment), method: :patch,
-                        params: filter.merge(review_action: 'reject'), class: 'btn btn-error btn-outline btn-sm min-h-11' %>
-        <% else %>
-          <%= button_to t('transit_segments.card.undo'), transit_segment_path(segment), method: :patch,
-                        params: filter.merge(review_action: 'reset'), class: 'btn btn-ghost btn-sm min-h-11' %>
-        <% end %>
-        <%= link_to t('transit_segments.card.on_map'), map_link, class: 'btn btn-ghost btn-sm min-h-11' %>
-      </div>
+    <div class="grid grid-cols-[3rem_1.25rem_1fr] gap-x-2 items-center" aria-label="<%= segment.boarding_stop_name %> → <%= segment.alighting_stop_name %>">
+      <span class="tabular-nums font-semibold text-sm"><%= started.strftime('%H:%M') %></span>
+      <span class="flex justify-center"><span class="w-3.5 h-3.5 rounded-full border-[3px] bg-base-100" style="border-color: <%= line_color %>"></span></span>
+      <span class="font-medium truncate"><%= segment.boarding_stop_name %></span>
 
-      <details class="group/alt">
-        <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer text-xs link link-hover opacity-80 w-fit">
+      <span></span>
+      <span class="flex justify-center self-stretch"><span class="w-1 min-h-6 h-full rounded-full" style="background-color: <%= line_color %>"></span></span>
+      <span class="text-xs opacity-70 py-1 truncate">
+        <% if segment.headsign.present? %>→ <%= segment.headsign %><% end %>
+      </span>
+
+      <span class="tabular-nums font-semibold text-sm"><%= ended.strftime('%H:%M') %></span>
+      <span class="flex justify-center"><span class="w-3.5 h-3.5 rounded-full border-[3px] bg-base-100" style="border-color: <%= line_color %>"></span></span>
+      <span class="font-medium truncate"><%= segment.alighting_stop_name %></span>
+    </div>
+
+    <% if status == :chosen %>
+      <p class="text-xs text-info">🔁 <%= t('transit_segments.card.chosen') %></p>
+    <% end %>
+    <% if status == :uncertain %>
+      <ul class="text-xs list-disc ml-5 opacity-80">
+        <li><%= t('transit_segments.card.confidence', value: (segment.confidence * 100).round) %></li>
+        <% Array(debug['caps']).each do |cap| %><li><%= t("transit_segments.card.reason_#{cap}", default: cap) %></li><% end %>
+        <% if debug['ambiguous'] %><li><%= t('transit_segments.card.reason_ambiguous') %></li><% end %>
+        <% if debug['trip_ambiguous'] %><li><%= t('transit_segments.card.reason_trip_ambiguous') %></li><% end %>
+      </ul>
+    <% end %>
+
+    <div class="flex flex-wrap items-center gap-1 border-t border-base-300 pt-3">
+      <% if segment.auto? %>
+        <%= button_to t('transit_segments.card.confirm'), transit_segment_path(segment), method: :patch,
+                      params: filter.merge(review_action: 'confirm'), class: "btn btn-sm min-h-11 sm:min-h-0 #{attention ? 'btn-success' : 'btn-ghost text-success'}" %>
+        <%= button_to t('transit_segments.card.reject'), transit_segment_path(segment), method: :patch,
+                      params: filter.merge(review_action: 'reject'), class: "btn btn-sm min-h-11 sm:min-h-0 #{attention ? 'btn-error btn-outline' : 'btn-ghost text-error'}" %>
+      <% else %>
+        <%= button_to t('transit_segments.card.undo'), transit_segment_path(segment), method: :patch,
+                      params: filter.merge(review_action: 'reset'), class: 'btn btn-ghost btn-sm min-h-11 sm:min-h-0' %>
+      <% end %>
+      <%= link_to map_link, class: 'btn btn-ghost btn-sm btn-square min-h-11 sm:min-h-0', title: t('transit_segments.card.on_map') do %>
+        <span aria-hidden="true">🗺️</span><span class="sr-only"><%= t('transit_segments.card.on_map') %></span>
+      <% end %>
+      <details class="dropdown dropdown-end ml-auto">
+        <summary class="btn btn-ghost btn-sm min-h-11 sm:min-h-0 list-none [&::-webkit-details-marker]:hidden">
           <%= t('transit_segments.card.other_trip') %> (<%= alternatives.size %>)
         </summary>
-        <% if alternatives.empty? %>
-          <p class="text-xs opacity-70 mt-1"><%= t('transit_segments.card.no_alternatives') %></p>
-        <% else %>
-          <ul class="mt-1 flex flex-col gap-1" role="list">
-            <% alternatives.each do |alt| %>
-              <li class="flex items-center justify-between gap-2 rounded-box bg-base-200 px-2 py-1">
-                <span class="text-xs tabular-nums">
-                  <strong><%= alt['line'] || alt['route_short_name'] %></strong>
-                  <%= zone.at(alt['started_at']).strftime('%H:%M') %>–<%= zone.at(alt['ended_at']).strftime('%H:%M') %>
-                  · <%= (alt['confidence'].to_f * 100).round %>%
-                </span>
-                <%= button_to t('transit_segments.card.choose'), transit_segment_path(segment), method: :patch,
-                              params: filter.merge(trip_gtfs_id: alt['trip_gtfs_id'], feed_id: alt['feed_id']), class: 'btn btn-xs min-h-11 sm:min-h-0' %>
-              </li>
-            <% end %>
-          </ul>
-        <% end %>
+        <div class="dropdown-content z-10 bg-base-100 rounded-box shadow-lg p-3 w-80 max-w-[85vw] mt-1">
+          <% if alternatives.empty? %>
+            <p class="text-sm opacity-70"><%= t('transit_segments.card.no_alternatives') %></p>
+          <% else %>
+            <ul class="flex flex-col gap-1" role="list">
+              <% alternatives.each do |alt| %>
+                <li class="flex items-center justify-between gap-2 rounded-box bg-base-200 px-2 py-1">
+                  <span class="text-sm tabular-nums">
+                    <strong><%= alt['line'] || alt['route_short_name'] %></strong>
+                    <%= zone.at(alt['started_at']).strftime('%H:%M') %>–<%= zone.at(alt['ended_at']).strftime('%H:%M') %>
+                    · <%= (alt['confidence'].to_f * 100).round %>%
+                  </span>
+                  <%= button_to t('transit_segments.card.choose'), transit_segment_path(segment), method: :patch,
+                                params: filter.merge(trip_gtfs_id: alt['trip_gtfs_id'], feed_id: alt['feed_id']), class: 'btn btn-xs min-h-11 sm:min-h-0' %>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+        </div>
       </details>
     </div>
-  </details>
+  </div>
 </li>

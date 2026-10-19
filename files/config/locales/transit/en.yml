@@ -62,6 +62,7 @@ en:
       to_review:
         one: "%{count} to review"
         other: "%{count} to review"
+      review_tile: To review
       all_reviewed: Nothing to review
       uncertain_note:
         one: "The totals leave out the %{count} uncertain ride until you decide about it."
