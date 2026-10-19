@@ -2,81 +2,28 @@
 
 <div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
   <%= render 'shared/page_header', title: t('.title') %>
-  <%= render 'shared/transit_tabs', active: :devices, days: @days %>
+  <%= render 'shared/transit_tabs', active: :devices %>
 
-  <p class="text-sm opacity-70 mb-4"><%= t(current_user.admin? ? '.intro_admin' : '.intro_self') %></p>
-
-  <%= form_with url: transit_devices_path, method: :get, local: true, class: 'flex flex-wrap items-end gap-3 mb-6' do %>
-    <label class="form-control">
-      <span class="label-text"><%= t('.period') %></span>
-      <%= select_tag :days, options_for_select(TransitDevicesController::PERIODS.map { |d| [t('.days', count: d), d] }, @days),
-                     class: 'select select-bordered min-h-11' %>
-    </label>
-    <%= submit_tag t('.filter'), class: 'btn btn-primary min-h-11', name: nil %>
-  <% end %>
-
-  <div class="flex flex-col gap-4">
-    <% @people.each do |user, devices| %>
-      <section class="card bg-base-200 shadow" aria-labelledby="person-<%= user.id %>">
-        <div class="card-body p-4 gap-3">
-          <h2 id="person-<%= user.id %>" class="font-semibold text-lg flex flex-wrap items-baseline gap-2">
-            <%= user.display_name %>
-            <% if user.display_name != user.email %><span class="text-sm font-normal opacity-60"><%= user.email %></span><% end %>
-          </h2>
-
-          <% if devices.empty? %>
-            <p class="text-sm opacity-70"><%= t('.no_reports', count: @days) %></p>
-          <% else %>
-            <div class="overflow-x-auto">
-              <table class="table table-sm">
-                <thead>
-                  <tr>
-                    <th><%= t('.device') %></th>
-                    <th><%= t('.last_report') %></th>
-                    <th class="hidden md:table-cell"><%= t('.received') %></th>
-                    <th><%= t('.battery') %></th>
-                    <th class="hidden md:table-cell"><%= t('.place') %></th>
-                    <th class="text-right"><%= t('.points') %></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% devices.each do |row| %>
-                    <%
-                      reported = @zone.at(row['timestamp'].to_i)
-                      received = row['received_at'] && @zone.at(row['received_at'].to_i)
-                      age = Time.current - reported
-                      badge = if age <= TransitDevicesController::FRESH then 'badge-success'
-                              elsif age <= TransitDevicesController::STALE then 'badge-warning'
-                              else 'badge-ghost'
-                              end
-                      place = [row['city'], row['country_name']].map(&:presence).compact.join(', ')
-                      battery = row['battery'].to_i if row['battery'].present? && row['battery'].to_i >= 0
-                    %>
-                    <tr>
-                      <td>
-                        <div class="font-medium"><%= row['tracker_id'].presence || t('.unknown_device') %></div>
-                        <% if row['topic'].present? && row['topic'] != row['tracker_id'] %>
-                          <div class="text-xs opacity-60 break-all"><%= row['topic'] %></div>
-                        <% end %>
-                      </td>
-                      <td>
-                        <span class="badge <%= badge %> badge-sm whitespace-nowrap"><%= t('.ago', time: time_ago_in_words(reported)) %></span>
-                        <div class="text-xs opacity-70 whitespace-nowrap"><%= l(reported, format: '%Y-%m-%d %H:%M') %></div>
-                      </td>
-                      <td class="hidden md:table-cell text-xs opacity-70 whitespace-nowrap">
-                        <%= received ? l(received, format: '%Y-%m-%d %H:%M') : '–' %>
-                      </td>
-                      <td class="whitespace-nowrap"><%= battery ? "#{battery}%" : '–' %></td>
-                      <td class="hidden md:table-cell text-sm"><%= place.presence || '–' %></td>
-                      <td class="text-right tabular-nums"><%= number_with_delimiter(row['points_count'].to_i) %></td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
-          <% end %>
-        </div>
-      </section>
+  <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
+    <%= form_with url: transit_devices_path, method: :get, local: true, class: 'flex flex-wrap items-end gap-3' do %>
+      <label class="form-control">
+        <span class="label-text"><%= t('transit_devices.index.period') %></span>
+        <%= select_tag :days, options_for_select(TransitDevicesController::PERIODS.map { |d| [t('transit_devices.index.days', count: d), d] }, @days),
+                       class: 'select select-bordered select-sm min-h-11' %>
+      </label>
+      <%= submit_tag t('transit_devices.index.filter'), class: 'btn btn-primary btn-sm min-h-11', name: nil %>
     <% end %>
+    <ul class="flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-80" aria-label="<%= t('transit_devices.index.legend') %>">
+      <li class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-success"></span><%= t('transit_devices.index.legend_fresh', minutes: (TransitDevicesController::FRESH / 60).to_i) %></li>
+      <li class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-warning"></span><%= t('transit_devices.index.legend_today') %></li>
+      <li class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-base-content/30"></span><%= t('transit_devices.index.legend_stale') %></li>
+    </ul>
   </div>
+
+  <%= turbo_frame_tag TransitDevicesController::FRAME, src: transit_devices_path(days: @days), loading: :lazy do %>
+    <div class="flex items-center gap-3 py-10 justify-center opacity-70" role="status">
+      <span class="loading loading-spinner loading-md"></span>
+      <span><%= t('transit_devices.index.loading') %></span>
+    </div>
+  <% end %>
 </div>

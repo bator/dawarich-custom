@@ -111,6 +111,7 @@
     "app/services/track_pick/ride_line.rb",
     "app/views/settings/transit/show.html.erb",
     "app/views/shared/_transit_tabs.html.erb",
+    "app/views/transit_devices/_list.html.erb",
     "app/views/transit_devices/index.html.erb",
     "app/views/transit_feeds/index.html.erb",
     "app/views/transit_segments/_card.html.erb",

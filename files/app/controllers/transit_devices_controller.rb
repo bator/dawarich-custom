@@ -6,24 +6,44 @@
 # from point_sources when the point has a source_id, else from the legacy
 # column. Imported points are left out, they are history, not reports.
 # Admins see every user, everyone else only their own devices.
+#
+# Speed: points have no index on the device, so the query reads every live
+# point of the period (about 0.3 s for 7 days, 1.6 s for 30, 5 s for 90 on
+# CT 139). The page shell renders at once and the list comes in a lazy Turbo
+# Frame; the result is cached for CACHE_TTL per (users, period).
 class TransitDevicesController < ApplicationController
   PERIODS = [1, 7, 30, 90].freeze
-  # Badge thresholds of the last report.
+  DEFAULT_DAYS = 7
+  FRAME = 'transit-devices'
+  CACHE_TTL = 2.minutes
+  # Status dot of the last report: green up to FRESH, yellow up to STALE.
   FRESH = 15.minutes
   STALE = 24.hours
 
   before_action :authenticate_user!
 
   def index
-    @days = PERIODS.include?(params[:days].to_i) ? params[:days].to_i : 30
+    @days = PERIODS.include?(params[:days].to_i) ? params[:days].to_i : DEFAULT_DAYS
     @zone = ActiveSupport::TimeZone[current_user.timezone_iana] || Time.zone
+    return unless turbo_frame_request?
+
     users = current_user.admin? ? User.all.to_a : [current_user]
-    devices = last_reports(users.map(&:id), @days.days.ago.to_i).group_by { |row| row['user_id'] }
-    @people = users.map { |user| [user, devices.fetch(user.id, [])] }
-                   .sort_by { |user, rows| [rows.empty? ? 1 : 0, -(rows.first&.dig('timestamp') || 0), user.display_name.downcase] }
+    @cached_at, rows = cached_reports(users.map(&:id).sort)
+    devices = rows.group_by { |row| row['user_id'] }
+    people = users.map { |user| [user, devices.fetch(user.id, [])] }
+    @silent, @people = people.partition { |_, list| list.empty? }
+    @people.sort_by! { |user, list| [-list.first['timestamp'].to_i, user.display_name.downcase] }
+    render partial: 'list'
   end
 
   private
+
+  # [computed_at, rows]
+  def cached_reports(user_ids)
+    Rails.cache.fetch(['transit-devices/v2', user_ids, @days], expires_in: CACHE_TTL) do
+      [Time.current, last_reports(user_ids, @days.days.ago.to_i)]
+    end
+  end
 
   # One row per (user, tracker_id): point count and newest timestamp from a
   # GROUP BY, then the newest point itself from a LATERAL lookup at that

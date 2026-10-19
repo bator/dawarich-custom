@@ -2,21 +2,26 @@ hu:
   transit_devices:
     index:
       title: Eszközök utolsó jelentése
-      intro_admin: Mikor küldött utoljára élő helyzetpontot az egyes emberek eszköze. Az importált pontok nem számítanak.
-      intro_self: Mikor küldött utoljára élő helyzetpontot az eszközöd. Az importált pontok nem számítanak.
       period: Időszak
       days:
         one: Az elmúlt nap
         other: "Az elmúlt %{count} nap"
       filter: Szűrés
+      loading: Eszközök betöltése…
+      legend: Az utolsó jelentés állapota
+      legend_fresh: "%{minutes} percen belül"
+      legend_today: 24 órán belül
+      legend_stale: régebben
       no_reports:
-        one: Az elmúlt napban nem jelentett élő pontot.
-        other: "Az elmúlt %{count} napban nem jelentett élő pontot."
-      device: Eszköz
+        one: Az elmúlt napban nem jött élő jelentés.
+        other: "Az elmúlt %{count} napban nem jött élő jelentés."
       unknown_device: ismeretlen eszköz
-      last_report: Utolsó jelentés
-      received: Beérkezett
-      battery: Akku
-      place: Hely
-      points: Pontok
       ago: "%{time} ezelőtt"
+      late: "%{time} késéssel érkezett"
+      points_title:
+        one: "1 pont az elmúlt %{days} napban"
+        other: "%{count} pont az elmúlt %{days} napban"
+      silent:
+        one: "Az elmúlt napban nem jelentett:"
+        other: "Az elmúlt %{count} napban nem jelentett:"
+      updated: "Frissítve: %{time}, legfeljebb %{minutes} percenként frissül."
