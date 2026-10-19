@@ -1,7 +1,7 @@
 <%#
-  Lazy part of /transit/coverage (Turbo Frame): per user a block of 24-hour
-  strips, one per day, newest first. Green spans: time with live points
-  (Gtfs::CoverageReport::MERGE_S joins nearby points); hatched: no data.
+  Lazy part of /transit/coverage (Turbo Frame): per user a collapsed row
+  that opens to thin 24-hour strips, one per day, newest first. Green spans:
+  time with live points (Gtfs::CoverageReport::MERGE_S joins nearby points).
   Full i18n keys: this is a partial.
 %>
 <%
@@ -10,7 +10,6 @@
   now = Time.current.in_time_zone(@zone)
   now_pct = ((now.hour * 60 + now.min) / 1440.0 * 100).round(2)
   weekdays = t('transit_commute.index.weekdays')
-  hatch = 'background-image: repeating-linear-gradient(135deg, rgb(127 127 127 / 0.22) 0 3px, transparent 3px 7px)'
   pct = ->(minute) { (minute / 1440.0 * 100).round(3) }
   hm = ->(minutes) { format('%d:%02d', minutes / 60, minutes % 60) }
   stamp = ->(ts) { l(@zone.at(ts), format: '%m.%d %H:%M') }
@@ -18,15 +17,15 @@
 <%= turbo_frame_tag TransitCoverageController::FRAME do %>
   <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs opacity-80 mb-3">
     <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-2.5 rounded-sm bg-success"></span><%= t('transit_coverage.index.legend_tracked') %></span>
-    <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-2.5 rounded-sm" style="<%= hatch %>"></span><%= t('transit_coverage.index.legend_gap') %></span>
-    <span class="flex items-center gap-1.5"><span class="inline-block w-px h-3 bg-primary"></span><%= t('transit_coverage.index.legend_now') %></span>
+    <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-2.5 rounded-sm bg-base-content/10"></span><%= t('transit_coverage.index.legend_gap') %></span>
+    <span class="opacity-70"><%= t('transit_coverage.index.legend_rows') %></span>
   </div>
 
   <div class="flex flex-col gap-3">
-    <% @users.each_with_index do |user, index| %>
+    <% @users.each do |user| %>
       <% report = @reports[user.id] %>
       <% uptime = report ? (report.covered_minutes * 100.0 / [total_minutes, 1].max).round : 0 %>
-      <details class="card bg-base-200 shadow-sm group" <%= 'open' if index.zero? %>>
+      <details class="card bg-base-200 shadow-sm group">
         <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer p-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <span class="flex items-center gap-2 min-w-0">
             <svg class="h-4 w-4 opacity-50 transition-transform group-open:rotate-90 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
@@ -47,47 +46,44 @@
         </summary>
 
         <% if report %>
-          <div class="px-4 pb-4 flex flex-col gap-1">
-            <div class="grid grid-cols-[4.5rem_1fr_2.75rem] gap-x-2 text-[10px] opacity-50 tabular-nums">
+          <div class="px-4 pb-4">
+            <div class="grid grid-cols-[2.75rem_1fr] gap-x-2 text-[10px] opacity-50 tabular-nums mb-0.5">
               <span></span>
               <span class="relative h-3">
                 <% [0, 6, 12, 18, 24].each do |h| %>
                   <span class="absolute -translate-x-1/2 <%= 'translate-x-0' if h.zero? %> <%= '-translate-x-full' if h == 24 %>" style="left: <%= (h / 24.0 * 100).round(2) %>%"><%= format('%02d', h) %></span>
                 <% end %>
               </span>
-              <span></span>
             </div>
-            <% dates.each do |date| %>
-              <% day = report.days[date] %>
-              <% today = date == @report_meta.to %>
-              <div class="grid grid-cols-[4.5rem_1fr_2.75rem] gap-x-2 items-center">
-                <span class="text-xs tabular-nums <%= today ? 'font-semibold' : 'opacity-70' %>">
-                  <span class="inline-block w-7"><%= weekdays[date.cwday - 1] %></span><%= l(date, format: '%m.%d') %>
-                </span>
-                <span class="relative h-4 rounded overflow-hidden bg-base-100"
-                      style="<%= hatch %><%= "; clip-path: inset(0 #{(100 - now_pct).round(2)}% 0 0 round 4px)" if today %>"
-                      title="<%= l(date, format: '%Y-%m-%d') %>: <%= transit_duration(day ? day[:minutes] * 60 : 0) %>, <%= t('transit_coverage.index.points', count: day ? day[:points] : 0) %>">
-                  <% day&.dig(:spans)&.each do |from_min, to_min| %>
-                    <span class="absolute inset-y-0 bg-success" style="left: <%= pct.call(from_min) %>%; width: <%= [pct.call(to_min) - pct.call(from_min), 0.15].max %>%"></span>
-                  <% end %>
-                  <% [6, 12, 18].each do |h| %>
-                    <span class="absolute inset-y-0 w-px bg-base-200/70" style="left: <%= (h / 24.0 * 100).round(2) %>%"></span>
-                  <% end %>
-                  <% if today %><span class="absolute inset-y-0 w-0.5 bg-primary" style="left: calc(<%= now_pct %>% - 1px)"></span><% end %>
-                </span>
-                <span class="text-xs tabular-nums text-right <%= day ? '' : 'opacity-40' %>"><%= day ? hm.call(day[:minutes]) : '–' %></span>
-              </div>
-            <% end %>
+            <div class="flex flex-col gap-0.5">
+              <% dates.each do |date| %>
+                <% day = report.days[date] %>
+                <% today = date == @report_meta.to %>
+                <div class="grid grid-cols-[2.75rem_1fr] gap-x-2 items-center h-1.5"
+                     title="<%= weekdays[date.cwday - 1] %> <%= l(date, format: '%Y-%m-%d') %>: <%= day ? hm.call(day[:minutes]) : '0:00' %>, <%= t('transit_coverage.index.points', count: day ? day[:points] : 0) %>">
+                  <span class="text-[9px] leading-none tabular-nums opacity-60 whitespace-nowrap">
+                    <%= l(date, format: '%m.%d') if today || date.cwday == 1 %>
+                  </span>
+                  <span class="relative h-1.5 rounded-sm overflow-hidden bg-base-content/10"
+                        style="<%= "clip-path: inset(0 #{(100 - now_pct).round(2)}% 0 0)" if today %>">
+                    <% day&.dig(:spans)&.each do |from_min, to_min| %>
+                      <span class="absolute inset-y-0 bg-success" style="left: <%= pct.call(from_min) %>%; width: <%= [pct.call(to_min) - pct.call(from_min), 0.2].max %>%"></span>
+                    <% end %>
+                    <% [6, 12, 18].each do |h| %>
+                      <span class="absolute inset-y-0 w-px bg-base-200" style="left: <%= (h / 24.0 * 100).round(2) %>%"></span>
+                    <% end %>
+                  </span>
+                </div>
+              <% end %>
+            </div>
 
             <% if report.gaps.any? %>
-              <div class="mt-3">
-                <div class="text-[11px] uppercase tracking-wide opacity-60 mb-1"><%= t('transit_coverage.index.gaps_count', count: report.gaps.size) %> (≥ <%= Gtfs::CoverageReport::GAP_S / 3600 %> h)</div>
-                <ul class="flex flex-wrap gap-2" role="list">
-                  <% report.gaps.each do |a, b| %>
-                    <li class="badge badge-ghost gap-1 tabular-nums"><%= stamp.call(a) %> → <%= stamp.call(b) %> <span class="opacity-60"><%= transit_duration(b - a) %></span></li>
-                  <% end %>
-                </ul>
-              </div>
+              <% longest = report.gaps.first %>
+              <p class="text-xs opacity-70 mt-3"
+                 title="<%= report.gaps.map { |x, y| "#{stamp.call(x)} → #{stamp.call(y)} (#{transit_duration(y - x)})" }.join(' · ') %>">
+                <%= t('transit_coverage.index.longest_gap', time: transit_duration(longest[1] - longest[0]), from: stamp.call(longest[0]), to: stamp.call(longest[1])) %>
+                <% if report.gaps.size > 1 %><span class="opacity-60">· <%= t('transit_coverage.index.more_gaps', count: report.gaps.size - 1) %></span><% end %>
+              </p>
             <% end %>
           </div>
         <% end %>

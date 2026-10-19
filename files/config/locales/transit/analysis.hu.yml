@@ -78,11 +78,12 @@ hu:
         other: "Az elmúlt %{count} napban nem jött élő pont."
       legend_tracked: követve
       legend_gap: nincs adat
-      legend_now: most
       points:
         one: 1 pont
         other: "%{count} pont"
+      legend_rows: "soronként egy nap, a legfrissebb felül; részletek egérrel"
+      longest_gap: "Leghosszabb csend: %{time} (%{from} → %{to})"
+      more_gaps:
+        one: "és még 1"
+        other: "és még %{count}"
       days_label: "%{covered}/%{total} nap"
-      gaps_count:
-        one: "1 hosszú csend"
-        other: "%{count} hosszú csend"

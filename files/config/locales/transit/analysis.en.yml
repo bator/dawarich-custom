@@ -78,11 +78,12 @@ en:
         other: "No live point in the last %{count} days."
       legend_tracked: tracked
       legend_gap: no data
-      legend_now: now
       points:
         one: 1 point
         other: "%{count} points"
+      legend_rows: "one row per day, newest on top; hover for details"
+      longest_gap: "Longest silence: %{time} (%{from} → %{to})"
+      more_gaps:
+        one: "1 more"
+        other: "%{count} more"
       days_label: "%{covered}/%{total} days"
-      gaps_count:
-        one: "1 long silence"
-        other: "%{count} long silences"
