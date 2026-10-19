@@ -24,13 +24,18 @@ module TransitHelper
     "#{sign}#{t('transit_segments.card.minutes', count: minutes.abs)}"
   end
 
-  # Line badge in the operator's route colour (Gtfs::RouteColors via
-  # Api::TransitSegmentSerializer.colors_for), mode colour as fallback.
-  def transit_line_badge(segment, colors, extra_class: '')
+  # [background, text] hex colours of a ride's line: the operator's route
+  # colour (Gtfs::RouteColors via Api::TransitSegmentSerializer.colors_for),
+  # else the mode colour.
+  def transit_line_colors(segment, colors)
     color, text_color = colors[[segment.feed_id, segment.route_gtfs_id]]
     hex = ->(value) { (v = value.to_s.delete_prefix('#')).match?(/\A\h{6}\z/) ? "##{v.upcase}" : nil }
-    background = hex.call(color) || Api::TransitSegmentSerializer::DEFAULT_COLORS.fetch(segment.mode)
-    foreground = hex.call(text_color) || '#FFFFFF'
+    [hex.call(color) || Api::TransitSegmentSerializer::DEFAULT_COLORS.fetch(segment.mode), hex.call(text_color) || '#FFFFFF']
+  end
+
+  # Line badge in the route colour.
+  def transit_line_badge(segment, colors, extra_class: '')
+    background, foreground = transit_line_colors(segment, colors)
     content_tag(:span, class: "badge font-bold gap-1 border-0 min-w-12 justify-center #{extra_class}",
                        style: "background-color: #{background}; color: #{foreground}",
                        title: t("transit_modes.#{segment.mode}")) do

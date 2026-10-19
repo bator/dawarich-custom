@@ -1,85 +1,81 @@
 <%#
-  Lazy part of /transit/coverage (Turbo Frame): one card per user with a
-  calendar heatmap (weeks as columns, Monday on top) of covered hours per day
-  and the longest gaps. Full i18n keys: this is a partial.
+  Lazy part of /transit/coverage (Turbo Frame), status-page style: one row
+  per user with a column per day whose height is the hours with live points
+  that day, plus the share of covered hours and the longest silences.
+  Full i18n keys: this is a partial.
 %>
 <%
   from = @report_meta.from
   to = @report_meta.to
   total = @report_meta.total_days
-  start = from.beginning_of_week
-  weeks = ((to - start).to_i / 7) + 1
-  weekdays = t('transit_commute.index.weekdays')
-  shade = lambda do |hours|
-    if hours.nil? || hours.zero? then 'bg-base-content/10'
-    elsif hours <= 6 then 'bg-success/30'
-    elsif hours <= 14 then 'bg-success/60'
+  dates = (from..to).to_a
+  tone = lambda do |hours|
+    if hours.to_i.zero? then 'bg-base-content/20'
+    elsif hours <= 6 then 'bg-error/70'
+    elsif hours <= 14 then 'bg-warning/80'
     else 'bg-success'
     end
   end
   stamp = ->(ts) { l(@zone.at(ts), format: '%m.%d %H:%M') }
 %>
 <%= turbo_frame_tag TransitCoverageController::FRAME do %>
-  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs opacity-80 mb-4">
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs opacity-80 mb-3">
     <span><%= t('transit_coverage.index.legend') %></span>
-    <% [[0, 'bg-base-content/10'], ['1–6', 'bg-success/30'], ['7–14', 'bg-success/60'], ['15–24', 'bg-success']].each do |label, cls| %>
-      <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm <%= cls %>"></span><%= label %></span>
+    <% [['0', 'bg-base-content/20'], ['1–6', 'bg-error/70'], ['7–14', 'bg-warning/80'], ['15–24', 'bg-success']].each do |label, cls| %>
+      <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm <%= cls %>"></span><%= label %></span>
     <% end %>
   </div>
 
-  <div class="flex flex-col gap-4">
-    <% @users.each do |user| %>
-      <% report = @reports[user.id] %>
-      <section class="card bg-base-200 shadow-sm" aria-labelledby="coverage-<%= user.id %>">
-        <div class="card-body p-4 gap-3">
-          <header class="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="coverage-<%= user.id %>" class="font-semibold text-lg" title="<%= user.email %>"><%= user.display_name %></h2>
+  <section class="card bg-base-200 shadow-sm">
+    <ul class="divide-y divide-base-300" role="list">
+      <% @users.each do |user| %>
+        <% report = @reports[user.id] %>
+        <% hours_total = report ? report.days.sum { |_, (h, _)| h } : 0 %>
+        <% uptime = (hours_total * 100.0 / (total * 24)).round %>
+        <li class="p-4 flex flex-col gap-2">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <span class="font-semibold" title="<%= user.email %>"><%= user.display_name %></span>
             <% if report %>
-              <span class="text-sm opacity-80">
-                <%= t('transit_coverage.index.summary', covered: report.covered_days, total:, hours: number_with_precision(report.mean_hours(total), precision: 1)) %>
-                · <%= t('transit_coverage.index.last', time: time_ago_in_words(Time.zone.at(report.last_ts))) %>
+              <span class="text-sm flex flex-wrap gap-x-3 gap-y-0.5 items-baseline">
+                <strong class="tabular-nums <%= uptime >= 60 ? 'text-success' : (uptime >= 25 ? 'text-warning' : 'text-error') %>"><%= t('transit_coverage.index.uptime', percent: uptime) %></strong>
+                <span class="opacity-60 tabular-nums"><%= t('transit_coverage.index.days_label', covered: report.covered_days, total:) %></span>
+                <span class="opacity-60"><%= t('transit_coverage.index.last', time: time_ago_in_words(Time.zone.at(report.last_ts))) %></span>
+              </span>
+            <% else %>
+              <span class="text-sm opacity-60"><%= t('transit_coverage.index.no_points', count: @days) %></span>
+            <% end %>
+          </div>
+
+          <div class="flex items-end gap-px h-10" role="img" aria-label="<%= user.display_name %>: <%= t('transit_coverage.index.uptime', percent: uptime) %>">
+            <% dates.each do |date| %>
+              <% hours, points = report&.days&.[](date) %>
+              <span class="flex-1 h-full flex items-end" title="<%= l(date, format: '%Y-%m-%d') %>: <%= t('transit_coverage.index.cell', hours: hours.to_i, points: points.to_i) %>">
+                <span class="w-full rounded-sm <%= tone.call(hours) %>" style="height: <%= hours.to_i.zero? ? 12 : [(hours / 24.0 * 100).round(1), 12].max %>%"></span>
               </span>
             <% end %>
-          </header>
+          </div>
+          <div class="flex justify-between text-[10px] opacity-50">
+            <span><%= t('transit_coverage.index.start', count: total) %></span>
+            <span><%= t('transit_coverage.index.today') %></span>
+          </div>
 
-          <% if report.nil? %>
-            <p class="text-sm opacity-70"><%= t('transit_coverage.index.no_points', count: @days) %></p>
-          <% else %>
-            <div class="flex gap-1 overflow-x-auto pb-1">
-              <div class="grid grid-rows-7 gap-1 text-[10px] opacity-50 pr-1">
-                <% weekdays.each do |d| %><span class="h-4 leading-4"><%= d %></span><% end %>
-              </div>
-              <% weeks.times do |w| %>
-                <div class="grid grid-rows-7 gap-1">
-                  <% 7.times do |d| %>
-                    <% date = start + (w * 7) + d %>
-                    <% if date < from || date > to %>
-                      <span class="w-4 h-4"></span>
-                    <% else %>
-                      <% hours, points = report.days[date] %>
-                      <span class="w-4 h-4 rounded-sm <%= shade.call(hours) %> <%= 'ring-1 ring-primary' if date == to %>"
-                            title="<%= l(date, format: '%Y-%m-%d') %>: <%= t('transit_coverage.index.cell', hours: hours.to_i, points: points.to_i) %>"></span>
-                    <% end %>
-                  <% end %>
-                </div>
-              <% end %>
-            </div>
-
-            <% if report.gaps.any? %>
-              <div>
-                <div class="text-[11px] uppercase tracking-wide opacity-60 mb-1"><%= t('transit_coverage.index.gaps', hours: Gtfs::CoverageReport::GAP_S / 3600) %></div>
-                <ul class="flex flex-wrap gap-2" role="list">
-                  <% report.gaps.each do |a, b| %>
-                    <li class="badge badge-outline gap-1 tabular-nums"><%= stamp.call(a) %> → <%= stamp.call(b) %> <span class="opacity-60">(<%= transit_duration(b - a) %>)</span></li>
-                  <% end %>
-                </ul>
-              </div>
-            <% end %>
+          <% if report&.gaps&.any? %>
+            <details class="text-sm">
+              <summary class="cursor-pointer opacity-70 w-fit"><%= t('transit_coverage.index.gaps_count', count: report.gaps.size) %> (≥ <%= Gtfs::CoverageReport::GAP_S / 3600 %> h)</summary>
+              <ul class="flex flex-col gap-1 mt-2" role="list">
+                <% report.gaps.each do |a, b| %>
+                  <li class="flex justify-between gap-3 tabular-nums text-xs">
+                    <span><%= stamp.call(a) %> → <%= stamp.call(b) %></span>
+                    <span class="opacity-70"><%= transit_duration(b - a) %></span>
+                  </li>
+                <% end %>
+              </ul>
+            </details>
           <% end %>
-        </div>
-      </section>
-    <% end %>
-  </div>
+        </li>
+      <% end %>
+    </ul>
+  </section>
 
   <p class="text-xs opacity-50 mt-4">
     <%= t('transit_devices.index.updated', time: @cached_at.in_time_zone(@zone).strftime('%H:%M:%S'),

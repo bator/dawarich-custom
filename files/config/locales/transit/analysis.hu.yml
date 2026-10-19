@@ -11,11 +11,11 @@ hu:
       range: Leggyorsabb – leglassabb
       delay: Jellemző késés
       late_share: "%{percent}% több mint 5 percet késett"
-      usual: Szokásos indulás
-      usual_detail:
-        one: "1 út, jellemzően %{time}"
-        other: "%{count} út, jellemzően %{time}"
-      by_hour: Indulások óránként
+      median_label:
+        one: "jellemző menetidő · 1 út"
+        other: "jellemző menetidő · %{count} út"
+      departures: Indulások a nap folyamán
+      usual_short: "általában %{time}"
       by_weekday: Napok szerint
       weekdays: [H, K, Sze, Cs, P, Szo, V]
   transit_punctuality:
@@ -73,10 +73,15 @@ hu:
       note: Naponta hány órában jött legalább egy élő pont (importált pontok nélkül), és a hosszú csendek.
       loading: Lefedettség betöltése…
       legend: "Órák ponttal:"
-      summary: "%{covered}/%{total} napon volt pont, átlag %{hours} óra/nap"
       last: "utolsó pont %{time} ezelőtt"
       no_points:
         one: Az elmúlt napban nem jött élő pont.
         other: "Az elmúlt %{count} napban nem jött élő pont."
       cell: "%{hours} óra, %{points} pont"
-      gaps: "Leghosszabb csendek (legalább %{hours} óra)"
+      uptime: "az órák %{percent}%-a lefedve"
+      days_label: "%{covered}/%{total} nap"
+      start: "%{count} napja"
+      today: ma
+      gaps_count:
+        one: "1 hosszú csend"
+        other: "%{count} hosszú csend"

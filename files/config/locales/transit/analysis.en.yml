@@ -11,11 +11,11 @@ en:
       range: Fastest – slowest
       delay: Typical delay
       late_share: "%{percent}% more than 5 min late"
-      usual: Usual departure
-      usual_detail:
-        one: "1 ride, typically %{time}"
-        other: "%{count} rides, typically %{time}"
-      by_hour: Departures by hour
+      median_label:
+        one: "typical time · 1 ride"
+        other: "typical time · %{count} rides"
+      departures: Departures through the day
+      usual_short: "usually %{time}"
       by_weekday: By weekday
       weekdays: [Mo, Tu, We, Th, Fr, Sa, Su]
   transit_punctuality:
@@ -73,10 +73,15 @@ en:
       note: Hours per day with at least one live point (imported points not counted), and silent gaps.
       loading: Loading coverage…
       legend: "Hours with points:"
-      summary: "%{covered}/%{total} days with points, %{hours} h/day on average"
       last: "last point %{time} ago"
       no_points:
         one: No live point in the last day.
         other: "No live point in the last %{count} days."
       cell: "%{hours} h, %{points} points"
-      gaps: "Longest gaps (%{hours} h or more)"
+      uptime: "%{percent}% of hours covered"
+      days_label: "%{covered}/%{total} days"
+      start: "%{count} days ago"
+      today: today
+      gaps_count:
+        one: "1 long silence"
+        other: "%{count} long silences"
