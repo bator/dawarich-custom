@@ -18,33 +18,9 @@ hu:
       usual_short: "általában %{time}"
       by_weekday: Napok szerint
       weekdays: [H, K, Sze, Cs, P, Szo, V]
-  transit_punctuality:
-    index:
-      title: Vonalak pontossága
-      note: "Késés = mért idő a menetrendhez képest, csak olyan utakból, ahol más járat nem illeszkedik ugyanilyen jól. A vasúti mutatókhoz hasonlóan a fő szám a tűrésen belüli utak aránya."
-      empty:
-        one: Az elmúlt napban nincs mért késésű út.
-        other: "Az elmúlt %{count} napban nincs mért késésű út."
-      summary: Összesítő
-      within_5: Pontos (≤ 5 perc)
-      within_1: Percre pontos (± 1 perc)
-      median: Jellemző késés
-      measured: Mért utak
-      of_rides:
-        one: "1 útból"
-        other: "%{count} útból"
-      distribution: Késések eloszlása
-      cat_early: korán
-      cat_on_time: pontos
-      cat_slight: 1–5 perc késés
-      cat_late: "> 5 perc késés"
-      minutes_axis: perc a menetrendhez képest
-      per_line: "Vonalanként (legalább %{min} mért út)"
-      no_lines: "Még egyik vonalnak sincs %{min} mért útja."
-      lines_legend: "Sáv: az utak megoszlása kategóriánként. Jobbra: pontos (≤ 5 perc) és jellemző késés."
   transit_savings:
     index:
-      title: Megtakarítás (becslés)
+      title: Megtakarítás és pontosság
       note: Becslés ugyanarra a távolságra autóval. A feltételezések lent láthatók és állíthatók.
       co2_saved: Megtakarított CO₂
       trees:
@@ -86,6 +62,26 @@ hu:
       a_pass: "Bérlet (%{days} nap)"
       a_tree: Egy fa CO₂-elnyelése
       year: év
+      punctuality:
+        title: Pontosság
+        note: "Késés = mért idő a menetrendhez képest, csak olyan utakból, ahol más járat nem illeszkedik ugyanilyen jól. A vasúti mutatókhoz hasonlóan a fő szám a tűrésen belüli utak aránya."
+        empty:
+          one: Az elmúlt napban nincs mért késésű út.
+          other: "Az elmúlt %{count} napban nincs mért késésű út."
+        within_5: Pontos (≤ 5 perc)
+        within_1: Percre pontos (± 1 perc)
+        median: Jellemző késés
+        measured: Mért utak
+        of_rides:
+          one: "/ 1 út"
+          other: "/ %{count} út"
+        cat_early: korán
+        cat_on_time: pontos
+        cat_slight: 1–5 perc késés
+        cat_late: "> 5 perc késés"
+        per_line: "Vonalanként (legalább %{min} mért út)"
+        no_lines: "Még egyik vonalnak sincs %{min} mért útja."
+        lines_legend: "Sáv: az utak megoszlása kategóriánként. Jobbra: pontos (≤ 5 perc) és jellemző késés."
   transit_coverage:
     index:
       title: "Követés: eszközök és lefedettség"

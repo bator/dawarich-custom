@@ -101,6 +101,80 @@
       </div>
     </section>
 
+    <%
+      p = @punctuality
+      colors = { early: 'bg-info', on_time: 'bg-success', slight: 'bg-warning', late: 'bg-error' }
+      pct = ->(share) { share.nil? ? '–' : "#{(share * 100).round}%" }
+      cat_title = ->(shares) { Gtfs::PunctualityStats::CATEGORIES.map { |c| "#{t(".punctuality.cat_#{c}")} #{pct.call(shares[c])}" }.join(' · ') }
+      stacked = lambda do |shares|
+        safe_join(Gtfs::PunctualityStats::CATEGORIES.reject { |c| shares[c].zero? }.map do |c|
+          tag.span(class: "h-full #{colors[c]}", style: "width: #{(shares[c] * 100).round(2)}%")
+        end)
+      end
+    %>
+    <section id="punctuality" class="card bg-base-200 shadow-sm mb-6 scroll-mt-20" aria-labelledby="savings-punctuality">
+      <div class="card-body p-5 gap-4">
+        <h2 id="savings-punctuality" class="font-semibold"><%= t('.punctuality.title') %></h2>
+        <% if p.measured.empty? %>
+          <p class="text-sm opacity-70"><%= t('.punctuality.empty', count: @days) %></p>
+        <% else %>
+          <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-success-ink"><%= t('.punctuality.within_5') %></dt>
+              <dd class="text-3xl font-bold tabular-nums leading-tight"><%= pct.call(p.within_5) %></dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide opacity-70"><%= t('.punctuality.within_1') %></dt>
+              <dd class="text-3xl font-bold tabular-nums leading-tight"><%= pct.call(p.within_1) %></dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide opacity-70"><%= t('.punctuality.median') %></dt>
+              <dd class="text-3xl font-bold tabular-nums leading-tight"><%= transit_delay(p.median_s) %></dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide opacity-70"><%= t('.punctuality.measured') %></dt>
+              <dd class="text-3xl font-bold tabular-nums leading-tight"><%= p.measured.size %>
+                <span class="text-sm font-normal opacity-70"><%= t('.punctuality.of_rides', count: @period_stats.count) %></span></dd>
+            </div>
+          </dl>
+
+          <div class="flex flex-col gap-1.5">
+            <span class="flex h-3 rounded-full overflow-hidden bg-base-100" title="<%= cat_title.call(p.shares) %>"><%= stacked.call(p.shares) %></span>
+            <ul class="flex flex-wrap gap-x-3 gap-y-1 text-xs" role="list">
+              <% Gtfs::PunctualityStats::CATEGORIES.each do |cat| %>
+                <li class="flex items-center gap-1.5">
+                  <span class="inline-block w-2.5 h-2.5 rounded-sm <%= colors[cat] %>"></span>
+                  <%= t(".punctuality.cat_#{cat}") %> <span class="opacity-70 tabular-nums"><%= pct.call(p.shares[cat]) %></span>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+
+          <div class="flex flex-col gap-3 border-t border-base-300 pt-4">
+            <h3 class="text-xs uppercase tracking-wide opacity-70"><%= t('.punctuality.per_line', min: Gtfs::PunctualityStats::MIN_RIDES) %></h3>
+            <% if p.lines.empty? %>
+              <p class="text-sm opacity-70"><%= t('.punctuality.no_lines', min: Gtfs::PunctualityStats::MIN_RIDES) %></p>
+            <% else %>
+              <ul class="flex flex-col gap-3" role="list">
+                <% p.lines.each do |line| %>
+                  <li class="grid grid-cols-[6.5rem_1fr_3.5rem] items-center gap-3">
+                    <span class="flex items-center gap-1"><%= transit_line_badge(line.segment, @colors) %><span class="text-xs opacity-70 tabular-nums">×<%= line.count %></span></span>
+                    <span class="flex h-3 rounded-full overflow-hidden bg-base-100"
+                          title="<%= cat_title.call(line.shares) %> · <%= t('.punctuality.median') %> <%= transit_delay(line.median_s) %>"><%= stacked.call(line.shares) %></span>
+                    <span class="text-right">
+                      <span class="font-semibold tabular-nums"><%= pct.call(line.within_5) %></span>
+                      <span class="block text-[10px] opacity-70 tabular-nums"><%= transit_delay(line.median_s) %></span>
+                    </span>
+                  </li>
+                <% end %>
+              </ul>
+            <% end %>
+          </div>
+        <% end %>
+        <p class="text-xs opacity-70"><%= t('.punctuality.lines_legend') unless p.lines.empty? %> <%= t('.punctuality.note') %></p>
+      </div>
+    </section>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <section class="card bg-base-200 shadow-sm" aria-labelledby="savings-modes">
         <div class="card-body p-5 gap-2">

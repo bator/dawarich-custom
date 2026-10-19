@@ -18,33 +18,9 @@ en:
       usual_short: "usually %{time}"
       by_weekday: By weekday
       weekdays: [Mo, Tu, We, Th, Fr, Sa, Su]
-  transit_punctuality:
-    index:
-      title: Line punctuality
-      note: "Delay = observed vs timetable, only from rides where no other trip fits as well. Like railway figures, the headline is the share of rides within a tolerance."
-      empty:
-        one: No ride with a measured delay in the last day.
-        other: "No ride with a measured delay in the last %{count} days."
-      summary: Summary
-      within_5: On time (≤ 5 min)
-      within_1: Exact (± 1 min)
-      median: Typical delay
-      measured: Measured rides
-      of_rides:
-        one: "of 1 ride"
-        other: "of %{count} rides"
-      distribution: Delay distribution
-      cat_early: early
-      cat_on_time: on time
-      cat_slight: 1–5 min late
-      cat_late: "> 5 min late"
-      minutes_axis: minutes vs timetable
-      per_line: "Per line (at least %{min} measured rides)"
-      no_lines: "No line has %{min} measured rides yet."
-      lines_legend: "Bar: share of rides by category. Right: on time (≤ 5 min) and typical delay."
   transit_savings:
     index:
-      title: Savings estimate
+      title: Savings and punctuality
       note: Estimate against the same distance by car. The assumptions are at the bottom and can be changed.
       co2_saved: CO₂ saved
       trees:
@@ -86,6 +62,26 @@ en:
       a_pass: "Pass (%{days} days)"
       a_tree: CO₂ a tree takes up
       year: year
+      punctuality:
+        title: Punctuality
+        note: "Delay = observed vs timetable, only from rides where no other trip fits as well. Like railway figures, the headline is the share of rides within a tolerance."
+        empty:
+          one: No ride with a measured delay in the last day.
+          other: "No ride with a measured delay in the last %{count} days."
+        within_5: On time (≤ 5 min)
+        within_1: Exact (± 1 min)
+        median: Typical delay
+        measured: Measured rides
+        of_rides:
+          one: "/ 1 ride"
+          other: "/ %{count} rides"
+        cat_early: early
+        cat_on_time: on time
+        cat_slight: 1–5 min late
+        cat_late: "> 5 min late"
+        per_line: "Per line (at least %{min} measured rides)"
+        no_lines: "No line has %{min} measured rides yet."
+        lines_legend: "Bar: share of rides by category. Right: on time (≤ 5 min) and typical delay."
   transit_coverage:
     index:
       title: "Tracking: devices and coverage"

@@ -127,7 +127,6 @@
     "app/views/transit_coverage/_report.html.erb",
     "app/views/transit_coverage/index.html.erb",
     "app/views/transit_feeds/index.html.erb",
-    "app/views/transit_punctuality/index.html.erb",
     "app/views/transit_savings/index.html.erb",
     "app/views/transit_segments/_card.html.erb",
     "app/views/transit_segments/index.html.erb",

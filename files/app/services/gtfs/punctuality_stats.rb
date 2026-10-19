@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-# Delays for /transit/punctuality, measured on the user's own rides. Only
-# rides whose delay is reliable count (TransitSegment#delay_reliable?: no
-# other trip or line fits as well). Delay = observed vs timetable time of the
-# ride, as stored by the matcher in debug['delay_secs'].
+# Delays for the Punctuality section of /transit/savings, measured on the
+# user's own rides. Only rides whose delay is reliable count
+# (TransitSegment#delay_reliable?: no other trip or line fits as well).
+# Delay = observed vs timetable time of the ride, as stored by the matcher in
+# debug['delay_secs'].
 #
 # Like railway punctuality figures (e.g. Deutsche Bahn), the headline is the
 # share of rides within a tolerance, not an average: on time within 1 min and
@@ -17,9 +18,6 @@ class Gtfs::PunctualityStats
   LATE_S = 300
   CATEGORIES = %i[early on_time slight late].freeze
   MIN_RIDES = 2
-  # Histogram: one bin per minute from HIST_FROM to HIST_TO, the ends collect the tails.
-  HIST_FROM = -3
-  HIST_TO = 15
 
   def self.category(delay)
     if delay < -ON_TIME_S then :early
@@ -56,13 +54,6 @@ class Gtfs::PunctualityStats
   def shares = self.class.shares(delays)
   def within_1 = ratio { |d| d.abs <= ON_TIME_S }
   def within_5 = ratio { |d| d <= LATE_S }
-
-  # [[minute, count, category], ...] from HIST_FROM to HIST_TO; the first
-  # bin holds everything earlier, the last everything later.
-  def histogram
-    counts = delays.map { |d| (d / 60.0).round.clamp(HIST_FROM, HIST_TO) }.tally
-    (HIST_FROM..HIST_TO).map { |m| [m, counts.fetch(m, 0), self.class.category(m * 60)] }
-  end
 
   # Lines with at least MIN_RIDES measured rides, most ridden first.
   def lines
