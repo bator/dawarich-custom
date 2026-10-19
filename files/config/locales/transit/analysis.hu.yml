@@ -88,7 +88,7 @@ hu:
       year: év
   transit_coverage:
     index:
-      title: Követés lefedettsége
+      title: "Követés: eszközök és lefedettség"
       note: "Az idő mekkora részében jöttek élő pontok (a 15 percen belüli pontok folytonosnak számítanak, az importált pontok nem)."
       loading: Lefedettség betöltése…
       last: "utolsó pont %{time} ezelőtt"
@@ -105,6 +105,10 @@ hu:
         other: "%{count} pont"
       no_data: nincs adat
       today: ma
+      devices:
+        one: Eszköz
+        other: "%{count} eszköz"
+      updated: "Eszközök frissítve %{devices} (%{devices_minutes} percenként), lefedettség %{coverage} (%{coverage_minutes} percenként)."
       longest_gap: "Leghosszabb csend: %{time} (%{from} → %{to})"
       legend: "Napi lefedettség (magasság: aznapi pontok):"
       no_points:

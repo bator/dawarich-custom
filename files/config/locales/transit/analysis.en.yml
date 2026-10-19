@@ -88,7 +88,7 @@ en:
       year: year
   transit_coverage:
     index:
-      title: Tracking coverage
+      title: "Tracking: devices and coverage"
       note: "How much of the time live points came in (points less than 15 min apart count as continuous; imported points not counted)."
       loading: Loading coverage…
       last: "last point %{time} ago"
@@ -105,6 +105,10 @@ en:
         other: "%{count} points"
       no_data: no data
       today: today
+      devices:
+        one: Device
+        other: "%{count} devices"
+      updated: "Devices updated %{devices} (every %{devices_minutes} min), coverage %{coverage} (every %{coverage_minutes} min)."
       longest_gap: "Longest silence: %{time} (%{from} → %{to})"
       legend: "Day covered (height: points that day):"
       no_points:

@@ -3,10 +3,9 @@ hu:
     label: Közlekedési oldalak
     rides: Utazások
     stats: Statisztika
-    devices: Eszközök
     feeds: Menetrendek
     settings: Beállítások
     commute: Ingázás
     punctuality: Pontosság
     savings: Megtakarítás
-    coverage: Lefedettség
+    coverage: Követés

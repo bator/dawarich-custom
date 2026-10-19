@@ -1,6 +1,6 @@
 <%#
   Lazy part of /transit/coverage (Turbo Frame): one card per user with the
-  coverage share, a "typical day" (24 bars: height = average points in that
+  coverage share, the last live report of each device, a "typical day" (24 bars: height = average points in that
   hour, colour = share of days with data) and a bar per day of the period
   (height = points that day, colour = covered share of the day), so a fully
   covered user still shows a shape. Full i18n keys: this is a partial.
@@ -21,7 +21,21 @@
   end
   hm = ->(minutes) { format('%d:%02d', minutes / 60, minutes % 60) }
   stamp = ->(ts) { l(@zone.at(ts), format: '%m.%d %H:%M') }
+  # status dot of a last report
+  dot = lambda do |timestamp|
+    age = Time.current.to_i - timestamp.to_i
+    if age <= TransitCoverageController::FRESH then 'bg-success'
+    elsif age <= TransitCoverageController::STALE then 'bg-warning'
+    else 'bg-base-content/30'
+    end
+  end
+  ago = ->(timestamp) { t('transit_devices.index.ago', time: time_ago_in_words(Time.zone.at(timestamp.to_i))) }
+  clock = lambda do |timestamp|
+    time = @zone.at(timestamp.to_i)
+    time.to_date == now.to_date ? time.strftime('%H:%M') : l(time, format: '%Y-%m-%d %H:%M')
+  end
   with_points, without = @users.partition { |user| @reports[user.id] }
+  with_points.sort_by! { |user| [-@reports[user.id].last_ts, user.display_name.downcase] }
 %>
 <%= turbo_frame_tag TransitCoverageController::FRAME do %>
   <% if with_points.empty? %>
@@ -35,7 +49,6 @@
           percent = (share * 100).round
           tone = if percent >= 90 then 'text-success-ink' elsif percent >= 60 then 'text-success-ink opacity-80' elsif percent >= 25 then 'text-warning-ink' else 'text-error-ink' end
           rhythm = meta.rhythm(report)
-          silent_for = Time.current.to_i - report.last_ts
         %>
         <section class="card bg-base-200 shadow-sm" aria-labelledby="coverage-<%= user.id %>">
           <div class="card-body p-5 gap-4">
@@ -43,7 +56,7 @@
               <div class="min-w-0">
                 <h2 id="coverage-<%= user.id %>" class="font-semibold truncate" title="<%= user.email %>"><%= user.display_name %></h2>
                 <p class="text-xs opacity-70 flex items-center gap-1.5">
-                  <span class="inline-block w-2 h-2 rounded-full <%= silent_for <= 900 ? 'bg-success' : (silent_for <= 86_400 ? 'bg-warning' : 'bg-base-content/30') %>"></span>
+                  <span class="inline-block w-2 h-2 rounded-full <%= dot.call(report.last_ts) %>" aria-hidden="true"></span>
                   <%= t('transit_coverage.index.last', time: time_ago_in_words(Time.zone.at(report.last_ts))) %>
                 </p>
               </div>
@@ -52,6 +65,41 @@
                 <div class="text-[11px] opacity-70 mt-1"><%= t('transit_coverage.index.covered') %></div>
               </div>
             </header>
+
+            <% devices = @devices.fetch(user.id, []) %>
+            <% if devices.any? %>
+              <div>
+                <div class="text-[11px] uppercase tracking-wide opacity-70 mb-0.5"><%= t('transit_coverage.index.devices', count: devices.size) %></div>
+                <ul class="flex flex-col divide-y divide-base-300" role="list">
+                  <% devices.each do |row| %>
+                    <%
+                      battery = row['battery'].to_i if row['battery'].present? && row['battery'].to_i >= 0
+                      place = row['city'].presence || row['country_name'].presence
+                      delay = row['received_at'].to_i - row['timestamp'].to_i
+                    %>
+                    <li class="flex items-start gap-2.5 py-1.5" title="<%= [row['topic'], t('transit_devices.index.points_title', count: row['points_count'].to_i, days: @days)].compact_blank.join(' · ') %>">
+                      <span class="mt-1.5 inline-block w-2 h-2 rounded-full shrink-0 <%= dot.call(row['timestamp']) %>" aria-hidden="true"></span>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-baseline justify-between gap-2 text-sm">
+                          <span class="font-medium truncate"><%= row['tracker_id'].presence || t('transit_devices.index.unknown_device') %></span>
+                          <span class="whitespace-nowrap"><%= ago.call(row['timestamp']) %></span>
+                        </div>
+                        <div class="text-xs opacity-70 flex flex-wrap gap-x-2">
+                          <span class="tabular-nums"><%= clock.call(row['timestamp']) %></span>
+                          <% if battery %>
+                            <span class="inline-flex items-center gap-1 <%= 'text-error-ink opacity-100' if battery < 20 %>"><%= transit_battery_icon %><span class="sr-only"><%= t('transit_devices.index.battery') %></span><%= battery %>%</span>
+                          <% end %>
+                          <% if place %><span class="inline-flex items-center gap-1 min-w-0"><%= transit_icon('map-pin', 'w-3.5 h-3.5') %><span class="truncate"><%= place %></span></span><% end %>
+                          <% if delay > 300 %>
+                            <span><%= t('transit_devices.index.late', time: distance_of_time_in_words(delay)) %></span>
+                          <% end %>
+                        </div>
+                      </div>
+                    </li>
+                  <% end %>
+                </ul>
+              </div>
+            <% end %>
 
             <div>
               <div class="text-[11px] uppercase tracking-wide opacity-70 mb-1.5 cursor-help w-fit" title="<%= t('transit_coverage.index.typical_hint') %>"><%= t('transit_coverage.index.typical_day') %> ⓘ</div>
@@ -107,6 +155,13 @@
   <% end %>
 
   <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] opacity-70 mt-4">
+    <span><%= t('transit_devices.index.legend') %>:</span>
+    <% [['bg-success', t('transit_devices.index.legend_fresh', minutes: (TransitCoverageController::FRESH / 60).to_i)],
+        ['bg-warning', t('transit_devices.index.legend_today')], ['bg-base-content/30', t('transit_devices.index.legend_stale')]].each do |cls, label| %>
+      <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full <%= cls %>"></span><%= label %></span>
+    <% end %>
+  </div>
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] opacity-70 mt-1">
     <span><%= t('transit_coverage.index.legend') %></span>
     <% [['bg-success', '≥ 90%'], ['bg-success/60', '60–90%'], ['bg-warning', '25–60%'], ['bg-error', '< 25%'], ['bg-base-content/10', t('transit_coverage.index.no_data')]].each do |cls, label| %>
       <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-[3px] <%= cls %>"></span><%= label %></span>
@@ -120,7 +175,9 @@
   <% end %>
 
   <p class="text-xs opacity-70 mt-3">
-    <%= t('transit_devices.index.updated', time: @cached_at.in_time_zone(@zone).strftime('%H:%M:%S'),
-                                           minutes: (TransitCoverageController::CACHE_TTL / 60).to_i) %>
+    <%= t('transit_coverage.index.updated', devices: @devices_at.in_time_zone(@zone).strftime('%H:%M'),
+                                            devices_minutes: (TransitCoverageController::DEVICES_TTL / 60).to_i,
+                                            coverage: @cached_at.in_time_zone(@zone).strftime('%H:%M'),
+                                            coverage_minutes: (TransitCoverageController::CACHE_TTL / 60).to_i) %>
   </p>
 <% end %>
