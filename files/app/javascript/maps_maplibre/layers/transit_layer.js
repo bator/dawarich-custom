@@ -5,6 +5,18 @@ import { BaseLayer } from "./base_layer"
 
 const EMPTY = { type: "FeatureCollection", features: [] }
 
+// Lucide outline glyphs (app/assets/svg/icons/lucide/outline) for the popup,
+// which is built in JS where the Rails icon helper is out of reach.
+const LUCIDE = {
+  "triangle-alert":
+    '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  "circle-check": '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+}
+
+function lucide(name) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 shrink-0" aria-hidden="true">${LUCIDE[name]}</svg>`
+}
+
 // English fallbacks for locales that do not translate the transit texts yet.
 const FALLBACK = {
   uncertain: "Uncertain",
@@ -190,9 +202,9 @@ export class TransitLayer extends BaseLayer {
         ? ""
         : `<div>${escapeHtml(tr("delay"))}: ${Math.round(p.delay_secs / 60)} min</div>`
     const badge = p.uncertain
-      ? `<span class="badge badge-warning badge-sm">⚠ ${escapeHtml(tr("uncertain"))}</span>`
+      ? `<span class="badge badge-warning badge-sm gap-1">${lucide("triangle-alert")}${escapeHtml(tr("uncertain"))}</span>`
       : p.status === "confirmed"
-        ? `<span class="badge badge-success badge-sm">✔ ${escapeHtml(tr("confirmed"))}</span>`
+        ? `<span class="badge badge-success badge-sm gap-1">${lucide("circle-check")}${escapeHtml(tr("confirmed"))}</span>`
         : ""
     const buttons =
       p.status === "auto"

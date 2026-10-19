@@ -78,8 +78,8 @@
                   <td><%= feed.last_imported_at ? l(feed.last_imported_at, format: :short) : t('.never') %></td>
                   <td>
                     <%= [feed.valid_from, feed.valid_until].compact.map { |d| l(d) }.join(' – ') %>
-                    <% if feed.expired? %><span class="badge badge-error badge-sm">⚠ <%= t('.expired') %></span>
-                    <% elsif feed.expiring_soon? %><span class="badge badge-warning badge-sm">⚠ <%= t('.expiring_soon') %></span><% end %>
+                    <% if feed.expired? %><span class="badge badge-error badge-sm gap-1"><%= transit_icon('triangle-alert', 'w-3 h-3') %><%= t('.expired') %></span>
+                    <% elsif feed.expiring_soon? %><span class="badge badge-warning badge-sm gap-1"><%= transit_icon('triangle-alert', 'w-3 h-3') %><%= t('.expiring_soon') %></span><% end %>
                   </td>
                 </tr>
               <% end %>

@@ -5,7 +5,6 @@
     minutes >= 60 ? t('transit_segments.index.hours_minutes', hours: minutes / 60, minutes: minutes % 60) : t('transit_segments.card.minutes', count: minutes)
   end
   km = ->(meters) { "#{number_with_precision(meters / 1000.0, precision: meters < 10_000 ? 1 : 0, delimiter: ' ')} km" }
-  emoji = Gtfs::Discord::MessageBuilder::EMOJI
   defaults = Api::TransitSegmentSerializer::DEFAULT_COLORS
   max_bar = [@histogram.map { |_date, count, _partial| count }.max.to_i, 1].max
 %>
@@ -49,10 +48,10 @@
         <div class="ml-auto self-center">
           <% if @stats.to_review.positive? %>
             <%= link_to transit_segments_path(days: @days, uncertain: '1'), class: 'btn btn-sm btn-outline btn-warning' do %>
-              ⚠ <%= t('transit_segments.index.to_review', count: @stats.to_review) %>
+              <%= transit_icon('triangle-alert') %> <%= t('transit_segments.index.to_review', count: @stats.to_review) %>
             <% end %>
           <% else %>
-            <span class="badge badge-success badge-outline gap-1">✔ <%= t('transit_segments.index.all_reviewed') %></span>
+            <span class="badge badge-success badge-outline gap-1"><%= transit_icon('circle-check', 'w-3.5 h-3.5') %> <%= t('transit_segments.index.all_reviewed') %></span>
           <% end %>
         </div>
       </div>
@@ -97,7 +96,7 @@
             <tbody>
               <% @stats.by_mode.each do |mode, row| %>
                 <tr>
-                  <td><span aria-hidden="true"><%= emoji.fetch(mode) %></span> <%= t("transit_modes.#{mode}") %></td>
+                  <td><span class="flex items-center gap-1.5"><%= transit_mode_icon(mode) %><%= t("transit_modes.#{mode}") %></span></td>
                   <td class="text-right tabular-nums"><%= row[:count] %></td>
                   <td class="text-right tabular-nums whitespace-nowrap"><%= hours_minutes.call(row[:duration_s]) %></td>
                   <td class="text-right tabular-nums whitespace-nowrap opacity-70"><%= km.call(row[:distance_m]) %></td>
@@ -141,7 +140,7 @@
             %>
             <li class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 py-1 border-b border-base-300 last:border-b-0">
               <span class="badge font-bold min-w-12 justify-center gap-1 border-0" style="background-color: <%= color %>; color: <%= text_color %>">
-                <span aria-hidden="true" class="text-xs"><%= emoji.fetch(segment.mode) %></span><%= row[:line] %>
+                <%= transit_mode_icon(segment.mode, 'w-3.5 h-3.5') %><span class="sr-only"><%= t("transit_modes.#{segment.mode}") %></span><%= row[:line] %>
               </span>
               <span class="text-sm truncate opacity-80"><%= t("transit_modes.#{segment.mode}") %> · <%= segment.feed&.name %></span>
               <span class="text-sm tabular-nums whitespace-nowrap"><%= t('transit_segments.index.day_rides', count: row[:count]) %></span>

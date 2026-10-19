@@ -36,12 +36,12 @@
         <%= link_to transit_segments_path(days: @days, uncertain: (@only_uncertain ? nil : '1')),
                     class: "rounded-box p-4 border-2 border-warning hover:bg-warning/10 #{@only_uncertain ? 'bg-warning/20' : 'bg-warning/5'}",
                     title: t('.uncertain_note', count: @summary[:uncertain]) do %>
-          <div class="text-xs uppercase tracking-wide text-warning-ink">⚠ <%= t('.review_tile') %></div>
+          <div class="flex items-center gap-1 text-xs uppercase tracking-wide text-warning-ink"><%= transit_icon('triangle-alert', 'w-3.5 h-3.5') %><%= t('.review_tile') %></div>
           <div class="text-2xl sm:text-3xl font-bold tabular-nums mt-1"><%= @summary[:uncertain] %></div>
         <% end %>
       <% else %>
         <div class="rounded-box bg-success/10 p-4">
-          <div class="text-xs uppercase tracking-wide text-success-ink">✔ <%= t('.review_tile') %></div>
+          <div class="flex items-center gap-1 text-xs uppercase tracking-wide text-success-ink"><%= transit_icon('circle-check', 'w-3.5 h-3.5') %><%= t('.review_tile') %></div>
           <div class="text-lg font-semibold mt-2"><%= t('.all_reviewed') %></div>
         </div>
       <% end %>
@@ -50,7 +50,7 @@
       <ul class="flex flex-wrap gap-2 mt-3" role="list">
         <% @summary[:by_mode].each do |mode, count| %>
           <li class="badge badge-lg gap-1.5 bg-base-200 border-0 py-3">
-            <span aria-hidden="true"><%= Gtfs::Discord::MessageBuilder::EMOJI.fetch(mode) %></span>
+            <%= transit_mode_icon(mode) %>
             <span class="text-sm"><%= t("transit_modes.#{mode}") %></span>
             <span class="font-semibold tabular-nums"><%= count %></span>
           </li>
