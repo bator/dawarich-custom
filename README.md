@@ -18,8 +18,8 @@ Source of truth: OneDev `dawarich-custom`. The GitHub copy is a one-way mirror, 
 <tr>
 <td valign="top"><img src="docs/img/commute.png" width="380" alt="Commute card: a recurring trip with typical times, departures through the day and delay"><br>
 <b>Commutes</b> (on the Overview): recurring trips with typical times, departures through the day and delay, then the breakdown by vehicle, operator and line.</td>
-<td valign="top"><img src="docs/img/timetables.png" width="380" alt="Timetables page: feed validity tiles and a timeline per feed"><br>
-<b>Timetables</b> (<code>/transit/feeds</code>, admins): validity and sync of the 19 enabled feeds, the <code>gtfs</code> job queue, history matching per user.</td>
+<td valign="top"><img src="docs/img/timetables.png" width="380" alt="Timetables page: status strip with sync, queue and history, cards for the timetables rides came from, compact tiles for the rest"><br>
+<b>Timetables</b> (<code>/transit/feeds</code>, admins): a status strip (last sync, <code>gtfs</code> job queue, history matching per user; it opens into the job and per-user lists), <i>Needs attention</i> for a failed or expiring timetable only when rides came from it or someone picked it, <i>In use</i> cards (rides in the last 30 days, weekly bars, top lines, validity left) and <i>Standing by</i> tiles for the other enabled feeds.</td>
 </tr>
 </table>
 
