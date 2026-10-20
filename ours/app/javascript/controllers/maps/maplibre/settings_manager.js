@@ -75,6 +75,7 @@ export class SettingsController {
       flightsToggle: "flightsEnabled",
       transitToggle: "transitEnabled",
       walkLegsToggle: "walkLegsEnabled",
+      corridorsToggle: "corridorsEnabled",
       anomaliesToggle: "anomaliesEnabled",
     }
 

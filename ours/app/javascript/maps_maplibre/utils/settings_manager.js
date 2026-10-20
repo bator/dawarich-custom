@@ -72,6 +72,7 @@ const LAYER_NAME_MAP = {
   Flights: "flightsEnabled",
   Transit: "transitEnabled",
   "Walking legs": "walkLegsEnabled",
+  "Frequent routes": "corridorsEnabled",
   "Fog of War": "fogEnabled",
   "Scratch map": "scratchEnabled",
   "Family Members": "familyEnabled",

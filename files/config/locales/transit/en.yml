@@ -125,6 +125,8 @@ en:
         all_modes: All vehicles
         walk_legs: Walks to and from the rides
         walk_legs_hint: "Snapped to footpaths: dark dashed line; recorded GPS: light grey dotted."
+        corridors: Frequent routes
+        corridors_hint: The middle line of the walks and rides you made many times; the wider, the more trips.
   javascript:
     transit:
       failed_to_load: Failed to load public transport rides
@@ -152,6 +154,15 @@ en:
       part_stationary: "standing still"
       accuracy: "95% of the fixes within"
       failed_to_load: "Failed to load walking legs"
+    corridors:
+      title: Frequent route
+      trips: Trips
+      length: Length
+      spread: Spread of the trips
+      failed_to_load: Failed to load frequent routes
+      mode_walking: walking
+      mode_cycling: cycling
+      mode_running: running
   shared:
     navbar:
       transit: Travel

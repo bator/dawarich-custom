@@ -1,15 +1,16 @@
 --- a/app/javascript/controllers/maps/maplibre/layer_manager.js
 +++ b/app/javascript/controllers/maps/maplibre/layer_manager.js
-@@ -10,6 +10,8 @@
+@@ -10,6 +10,9 @@
  import { PhotosLayer } from "maps_maplibre/layers/photos_layer"
  import { PlacesLayer } from "maps_maplibre/layers/places_layer"
  import { PointsMvtLayer } from "maps_maplibre/layers/points_mvt_layer"
 +import { TransitLayer } from "maps_maplibre/layers/transit_layer"
 +import { WalkLegsLayer } from "maps_maplibre/layers/walk_legs_layer"
++import { CorridorsLayer } from "maps_maplibre/layers/corridors_layer"
  import { RecentPointLayer } from "maps_maplibre/layers/recent_point_layer"
  import { ReplayMarkerLayer } from "maps_maplibre/layers/replay_marker_layer"
  import { TracksLayer } from "maps_maplibre/layers/tracks_layer"
-@@ -48,6 +50,8 @@
+@@ -48,6 +51,8 @@
      placesGeoJSON,
      flightsGeoJSON,
      isCurrent = () => true,
@@ -18,19 +19,36 @@
    ) {
      performanceMonitor.mark("add-layers")
  
-@@ -58,6 +62,8 @@
+@@ -58,6 +63,9 @@
      this._addAreasLayer(areasGeoJSON)
      this._addTracksLayer(EMPTY_GEOJSON)
      this._addFlightsLayer(flightsGeoJSON)
++    this._addCorridorsLayer() // frequent routes, under the walks and rides
 +    this._addWalkLegsLayer(walkLegsGeoJSON) // below the rides
 +    this._addTransitLayer(transitGeoJSON)
      this._addVisitsLayer(visitsGeoJSON)
      this._addPlacesLayer(placesGeoJSON)
  
-@@ -384,6 +390,35 @@
+@@ -384,6 +392,51 @@
      }
    }
  
++  // Frequent routes are not tied to the date range: created once, loaded on
++  // first show (here when the setting was on, else in toggleCorridors).
++  _addCorridorsLayer() {
++    if (this.layers.corridorsLayer) return
++    this.layers.corridorsLayer = new CorridorsLayer(this.map, {
++      visible: this.settings.corridorsEnabled || false,
++    })
++    this.layers.corridorsLayer.add(EMPTY_GEOJSON)
++    if (this.settings.corridorsEnabled) {
++      this.controller?.api
++        ?.fetchCorridors()
++        .then((geojson) => this.layers.corridorsLayer?.update(geojson))
++        .catch((error) => console.warn("Failed to fetch frequent routes:", error))
++    }
++  }
++
 +  _addWalkLegsLayer(walkLegsGeoJSON) {
 +    if (!this.layers.walkLegsLayer) {
 +      this.layers.walkLegsLayer = new WalkLegsLayer(this.map, {

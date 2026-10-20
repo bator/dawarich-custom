@@ -1,6 +1,6 @@
 --- a/config/schedule.yml
 +++ b/config/schedule.yml
-@@ -124,3 +124,14 @@
+@@ -124,3 +124,24 @@
    cron: "*/5 * * * *"
    class: "Stats::ToponymsRefreshJob"
    queue: stats
@@ -15,3 +15,13 @@
 +  cron: "<%= ENV.fetch('GTFS_SYNC_CRON', '30 3 * * * Europe/Budapest') %>" # no-op unless GTFS_ENABLED=true
 +  class: "Gtfs::SyncAllFeedsJob"
 +  queue: gtfs
++
++corridors_rebuild_job:
++  cron: "<%= ENV.fetch('CORRIDORS_REBUILD_CRON', '15 4 * * 1 Europe/Budapest') %>" # no-op unless CORRIDORS_ENABLED=true
++  class: "Corridors::RebuildJob"
++  queue: low_priority
++
++corridors_snap_job:
++  cron: "<%= ENV.fetch('CORRIDORS_SNAP_CRON', '45 4 * * * Europe/Budapest') %>" # no-op unless CORRIDORS_SNAP_ENABLED=true
++  class: "Corridors::SnapJob"
++  queue: low_priority

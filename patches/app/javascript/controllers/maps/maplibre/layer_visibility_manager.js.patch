@@ -1,15 +1,16 @@
 --- a/app/javascript/controllers/maps/maplibre/layer_visibility_manager.js
 +++ b/app/javascript/controllers/maps/maplibre/layer_visibility_manager.js
-@@ -1,6 +1,8 @@
+@@ -1,6 +1,9 @@
  import { translate } from "i18n"
  import { Toast } from "maps_maplibre/components/toast"
  import { anomaliesVisible } from "maps_maplibre/utils/layer_dependencies"
 +import { tr } from "maps_maplibre/layers/transit_layer"
 +import { walkTr } from "maps_maplibre/layers/walk_legs_layer"
++import { corridorTr } from "maps_maplibre/layers/corridors_layer"
  import { gatedToggle } from "maps_maplibre/utils/layer_gate"
  import { lazyLoader } from "maps_maplibre/utils/lazy_loader"
  import { SettingsManager } from "maps_maplibre/utils/settings_manager"
-@@ -377,6 +379,112 @@
+@@ -377,6 +380,136 @@
      }
    }
  
@@ -67,6 +68,30 @@
 +    } catch (error) {
 +      console.error("Failed to toggle walking legs layer:", error)
 +      Toast.error(walkTr("failed_to_load"))
++    }
++  }
++
++  /**
++   * Toggle the frequent routes (loads them on first enable; not date bound).
++   */
++  async toggleCorridors(event) {
++    const enabled = event.target.checked
++    SettingsManager.updateSetting("corridorsEnabled", enabled)
++    const layer = this.layerManager.getLayer("corridors")
++    if (!layer) return
++
++    try {
++      if (enabled) {
++        if (!(layer.data?.features?.length > 0)) {
++          layer.update(await this.controller.api.fetchCorridors())
++        }
++        layer.show()
++      } else {
++        layer.hide()
++      }
++    } catch (error) {
++      console.error("Failed to toggle frequent routes layer:", error)
++      Toast.error(corridorTr("failed_to_load"))
 +    }
 +  }
 +

@@ -12,6 +12,7 @@ import { PlacesLayer } from "maps_maplibre/layers/places_layer"
 import { PointsMvtLayer } from "maps_maplibre/layers/points_mvt_layer"
 import { TransitLayer } from "maps_maplibre/layers/transit_layer"
 import { WalkLegsLayer } from "maps_maplibre/layers/walk_legs_layer"
+import { CorridorsLayer } from "maps_maplibre/layers/corridors_layer"
 import { RecentPointLayer } from "maps_maplibre/layers/recent_point_layer"
 import { ReplayMarkerLayer } from "maps_maplibre/layers/replay_marker_layer"
 import { TracksLayer } from "maps_maplibre/layers/tracks_layer"
@@ -62,6 +63,7 @@ export class LayerManager {
     this._addAreasLayer(areasGeoJSON)
     this._addTracksLayer(EMPTY_GEOJSON)
     this._addFlightsLayer(flightsGeoJSON)
+    this._addCorridorsLayer() // frequent routes, under the walks and rides
     this._addWalkLegsLayer(walkLegsGeoJSON) // below the rides
     this._addTransitLayer(transitGeoJSON)
     this._addVisitsLayer(visitsGeoJSON)
@@ -387,6 +389,22 @@ export class LayerManager {
       this.layers.flightsLayer.add(flightsGeoJSON)
     } else {
       this.layers.flightsLayer.update(flightsGeoJSON)
+    }
+  }
+
+  // Frequent routes are not tied to the date range: created once, loaded on
+  // first show (here when the setting was on, else in toggleCorridors).
+  _addCorridorsLayer() {
+    if (this.layers.corridorsLayer) return
+    this.layers.corridorsLayer = new CorridorsLayer(this.map, {
+      visible: this.settings.corridorsEnabled || false,
+    })
+    this.layers.corridorsLayer.add(EMPTY_GEOJSON)
+    if (this.settings.corridorsEnabled) {
+      this.controller?.api
+        ?.fetchCorridors()
+        .then((geojson) => this.layers.corridorsLayer?.update(geojson))
+        .catch((error) => console.warn("Failed to fetch frequent routes:", error))
     }
   }
 

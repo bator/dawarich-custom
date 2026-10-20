@@ -172,6 +172,19 @@
             </div>
           <% end %>
 
+          <% if Corridors::Config.enabled? %>
+            <div class="layer-options__group space-y-2" data-layer-options="corridors">
+              <label class="label cursor-pointer justify-start gap-3 py-0">
+                <input type="checkbox"
+                       class="toggle toggle-primary toggle-sm"
+                       data-maps--maplibre-target="corridorsToggle"
+                       data-action="change->maps--maplibre#toggleCorridors" />
+                <span class="label-text"><%= t('map.maplibre.transit_settings.corridors') %></span>
+              </label>
+              <p class="text-sm text-base-content/60"><%= t('map.maplibre.transit_settings.corridors_hint') %></p>
+            </div>
+          <% end %>
+
           <div class="layer-options__group space-y-2" data-maps--maplibre-target="visitsSearch" style="display: none;">
             <span class="layer-options__label"><%= t('.visits') %></span>
             <input type="text"

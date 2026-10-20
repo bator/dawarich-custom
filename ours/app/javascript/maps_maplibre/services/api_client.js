@@ -1077,6 +1077,20 @@ export class ApiClient {
   }
 
   /**
+   * Frequent routes of the user (Corridors::Builder) as GeoJSON; not tied to
+   * a date range.
+   */
+  async fetchCorridors() {
+    const response = await fetch(`${this.baseURL}/transit/corridors`, {
+      headers: this.getHeaders(),
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to fetch frequent routes: ${response.statusText}`)
+    }
+    return response.json()
+  }
+
+  /**
    * Confirm / reject a ride. Resolves to { ok, status, reload }; a 404 means
    * the ride was matched again meanwhile and the layer must be reloaded.
    */

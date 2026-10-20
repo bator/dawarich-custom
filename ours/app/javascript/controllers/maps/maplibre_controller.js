@@ -77,6 +77,7 @@ export default class extends Controller {
     "transitToggle",
     "transitModeSelect",
     "walkLegsToggle",
+    "corridorsToggle",
     "tracksToggle",
     // Globe projection
     "globeToggle",
@@ -1450,6 +1451,10 @@ export default class extends Controller {
 
   toggleWalkLegs(event) {
     return this.layerVisibilityManager.toggleWalkLegs(event)
+  }
+
+  toggleCorridors(event) {
+    return this.layerVisibilityManager.toggleCorridors(event)
   }
   toggleAnomalies(event) {
     return this.layerVisibilityManager.toggleAnomalies(event)

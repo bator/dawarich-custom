@@ -1,6 +1,6 @@
 --- a/app/javascript/maps_maplibre/services/api_client.js
 +++ b/app/javascript/maps_maplibre/services/api_client.js
-@@ -1039,6 +1039,60 @@
+@@ -1039,6 +1039,74 @@
      return response.json()
    }
  
@@ -37,6 +37,20 @@
 +    )
 +    if (!response.ok) {
 +      throw new Error(`Failed to fetch walking legs: ${response.statusText}`)
++    }
++    return response.json()
++  }
++
++  /**
++   * Frequent routes of the user (Corridors::Builder) as GeoJSON; not tied to
++   * a date range.
++   */
++  async fetchCorridors() {
++    const response = await fetch(`${this.baseURL}/transit/corridors`, {
++      headers: this.getHeaders(),
++    })
++    if (!response.ok) {
++      throw new Error(`Failed to fetch frequent routes: ${response.statusText}`)
 +    }
 +    return response.json()
 +  }

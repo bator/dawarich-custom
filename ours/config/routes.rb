@@ -446,6 +446,7 @@ Rails.application.routes.draw do
         resources :walk_legs, only: %i[index] do
           collection { get :map }
         end
+        resources :corridors, only: %i[index]
         resource :rematch, only: %i[create]
         resources :feeds, only: %i[index]
         resources :stats, only: %i[index]

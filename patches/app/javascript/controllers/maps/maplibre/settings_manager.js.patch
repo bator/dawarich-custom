@@ -1,15 +1,16 @@
 --- a/app/javascript/controllers/maps/maplibre/settings_manager.js
 +++ b/app/javascript/controllers/maps/maplibre/settings_manager.js
-@@ -73,6 +73,8 @@
+@@ -73,6 +73,9 @@
        familyToggle: "familyEnabled",
        tracksToggle: "tracksEnabled",
        flightsToggle: "flightsEnabled",
 +      transitToggle: "transitEnabled",
 +      walkLegsToggle: "walkLegsEnabled",
++      corridorsToggle: "corridorsEnabled",
        anomaliesToggle: "anomaliesEnabled",
      }
  
-@@ -101,6 +103,11 @@
+@@ -101,6 +104,11 @@
        }
      })
  
