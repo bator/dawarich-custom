@@ -31,12 +31,19 @@ It matches recorded location history against Hungarian public-transport timetabl
 Also: **Settings** (opt-in, feeds, minimum confidence, rematch the whole history), transit layers on `/map/v2`, and `track_pick`, a daily Discord pick of which user's
 track to copy onto the target account.
 
-## Docker
+## Install
 
-The same code also runs as a Docker image built on top of the official Dawarich image
-([`freikin/dawarich`](https://hub.docker.com/r/freikin/dawarich) on Docker Hub, built from
-[Freika/dawarich](https://github.com/Freika/dawarich)), with the Discord bot as its own container:
-[docs/docker.md](docs/docker.md).
+- **Proxmox VE**, into a [community-scripts](https://community-scripts.github.io/ProxmoxVE/scripts?id=dawarich)
+  Dawarich container, one command on the node ([docs/proxmox.md](docs/proxmox.md)):
+
+  ```bash
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/bator/dawarich-custom/main/install/proxmox.sh)"
+  ```
+
+- **Docker**: an image built on top of the official Dawarich image
+  ([`freikin/dawarich`](https://hub.docker.com/r/freikin/dawarich) on Docker Hub, built from
+  [Freika/dawarich](https://github.com/Freika/dawarich)), with the Discord bot as its own container
+  ([docs/docker.md](docs/docker.md)).
 
 ## How it survives upgrades
 
@@ -57,6 +64,7 @@ State: `/var/lib/dawarich-custom/` (`state.json`, backups, `conflicts/<version>/
 | `manifest.json` | `base_version`, `custom_files`, `patched_files` |
 | `systemd/` | drop-in that chains the restore after the OSRM overlay restore |
 | `docker/` | `Dockerfile`, compose override, bot entrypoint and env example ([docs/docker.md](docs/docker.md)) |
+| `install/` | `proxmox.sh` (on the node) and `lxc.sh` (in the container) ([docs/proxmox.md](docs/proxmox.md)) |
 
 Not stored: `tailwind.css` and `sprockets-manifest.json` (rebuilt by `assets:precompile`) and secrets
 (`/opt/dawarich/.env`, `/opt/dawarich/gtfs.env`).
