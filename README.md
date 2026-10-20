@@ -10,23 +10,26 @@ Source of truth: OneDev `dawarich-custom`. The GitHub copy is a one-way mirror, 
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/img/rides.png" width="380" alt="Rides page: totals for the period and one matched ride with line, stops and delay"><br>
+<td width="50%" valign="top"><img src="docs/img/rides.png" width="380" alt="Rides page: totals for the period, then the matched rides as cards with line, stops, times and delay"><br>
 <b>Rides</b> (<code>/transit</code>): every matched ride with line, stops, on-time state and the uncertain ones to review. Rides are approved from Discord too (<code>dawarich-gtfs-discord-bot</code>).</td>
 <td width="50%" valign="top"><img src="docs/img/overview.png" width="380" alt="Overview page: totals against the period before, the ridden network on the map along the timetable's line, punctuality and savings against the car"><br>
 <b>Overview</b> (<code>/transit/stats</code>): totals against the period before, your network on the map along the timetable's line, punctuality, CO₂ and money against the car. The old <code>/transit/savings</code> and <code>/transit/punctuality</code> links redirect here.</td>
 </tr>
 <tr>
-<td valign="top"><img src="docs/img/commute.png" width="380" alt="Commute card: a recurring trip with typical times, departures through the day and delay"><br>
+<td valign="top"><img src="docs/img/commute.png" width="380" alt="Commute card: a recurring trip with typical times, departures through the day and delay, then rides by vehicle and operator"><br>
 <b>Commutes</b> (on the Overview): recurring trips with typical times, departures through the day and delay, then the breakdown by vehicle, operator and line.</td>
 <td valign="top"><img src="docs/img/timetables.png" width="380" alt="Timetables page: status strip with sync, queue and history, cards for the timetables rides came from, compact tiles for the rest"><br>
 <b>Timetables</b> (<code>/transit/feeds</code>, admins): a status strip (last sync, <code>gtfs</code> job queue, history matching per user; it opens into the job and per-user lists), <i>Needs attention</i> for a failed or expiring timetable only when rides came from it or someone picked it, <i>In use</i> cards (rides in the last 30 days, weekly bars, top lines, validity left) and <i>Standing by</i> tiles for the other enabled feeds.</td>
 </tr>
+<tr>
+<td colspan="2" valign="top"><img src="docs/img/discord.png" width="560" alt="Discord page: connection, whose rides are posted and who approves, message language, track pick, and a preview of the ride message as Discord shows it"><br>
+<b>Discord</b> (<code>/transit/discord</code>, admins): bot status, token, channel, whose rides are posted and who may approve, the message language (Hungarian or English) and the daily track pick, with a live preview of the ride message. Saved values win over <code>gtfs.env</code>.</td>
+</tr>
 </table>
 
 Also: **Tracking** (coverage and devices), **Settings** (opt-in, feeds, minimum confidence, rematch
-the whole history), **Discord** (`/transit/discord`, admins: bot status, token, channel, who gets posted,
-who may approve and the message language, Hungarian or English; saved values win over `gtfs.env`), transit layers on `/map/v2`, and `track_pick`,
-a daily Discord pick of which user's track to copy onto the target account.
+the whole history), transit layers on `/map/v2`, and `track_pick`, a daily Discord pick of which user's
+track to copy onto the target account.
 
 ## How it survives upgrades
 
