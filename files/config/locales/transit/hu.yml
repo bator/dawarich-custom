@@ -17,9 +17,6 @@ hu:
         feed_name: Menetrend
         validity: Érvényes
         no_feeds: Még nincs importált menetrend.
-        never: soha
-        expired: lejárt
-        expiring_soon: hamarosan lejár
         licence: licenc
         rematch_hint: Minden napot újra feldolgoz, amelyet a tárolt menetrendek még lefednek. Ez sokáig tart.
         feeds_selected:
@@ -27,7 +24,7 @@ hu:
           other: "%{count} menetrend kiválasztva"
         feeds_all: "Nincs kijelölés: minden menetrend használatban"
         today: ma
-        last_import_short: Import
+        remaining: Hátralévő
         attribution_missing_count:
           one: "1 menetrendnél nincs rögzített forrásmegjelölés vagy licenc; ezt az adminisztrátor tölti ki."
           other: "%{count} menetrendnél nincs rögzített forrásmegjelölés vagy licenc; ezt az adminisztrátor tölti ki."

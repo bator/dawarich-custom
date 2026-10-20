@@ -17,9 +17,6 @@ en:
         feed_name: Timetable
         validity: Valid
         no_feeds: No timetable has been imported yet.
-        never: never
-        expired: expired
-        expiring_soon: expires soon
         licence: licence
         rematch_hint: Goes through every day the stored timetables still cover. This takes a while.
         feeds_selected:
@@ -27,7 +24,7 @@ en:
           other: "%{count} timetables selected"
         feeds_all: "None ticked: every timetable is used"
         today: today
-        last_import_short: Import
+        remaining: Remaining
         attribution_missing_count:
           one: "1 timetable has no attribution or licence recorded; the administrator fills it in."
           other: "%{count} timetables have no attribution or licence recorded; the administrator fills it in."

@@ -62,7 +62,7 @@
         <% else %>
           <fieldset>
             <legend class="sr-only"><%= t('.feeds_label') %></legend>
-            <div class="hidden sm:grid grid-cols-[1.5rem_minmax(0,13rem)_minmax(0,1fr)_3.5rem] gap-x-3 items-end text-[10px] opacity-70 tabular-nums" aria-hidden="true">
+            <div class="hidden sm:grid grid-cols-[1.5rem_minmax(0,13rem)_minmax(0,1fr)_6.5rem] gap-x-3 items-end text-[10px] opacity-70 tabular-nums" aria-hidden="true">
               <span></span><span class="uppercase tracking-wide"><%= t('.feed_name') %></span>
               <span class="relative h-4">
                 <% years.each do |date| %>
@@ -70,7 +70,7 @@
                 <% end %>
                 <span class="absolute bottom-0 -translate-x-1/2 font-semibold opacity-100" style="left: <%= axis_pct.call(today) %>%"><%= t('.today') %></span>
               </span>
-              <span class="text-right uppercase tracking-wide"><%= t('.last_import_short') %></span>
+              <span class="text-right uppercase tracking-wide"><%= t('.remaining') %></span>
             </div>
             <ul class="flex flex-col divide-y divide-base-300" role="list">
               <% feeds.each do |feed| %>
@@ -86,8 +86,12 @@
                         else 'bg-base-content/30'
                         end
                   validity = [feed.valid_from, feed.valid_until].compact.map { |d| l(d) }.join(' – ')
+                  remaining_tone = if feed.expired? then 'text-error-ink'
+                                   elsif feed.expiring_soon? then 'text-warning-ink'
+                                   else ''
+                                   end
                 %>
-                <li class="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] sm:grid-cols-[1.5rem_minmax(0,13rem)_minmax(0,1fr)_3.5rem] gap-x-3 gap-y-1 items-center py-2">
+                <li class="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] sm:grid-cols-[1.5rem_minmax(0,13rem)_minmax(0,1fr)_6.5rem] gap-x-3 gap-y-1 items-center py-2">
                   <%= check_box_tag 'transit[feed_keys][]', feed.key, selected.include?(feed.key),
                                     id: "transit_feed_#{feed.key}", class: 'checkbox checkbox-primary checkbox-sm' %>
                   <span class="flex items-center gap-1.5 min-w-0">
@@ -99,15 +103,17 @@
                     <% elsif feed.attribution.present? %>
                       <span class="opacity-70 shrink-0" title="<%= feed.attribution %>"><%= transit_icon('info', 'w-3.5 h-3.5') %><span class="sr-only"><%= feed.attribution %></span></span>
                     <% end %>
-                    <% if feed.expired? %>
-                      <span class="badge badge-sm badge-outline border-error text-error-ink gap-1 shrink-0"><%= transit_icon('triangle-alert', 'w-3 h-3') %><%= t('.expired') %></span>
-                    <% elsif feed.expiring_soon? %>
-                      <span class="badge badge-sm badge-outline border-warning text-warning-ink gap-1 shrink-0"><%= transit_icon('triangle-alert', 'w-3 h-3') %><%= t('.expiring_soon') %></span>
-                    <% end %>
                   </span>
-                  <span class="sm:order-last text-xs opacity-70 tabular-nums text-right whitespace-nowrap"
-                        title="<%= feed.last_imported_at ? l(feed.last_imported_at, format: :short) : t('.never') %>">
-                    <%= feed.last_imported_at ? l(feed.last_imported_at.to_date, format: '%m.%d') : t('.never') %>
+                  <span class="sm:order-last text-right leading-tight whitespace-nowrap <%= remaining_tone %>">
+                    <% if feed.valid_until %>
+                      <span class="flex items-center justify-end gap-1 text-sm tabular-nums">
+                        <% if feed.expired? || feed.expiring_soon? %><%= transit_icon('triangle-alert', 'w-3.5 h-3.5') %><% end %>
+                        <%= feed.expired? ? t('transit_feeds.index.expired_ago', count: (today - feed.valid_until).to_i) : t('transit_feeds.index.days_left', count: (feed.valid_until - today).to_i) %>
+                      </span>
+                      <span class="block text-[11px] opacity-70 tabular-nums"><%= l(feed.valid_until, format: feed.valid_until.year == today.year ? '%m.%d' : '%Y.%m.%d') %></span>
+                    <% else %>
+                      <span class="text-sm opacity-70">–</span>
+                    <% end %>
                   </span>
                   <span class="col-span-2 col-start-2 sm:col-span-1 sm:col-start-auto flex items-center min-w-0">
                     <span class="relative h-2.5 flex-1 rounded-full bg-base-100" title="<%= t('.validity') %>: <%= validity.presence || '–' %>">
