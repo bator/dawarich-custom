@@ -11,6 +11,16 @@ export default class extends Controller {
   static values = { bounds: Array, unsupported: String }
 
   async connect() {
+    // MapLibre needs WebGL2; without it, it only logs an error and leaves an
+    // empty box, so say so instead (the routes are listed beside the map)
+    if (!document.createElement("canvas").getContext("webgl2")) {
+      const note = document.createElement("p")
+      note.className = "h-full flex items-center justify-center p-6 text-center text-sm opacity-70"
+      note.textContent = this.unsupportedValue
+      this.mapTarget.replaceChildren(note)
+      return
+    }
+
     const dark = (document.documentElement.dataset.theme || "").includes("dark")
     this.dark = dark
     let style
@@ -25,24 +35,14 @@ export default class extends Controller {
     // stop names sit right of the dot: more room on the right so they are not cut
     const width = this.mapTarget.clientWidth || 600
     const pad = Math.round(Math.min(48, width * 0.08))
-    try {
-      this.map = new maplibregl.Map({
-        container: this.mapTarget,
-        style,
-        bounds: this.boundsValue,
-        fitBoundsOptions: { padding: { top: pad, bottom: pad, left: pad, right: Math.round(Math.min(150, width * 0.3)) }, maxZoom: 13 },
-        cooperativeGestures: true,
-        attributionControl: { compact: true },
-      })
-    } catch (error) {
-      // no WebGL (MapLibre throws): a note instead of an empty box
-      console.error("[transit network] map failed", error)
-      const note = document.createElement("p")
-      note.className = "h-full flex items-center justify-center p-6 text-center text-sm opacity-70"
-      note.textContent = this.unsupportedValue
-      this.mapTarget.replaceChildren(note)
-      return
-    }
+    this.map = new maplibregl.Map({
+      container: this.mapTarget,
+      style,
+      bounds: this.boundsValue,
+      fitBoundsOptions: { padding: { top: pad, bottom: pad, left: pad, right: Math.round(Math.min(150, width * 0.3)) }, maxZoom: 13 },
+      cooperativeGestures: true,
+      attributionControl: { compact: true },
+    })
     this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right")
     this.map.on("load", () => this.addLayers())
   }
