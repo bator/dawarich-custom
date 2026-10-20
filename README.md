@@ -1,10 +1,39 @@
 # dawarich-custom
 
-Custom code on top of upstream [Dawarich](https://github.com/Freika/dawarich) for CT 139 (`minipc`):
-GTFS public-transit matcher (`/transit`, transit layers on `/map/v2`, Discord ride approvals via
-`dawarich-gtfs-discord-bot`) and `track_pick`. OSRM overlays stay in `/opt/dawarich-osrm`.
+Custom code on top of upstream [Dawarich](https://github.com/Freika/dawarich) 1.16.0, running in CT 139 (`minipc`).
+It matches recorded location history against Hungarian public-transport timetables (GTFS), and
+`restore_custom.py` puts it back after every community-script upgrade.
 
-Community-script upgrades replace `/opt/dawarich/app` wholesale. `restore_custom.py` puts this back.
+Source of truth: OneDev `dawarich-custom`. The GitHub copy is a one-way mirror, so push to OneDev only.
+
+## What it adds
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/img/rides.png" width="380" alt="Rides page: totals for the period and one matched ride with line, stops and delay"><br>
+<b>Rides</b> (<code>/transit</code>): every matched ride with line, stops, on-time state and the uncertain ones to review. Rides are approved from Discord too (<code>dawarich-gtfs-discord-bot</code>).</td>
+<td width="50%" valign="top"><img src="docs/img/commute.png" width="380" alt="Commute card: a recurring trip with typical times, departures through the day and delay"><br>
+<b>Overview</b> (<code>/transit/stats</code>): totals, rides per week, recurring commutes, breakdown by vehicle and operator.</td>
+</tr>
+<tr>
+<td valign="top"><img src="docs/img/savings.png" width="380" alt="Savings page: CO2 saved versus the same distance by car, and money saved"><br>
+<b>Savings</b> (<code>/transit/savings</code>): CO₂ and money against the same distance by car, plus punctuality.</td>
+<td valign="top"><img src="docs/img/timetables.png" width="380" alt="Timetables page: feed validity tiles and a timeline per feed"><br>
+<b>Timetables</b> (<code>/transit/feeds</code>, admins): validity and sync of the 19 enabled feeds, the <code>gtfs</code> job queue, history matching per user.</td>
+</tr>
+</table>
+
+Also: **Tracking** (coverage and devices), **Settings** (opt-in, feeds, minimum confidence, rematch
+the whole history), transit layers on `/map/v2`, and `track_pick`, a daily Discord pick of which
+user's track to copy onto the target account.
+
+## How it survives upgrades
+
+<img src="docs/restore-flow.svg" width="560" alt="Restore flow: upgrade, path unit, OSRM overlays, restore_custom.py plan, guards, write and migrate, restart, smoke check">
+
+A community-script upgrade replaces `/opt/dawarich/app` wholesale. The restore merges our edits into the new
+upstream files instead of overwriting them, and stops on anything it cannot merge cleanly.
+State: `/var/lib/dawarich-custom/` (`state.json`, backups, `conflicts/<version>/`).
 
 ## Layout
 
@@ -12,34 +41,13 @@ Community-script upgrades replace `/opt/dawarich/app` wholesale. `restore_custom
 |---|---|
 | `files/<rel>` | custom-only files, copied verbatim into the app |
 | `ours/<rel>` | our version of a modified upstream file |
-| `upstream/<base_version>/<rel>` | pristine upstream file that `ours/` was made from (merge base) |
+| `upstream/<base_version>/<rel>` | the pristine upstream file `ours/` was made from (merge base) |
 | `patches/<rel>.patch` | `upstream` → `ours` diff, for reading only (generated) |
 | `manifest.json` | `base_version`, `custom_files`, `patched_files` |
 | `systemd/` | drop-in that chains the restore after the OSRM overlay restore |
 
-Not stored: `app/assets/builds/tailwind.css` and `config/sprockets-manifest.json` (rebuilt by
-`assets:precompile`), secrets (`/opt/dawarich/.env`, `/opt/dawarich/gtfs.env`).
-
-## How the restore works
-
-Trigger: `dawarich-osrm-restore.path` (`/opt/dawarich/app/.app_version` changes) →
-`dawarich-osrm-restore.service` → overlays, then `restore_custom.py`.
-
-1. Plan without writing: copy `files/`; 3-way merge each `ours/` file
-   (`git merge-file ours upstream/<base> <new upstream>`). A custom file dropped from
-   `manifest.json` (still in `state.json`) is removed if it is unchanged since we wrote it;
-   if it differs, or was a patched upstream file, it stays and the plan gets a note.
-2. Guards that refuse the whole restore (Discord alert, nothing written):
-   - any merge conflict (diff3 output in `/var/lib/dawarich-custom/conflicts/<version>/`)
-   - a custom-only path that now exists upstream, or a live file edited without `capture`
-   - a migration version used by both upstream and us (db:migrate silently skips the second one)
-3. Write and remove (backup in `/var/lib/dawarich-custom/backup/<ts>/`), `bundle check || bundle install`
-   if the Gemfile changed, `db:migrate`, `assets:precompile`. A failure rolls the files back and
-   does not restart.
-4. Restart `dawarich-web`, `dawarich-web-local`, `dawarich-worker`, `dawarich-gtfs-discord-bot`.
-5. Smoke check: `/transit` on :3000 and :3002 must not be 404/5xx, the bot must stay active.
-
-State: `/var/lib/dawarich-custom/state.json` (which file we wrote, per version).
+Not stored: `tailwind.css` and `sprockets-manifest.json` (rebuilt by `assets:precompile`) and secrets
+(`/opt/dawarich/.env`, `/opt/dawarich/gtfs.env`).
 
 ## Commands (in CT 139)
 
@@ -55,7 +63,9 @@ New custom file: add its path to `manifest.json` (`custom_files`), then `capture
 
 ## Migrations
 
-Custom migration versions must never equal an upstream one. `create_gtfs_tables` is
-`20261010115959` because upstream 1.16.0 ships `20261010120000_enqueue_achievement_visit_date_backfill`.
-On a collision the restore stops; fix by renaming ours to a free version, inserting the new
-version into `schema_migrations`, deleting the upstream version row so upstream's migration runs.
+A custom migration version must never equal an upstream one: `db:migrate` silently skips the second.
+`create_gtfs_tables` is `20261010115959` because upstream 1.16.0 ships `20261010120000`. On a collision
+the restore stops. Fix: rename ours to a free version, insert the new version into `schema_migrations`,
+and delete the upstream version's row so upstream's migration runs.
+
+<sub>Screenshots: 2026-10-20, dark theme, own account only.</sub>
