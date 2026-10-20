@@ -12,7 +12,8 @@ module Gtfs::Discord::BotStatus
   TTL = 3.minutes
 
   def connected!(username)
-    write('state' => 'connected', 'bot' => username, 'since' => Time.current.iso8601)
+    # braces: without them Ruby 3 passes the string-keyed hash as keywords
+    write({ 'state' => 'connected', 'bot' => username, 'since' => Time.current.iso8601 })
   end
 
   def beat!
