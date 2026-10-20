@@ -5,15 +5,35 @@
 # railway; else the line through the timetable stops; else a straight line;
 # for an older ride whose feed version has been replaced since, a trip of the
 # active version through the same two stops stands in for its own trip),
-# the GPS trace and the two stops. Nothing that lies in one of the user's
-# privacy zones (plus ZONE_BUFFER_M) is returned: every edge of the lines
-# and the trace is clipped exactly at the zone circle (review A1: an edge
-# between two points outside a zone can still cross it), so they end at the
-# buffered zone border, and a stop inside one is left out.
+# the GPS trace and the two stops. The trace is cut at every gap (no fix for
+# a long stretch: the minutes before the phone's first fix, the M4
+# underground, a station hall, or a position jump), so no straight line runs
+# across where the ride never went (ride 111's trace drew one from
+# Kelenföld towards Diósd), and a short piece (MIN_PIECE_SHARE) between two
+# gaps is left out (with a fix every few minutes there is no trace at all,
+# only chords). Nothing that lies in one of the user's privacy zones
+# (plus ZONE_BUFFER_M) is returned: every edge of the lines and the trace is
+# clipped exactly at the zone circle (review A1: an edge between two points
+# outside a zone can still cross it), so they end at the buffered zone
+# border, and a stop inside one is left out.
 class Gtfs::Discord::RideMap
   EARTH_RADIUS_M = 6_371_000.0
   ZONE_BUFFER_M = 50.0 # the line stops a bit before the zone, not at its exact border
   EPSILON = 1e-9
+  # A gap in the trace: a step longer than GAP_M, or longer than GAP_SLOW_M
+  # after more than GAP_S without a fix. Phones sending every 1-5 s step at
+  # most ~250 m between two fixes (99.9% of them; 160 km/h is 220 m in 5 s),
+  # and the longer steps of a few seconds are fast rides with a fix or two
+  # missed, whose chord stays on the track. A shorter step after a silence
+  # is a gap too (bus 20: 833 m in 157 s), unless the phone barely moved, e.g.
+  # standing at a station.
+  GAP_M = 1_000.0
+  GAP_S = 30
+  GAP_SLOW_M = 250.0
+  # A piece of trace shorter than this share of the ride (7-14 px on the
+  # image, which fits the whole ride) or than MIN_PIECE_M is a stub, not a trace.
+  MIN_PIECE_SHARE = 0.02
+  MIN_PIECE_M = 50.0
 
   Result = Struct.new(:line, :line_source, :gps, :board, :alight, keyword_init: true) do
     delegate :empty?, to: :coordinates
@@ -30,7 +50,7 @@ class Gtfs::Discord::RideMap
 
   def call
     source, coordinates = line_coordinates
-    Result.new(line: runs(coordinates), line_source: source, gps: runs(gps_coordinates),
+    Result.new(line: runs(coordinates), line_source: source, gps: gps_pieces.flat_map { |piece| runs(piece) },
                board: visible(lonlat(@segment.boarding_lonlat)), alight: visible(lonlat(@segment.alighting_lonlat)))
   end
 
@@ -122,16 +142,36 @@ class Gtfs::Discord::RideMap
     rows[from..to].map { |row| [row[1].to_f, row[2].to_f] }
   end
 
-  # Read only: the ride's points, oldest first.
-  def gps_coordinates
+  # The trace between its gaps, each piece a list of coordinates, without the
+  # short pieces (a lone fix is one too).
+  def gps_pieces
+    shortest = [@segment.distance_m.to_f * MIN_PIECE_SHARE, MIN_PIECE_M].max
+    gps_points.slice_when { |a, b| gap?(a, b) }
+              .map { |piece| piece.map { |lon, lat, _| [lon, lat] } }
+              .select { |piece| piece.each_cons(2).sum { |a, b| distance_m(a, b) } >= shortest }
+  end
+
+  def gap?((lon0, lat0, time0), (lon1, lat1, time1))
+    step = distance_m([lon0, lat0], [lon1, lat1])
+    step > GAP_M || (time1 - time0 > GAP_S && step > GAP_SLOW_M)
+  end
+
+  # Read only: the ride's points, oldest first, as [lon, lat, unix time].
+  def gps_points
     sql = <<~SQL.squish
-      SELECT ST_X(points.lonlat::geometry), ST_Y(points.lonlat::geometry)
+      SELECT ST_X(points.lonlat::geometry), ST_Y(points.lonlat::geometry), points.timestamp
       FROM transit_segment_points
       JOIN points ON points.id = transit_segment_points.point_id
       WHERE transit_segment_points.transit_segment_id = ? AND points.lonlat IS NOT NULL
       ORDER BY points.timestamp, points.id
     SQL
-    select_rows(sql, @segment.id).map { |lon, lat| [lon.to_f, lat.to_f] }
+    select_rows(sql, @segment.id).map { |lon, lat, time| [lon.to_f, lat.to_f, time.to_i] }
+  end
+
+  # Metres between two coordinates (equirectangular: exact enough for a step).
+  def distance_m((lon0, lat0), (lon1, lat1))
+    rad = Math::PI / 180
+    Math.hypot((lon1 - lon0) * rad * Math.cos((lat0 + lat1) / 2 * rad), (lat1 - lat0) * rad) * EARTH_RADIUS_M
   end
 
   # The visible parts of a polyline, each a list of coordinates.
