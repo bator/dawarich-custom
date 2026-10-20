@@ -158,6 +158,7 @@
     "db/migrate/20261010170100_drop_transit_segment_orphan_trigger.rb",
     "db/migrate/20261011060000_create_transit_walk_legs.rb",
     "db/migrate/20261011130000_add_drawn_to_transit_walk_legs.rb",
+    "db/migrate/20261020101959_add_live_points_index_for_transit_coverage.rb",
     "lib/tasks/gtfs.rake",
     "lib/tasks/gtfs_discord.rake",
     "lib/tasks/gtfs_match.rake",

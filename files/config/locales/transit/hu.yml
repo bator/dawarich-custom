@@ -144,4 +144,4 @@ hu:
       failed_to_load: "Nem sikerült betölteni a gyalogos szakaszokat"
   shared:
     navbar:
-      transit: Közlekedés
+      transit: Utazás

@@ -18,6 +18,36 @@ class Gtfs::CoverageReport
     def covered_minutes = days.sum { |_, day| day[:minutes] }
   end
 
+  # Local date and hour of epoch seconds without a TimeWithZone per point
+  # (that was most of the page's time): the UTC offset only changes at a
+  # transition, so the current TZInfo period is reused until ts leaves it.
+  class LocalClock
+    EPOCH = Date.new(1970, 1, 1)
+
+    def initialize(zone)
+      @tz = zone.tzinfo
+      @from = @to = 0
+      @dates = {}
+    end
+
+    # [Date, hour]
+    def date_hour(ts)
+      period(ts) unless ts >= @from && ts < @to
+      local = ts + @offset
+      day = local.div(86_400)
+      [@dates[day] ||= EPOCH + day, (local % 86_400) / 3600]
+    end
+
+    private
+
+    def period(ts)
+      period = @tz.period_for(Time.at(ts).utc)
+      @offset = period.observed_utc_offset
+      @from = period.start_transition&.timestamp_value || -Float::INFINITY
+      @to = period.end_transition&.timestamp_value || Float::INFINITY
+    end
+  end
+
   attr_reader :from, :to
 
   def initialize(user_ids, since:, zone:)
@@ -74,11 +104,12 @@ class Gtfs::CoverageReport
     counts = Hash.new(0)
     hours = Hash.new { |h, k| h[k] = Set.new }
     hour_points = Array.new(24, 0)
+    clock = LocalClock.new(@zone)
     timestamps.each do |ts|
-      time = @zone.at(ts)
-      counts[time.to_date] += 1
-      hours[time.to_date] << time.hour
-      hour_points[time.hour] += 1
+      date, hour = clock.date_hour(ts)
+      counts[date] += 1
+      hours[date] << hour
+      hour_points[hour] += 1
     end
     Entry.new(user_id:, days: per_day(spans, counts, hours), hour_points:, gaps: gaps.sort_by { |a, b| a - b }.first(TOP_GAPS), last_ts: timestamps.last)
   end
