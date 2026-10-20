@@ -21,13 +21,14 @@ It matches recorded location history against Hungarian public-transport timetabl
 <b>Timetables</b> (<code>/transit/feeds</code>, admins): a status strip (last sync, <code>gtfs</code> job queue, history matching per user; it opens into the job and per-user lists), <i>Needs attention</i> for a failed or expiring timetable only when rides came from it or someone picked it, <i>In use</i> cards (rides in the last 30 days, weekly bars, top lines, validity left) and <i>Standing by</i> tiles for the other enabled feeds.</td>
 </tr>
 <tr>
-<td colspan="2" valign="top"><img src="docs/img/discord.png" width="560" alt="Discord page: connection, whose rides are posted and who approves, message language, track pick, and a preview of the ride message as Discord shows it"><br>
+<td valign="top"><img src="docs/img/tracking.png" width="380" alt="Tracking page: per user the covered share of the time, the devices with their last report, a typical day and the last 31 days; names, devices, places and battery levels masked"><br>
+<b>Tracking</b> (<code>/transit/coverage</code>): how much of the time live points came in, per user and device: last report, a typical day by hour, coverage per day and the longest silence. Admins see every user.</td>
+<td valign="top"><img src="docs/img/discord.png" width="380" alt="Discord page: connection, whose rides are posted and who approves, message language, track pick, and a preview of the ride message as Discord shows it"><br>
 <b>Discord</b> (<code>/transit/discord</code>, admins): bot status, token, channel, whose rides are posted and who may approve, the message language (Hungarian or English) and the daily track pick, with a live preview of the ride message. Saved values win over <code>gtfs.env</code>.</td>
 </tr>
 </table>
 
-Also: **Tracking** (coverage and devices), **Settings** (opt-in, feeds, minimum confidence, rematch
-the whole history), transit layers on `/map/v2`, and `track_pick`, a daily Discord pick of which user's
+Also: **Settings** (opt-in, feeds, minimum confidence, rematch the whole history), transit layers on `/map/v2`, and `track_pick`, a daily Discord pick of which user's
 track to copy onto the target account.
 
 ## How it survives upgrades
