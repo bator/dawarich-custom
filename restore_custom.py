@@ -25,6 +25,9 @@ is routed again (302 to sign-in, not 404).
 
 Commands:
   restore_custom.py [--dry-run]   restore (default); --dry-run only prints the plan
+  restore_custom.py --settle      the same, after waiting for an upgrade to finish
+                                  (app tree quiet, web and worker active): used by
+                                  the .path trigger install/lxc.sh sets up
   restore_custom.py capture       copy the live custom files back into the repo
                                   (after editing on the box; then git commit)
   restore_custom.py rebase        after a clean merge on a new upstream version:
@@ -60,11 +63,18 @@ ENV_FILES = (Path("/opt/dawarich/.env"), Path("/opt/dawarich/gtfs.env"))
 DISCORD_ENV = Path("/opt/dawarich-osrm/discord.env")
 RBENV_SHIMS = "/root/.rbenv/shims"
 
+# Restarted (and smoke-checked) only where installed and enabled or running
+# (unit_wanted): a fresh community-scripts CT has no dawarich-web-local, and
+# the bot only once it is set up (install/proxmox.sh leaves it disabled).
 RESTART_UNITS = ("dawarich-web", "dawarich-web-local", "dawarich-worker", "dawarich-gtfs-discord-bot")
 # (url, unit) -- /transit must be routed: 302 to sign-in, not 404
 SMOKE_URLS = (("http://127.0.0.1:3000/transit", "dawarich-web"),
               ("http://127.0.0.1:3002/transit", "dawarich-web-local"))
 SMOKE_TIMEOUT_SEC = 240
+# --settle: the .path trigger fires while the upgrade is still writing
+SETTLE_QUIET_SEC = 120
+SETTLE_MAX_SEC = 45 * 60
+SETTLE_POLL_SEC = 15
 BOT_UNIT = "dawarich-gtfs-discord-bot"
 GEM_FILES = ("Gemfile", "Gemfile.lock")
 MIGRATION_RE = re.compile(r"^db/migrate/(\d{14})_.+\.rb$")
@@ -378,10 +388,22 @@ def http_status(url: str) -> int | None:
         return None
 
 
-def smoke_check() -> list[str]:
+def unit_wanted(unit: str) -> bool:
+    r = subprocess.run(["systemctl", "show", unit, "-p", "LoadState", "-p", "UnitFileState", "-p", "ActiveState"],
+                       capture_output=True, text=True)
+    props = dict(line.split("=", 1) for line in r.stdout.splitlines() if "=" in line)
+    if props.get("LoadState") != "loaded":
+        return False
+    return (props.get("UnitFileState", "").startswith("enabled")
+            or props.get("ActiveState") in ("active", "activating", "reloading"))
+
+
+def smoke_check(units: list[str]) -> list[str]:
     errors: list[str] = []
     deadline = time.monotonic() + SMOKE_TIMEOUT_SEC
     for url, unit in SMOKE_URLS:
+        if unit not in units:
+            continue
         status = None
         while time.monotonic() < deadline:
             status = http_status(url)
@@ -392,11 +414,35 @@ def smoke_check() -> list[str]:
             errors.append(f"smoke: {url} ({unit}) -> {status}")
         else:
             log(f"smoke: {url} -> {status}")
-    time.sleep(20)  # the bot exits fast on a missing rake task or a bad token
-    r = subprocess.run(["systemctl", "is-active", "--quiet", BOT_UNIT], check=False)
-    if r.returncode != 0:
-        errors.append(f"smoke: {BOT_UNIT} not active")
+    if BOT_UNIT in units:
+        time.sleep(20)  # the bot exits fast on a missing rake task or a bad token
+        r = subprocess.run(["systemctl", "is-active", "--quiet", BOT_UNIT], check=False)
+        if r.returncode != 0:
+            errors.append(f"smoke: {BOT_UNIT} not active")
     return errors
+
+
+def wait_for_upgrade_to_settle() -> None:
+    """Until the app tree has been quiet for SETTLE_QUIET_SEC and web and
+    worker are active again (the community-scripts update restarts them
+    last), at most SETTLE_MAX_SEC."""
+    deadline = time.monotonic() + SETTLE_MAX_SEC
+    units = [u for u in ("dawarich-web", "dawarich-worker") if unit_wanted(u)]
+    log(f"settle: waiting for the app tree to be quiet {SETTLE_QUIET_SEC}s and {', '.join(units)} active")
+    while time.monotonic() < deadline:
+        newest = 0.0
+        for path in (APP, APP / ".app_version", APP / "config", APP / "public/assets", APP / "Gemfile.lock"):
+            try:
+                newest = max(newest, path.stat().st_mtime)
+            except OSError:
+                pass
+        quiet = time.time() - newest
+        active = all(subprocess.run(["systemctl", "is-active", "--quiet", u], check=False).returncode == 0 for u in units)
+        if APP.is_dir() and quiet >= SETTLE_QUIET_SEC and active:
+            log(f"settle: ok (quiet {quiet:.0f}s)")
+            return
+        time.sleep(SETTLE_POLL_SEC)
+    log("settle: timeout, restoring anyway")
 
 
 def restore(dry_run: bool) -> int:
@@ -486,17 +532,19 @@ def restore(dry_run: bool) -> int:
                   "last_restore": datetime.now(timezone.utc).isoformat()})
     save_state(state)  # a failed restart is retried on the next run
     errors: list[str] = []
-    for unit in RESTART_UNITS:
+    units = [u for u in RESTART_UNITS if unit_wanted(u)]
+    for unit in units:
         r = subprocess.run(["systemctl", "restart", unit], capture_output=True, text=True)
         if r.returncode != 0:
             errors.append(f"systemctl restart {unit}: {(r.stderr or r.stdout).strip()}")
     if not errors:
         state["restart_pending"] = False
-        lines.append("Újraindítva: " + ", ".join(f"`{u}`" for u in RESTART_UNITS))
-        errors = smoke_check()
+        lines.append("Újraindítva: " + ", ".join(f"`{u}`" for u in units))
+        errors = smoke_check(units)
     save_state(state)
     if not errors:
-        lines.append("Smoke check: `/transit` routolva (3000, 3002), a bot fut.")
+        ports = ", ".join(url.split(":")[2].split("/")[0] for url, unit in SMOKE_URLS if unit in units)
+        lines.append(f"Smoke check: `/transit` routolva ({ports})" + (", a bot fut." if BOT_UNIT in units else "."))
         if version != manifest["base_version"]:
             lines.append(f"Merge-bázis még {manifest['base_version']}: `restore_custom.py rebase`, majd commit + push.")
     notify("Dawarich custom restore" + (" FAILED" if errors else ""), lines + [f"• {e}" for e in errors], ok=not errors)
@@ -637,6 +685,8 @@ def main() -> int:
             return capture()
         if args[:1] == ["rebase"]:
             return rebase()
+        if "--settle" in args:
+            wait_for_upgrade_to_settle()
         return restore(dry_run="--dry-run" in args)
     except Exception as e:  # unexpected crash: tell Discord, keep the exit code
         if "--dry-run" not in args:

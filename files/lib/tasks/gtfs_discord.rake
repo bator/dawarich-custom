@@ -31,6 +31,7 @@ end
 namespace :gtfs do
   desc 'Run the Discord transit bot (gateway connection for the approve/reject buttons)'
   task discord_bot: :environment do
+    $stdout.sync = true # journald / docker logs line by line, not in 4 KB blocks
     problems = Gtfs::Discord::Config.problems
     abort "Discord transit bot does not start: #{problems.join('; ')}" if problems.any?
 
