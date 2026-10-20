@@ -24,8 +24,9 @@ Source of truth: OneDev `dawarich-custom`. The GitHub copy is a one-way mirror, 
 </table>
 
 Also: **Tracking** (coverage and devices), **Settings** (opt-in, feeds, minimum confidence, rematch
-the whole history), transit layers on `/map/v2`, and `track_pick`, a daily Discord pick of which
-user's track to copy onto the target account.
+the whole history), **Discord** (`/transit/discord`, admins: bot status, token, channel, who gets posted
+and who may approve; saved values win over `gtfs.env`), transit layers on `/map/v2`, and `track_pick`,
+a daily Discord pick of which user's track to copy onto the target account.
 
 ## How it survives upgrades
 
