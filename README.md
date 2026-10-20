@@ -12,12 +12,12 @@ Source of truth: OneDev `dawarich-custom`. The GitHub copy is a one-way mirror, 
 <tr>
 <td width="50%" valign="top"><img src="docs/img/rides.png" width="380" alt="Rides page: totals for the period and one matched ride with line, stops and delay"><br>
 <b>Rides</b> (<code>/transit</code>): every matched ride with line, stops, on-time state and the uncertain ones to review. Rides are approved from Discord too (<code>dawarich-gtfs-discord-bot</code>).</td>
-<td width="50%" valign="top"><img src="docs/img/commute.png" width="380" alt="Commute card: a recurring trip with typical times, departures through the day and delay"><br>
-<b>Overview</b> (<code>/transit/stats</code>): totals, rides per week, recurring commutes, breakdown by vehicle and operator.</td>
+<td width="50%" valign="top"><img src="docs/img/overview.png" width="380" alt="Overview page: totals against the period before, the ridden network on the map along the timetable's line, punctuality and savings against the car"><br>
+<b>Overview</b> (<code>/transit/stats</code>): totals against the period before, your network on the map along the timetable's line, punctuality, CO₂ and money against the car. The old <code>/transit/savings</code> and <code>/transit/punctuality</code> links redirect here.</td>
 </tr>
 <tr>
-<td valign="top"><img src="docs/img/savings.png" width="380" alt="Savings page: CO2 saved versus the same distance by car, and money saved"><br>
-<b>Savings</b> (<code>/transit/savings</code>): CO₂ and money against the same distance by car, plus punctuality.</td>
+<td valign="top"><img src="docs/img/commute.png" width="380" alt="Commute card: a recurring trip with typical times, departures through the day and delay"><br>
+<b>Commutes</b> (on the Overview): recurring trips with typical times, departures through the day and delay, then the breakdown by vehicle, operator and line.</td>
 <td valign="top"><img src="docs/img/timetables.png" width="380" alt="Timetables page: feed validity tiles and a timeline per feed"><br>
 <b>Timetables</b> (<code>/transit/feeds</code>, admins): validity and sync of the 19 enabled feeds, the <code>gtfs</code> job queue, history matching per user.</td>
 </tr>
