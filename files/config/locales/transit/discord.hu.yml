@@ -66,6 +66,8 @@ hu:
       uncertain_label: Bizonytalan, ha
       uncertain_hint: A „bizonytalan” jelölés küszöbe. Csak az üzenet szövegét és színét érinti, a felismerést nem.
       map_label: Térképkép
+      locale_label: Nyelv
+      locale_hint: A Discord-üzeneteké, gomboké és válaszoké, valamint a térképkép forrásmegjelöléséé. A már kiküldött üzenetek a következő szerkesztésükkor váltanak.
       trackpick_title: Track-választás
       trackpick_intro: Reggelente összeveti a tegnapi trackeket, és megkérdezi, melyik kerüljön a cél fiókba. Kikapcsolva csak próbafutás.
       flow_label: Kitől kihez
@@ -95,7 +97,6 @@ hu:
       saved: Mentve. A bot 10 másodpercen belül átveszi.
       rate_limited: Túl sok tesztüzenet, próbáld újra pár perc múlva.
       test_unconfigured: A tesztüzenethez token és csatorna kell.
-      test_content: "🧪 Tesztüzenet a Dawarich Discord-beállítás oldaláról (%{user})."
       test_sent: Tesztüzenet elküldve.
       test_failed: "A tesztüzenet nem ment ki: %{reason}"
     errors:
@@ -105,6 +106,7 @@ hu:
       max_age: "Az út legfeljebb %{range} órás lehet."
       max_per_run: "Futásonként %{range} üzenet lehet."
       uncertain: Ismeretlen bizonytalansági küszöb.
+      locale: Ismeretlen üzenetnyelv.
       target: Ismeretlen cél fiók.
       sources: "1–%{max} összevetett fiók kell, mindegyik létező felhasználó."
       pickers_required: A track-választáshoz legalább egy Discord ID kell.

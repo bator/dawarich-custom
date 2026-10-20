@@ -10,10 +10,10 @@ require 'chunky_png'
 # the line keeps its colour; where it leaves it, the trace shows): lines
 # only, no dots or stop markers. The ride's status is the line style, not
 # its colour: solid (pending/approved), dashed in the line colour
-# (uncertain), greyed out (rejected). Plus ATTRIBUTION
-# ("© OpenStreetMap-közreműködők") in the bottom-right corner (the tiles'
-# licence requires it). Pure Ruby
-# (chunky_png), no system libraries.
+# (uncertain), greyed out (rejected). Plus the attribution
+# ("© OpenStreetMap-közreműködők" or "© OpenStreetMap contributors", in the
+# bot's language) in the bottom-right corner (the tiles' licence requires
+# it). Pure Ruby (chunky_png), no system libraries.
 class Gtfs::Discord::MapRenderer
   WIDTH = 800
   HEIGHT = 450
@@ -22,7 +22,6 @@ class Gtfs::Discord::MapRenderer
   MAX_ZOOM = 16
   MIN_ZOOM = 3
   MAX_LAT = 85.05112878
-  ATTRIBUTION = '© OpenStreetMap-közreműködők'
 
   C = ChunkyPNG::Color
   COLORS = {
@@ -51,7 +50,7 @@ class Gtfs::Discord::MapRenderer
 
   # style: :line (solid), :uncertain (dashed) or :rejected (greyed out);
   # color: the line colour, '#RRGGBB'.
-  def render(map, style: :line, color: DEFAULT_LINE)
+  def render(map, style: :line, color: DEFAULT_LINE, attribution: Gtfs::Discord::Texts.t('attribution'))
     raise ArgumentError, 'nothing to draw' if map.empty?
     raise ArgumentError, "unknown style #{style}" unless %i[line uncertain rejected].include?(style)
 
@@ -60,7 +59,7 @@ class Gtfs::Discord::MapRenderer
     draw_tiles(canvas)
     canvas.pixels.map! { |pixel| C.compose_quick(COLORS[:fade], pixel) }
     draw_ride(canvas, map, line_style(color, style))
-    draw_attribution(canvas)
+    draw_attribution(canvas, attribution)
     canvas.to_blob(color_mode: ChunkyPNG::COLOR_TRUECOLOR, compression: Zlib::BEST_COMPRESSION)
   end
 
@@ -100,16 +99,16 @@ class Gtfs::Discord::MapRenderer
     map.line.each { |run| stroke(canvas, run, style[:color], 4, dash:) }
   end
 
-  def draw_attribution(canvas)
+  def draw_attribution(canvas, text)
     font = Gtfs::Discord::PixelFont
-    box_w = font.width(ATTRIBUTION) + 6
+    box_w = font.width(text) + 6
     box_h = font::HEIGHT + 4
     left = @width - box_w
     top = @height - box_h
     (top...@height).each do |y|
       (left...@width).each { |x| canvas.compose_pixel(x, y, COLORS[:label_box]) }
     end
-    font.draw(canvas, ATTRIBUTION, left + 3, top + 2, COLORS[:label])
+    font.draw(canvas, text, left + 3, top + 2, COLORS[:label])
   end
 
   # Highest zoom at which everything fits inside the padding, centred.

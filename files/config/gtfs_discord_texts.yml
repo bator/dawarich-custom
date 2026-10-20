@@ -1,0 +1,89 @@
+# Texts of the GTFS Discord bot's messages (Gtfs::Discord::Texts), one block
+# per language that /transit/discord offers (DISCORD_TRANSIT_LOCALE). Not in
+# config/locales: the app has no `hu` locale, and the bot speaks the
+# channel's language, not the viewer's. %{name} placeholders as in I18n;
+# date and time keys are strftime patterns (English month names).
+hu:
+  ride_of: "👤 %{name} utazása"
+  compact: "%{mark} %{name} utazása: %{from} → %{to}"
+  compact_time: "%m. %d. %H:%M"
+  rejected: elutasítva
+  chosen: "🔁 Másik járatra cserélve%{who}, jóváhagyásra vár"
+  deleted: "🗑️ Ez a menet törölve lett."
+  hidden: "🔒 Ez a menet már nem látható."
+  date: "%Y. %m. %d."
+  times: "🕒 %{date} %{from}–%{to} (%{minutes} perc)"
+  schedule: "🗓️ Menetrend: %{times}%{delay}"
+  on_time: " · pontosan"
+  late: " · késés kb. %{minutes} perc"
+  early: " · kb. %{minutes} perccel korábban"
+  confidence: "🎯 Megbízhatóság: %{percent}%{uncertain}"
+  uncertain: " · ⚠️ bizonytalan"
+  headsign: "➡️ Irány: %{headsign}"
+  footer: "Dawarich · menet #%{id} · %{feed}"
+  reason_no_intermediate: "• nincs köztes megálló, az útvonal nem ellenőrizhető"
+  reason_no_dwell: "• a megállókban nem állt meg (lehet autó/bicikli)"
+  reason_other_line: "• más vonal is illeszkedik: %{lines}"
+  reason_other_trip: "• ugyanennek a vonalnak egy másik járata is illeszkedik"
+  confirm: Jóváhagyom
+  reject: Elutasítom
+  undo: Visszavonom
+  choose: "Másik járat választása…"
+  not_allowed: Ehhez a gombhoz nincs jogosultságod.
+  unknown_button: Ismeretlen gomb.
+  gone: Ez a menet már nem elérhető.
+  failed: "Nem sikerült: %{reason}"
+  try_again: Nem sikerült, próbáld újra.
+  unknown_user: ismeretlen
+  test: "🧪 Tesztüzenet a Dawarich Discord-beállítás oldaláról (%{user})."
+  attribution: © OpenStreetMap-közreműködők
+  mode:
+    bus: busz
+    tram: villamos
+    metro: metró
+    rail: vonat
+    suburban: HÉV
+    ferry: hajó
+    other: járat
+en:
+  ride_of: "👤 %{name}'s ride"
+  compact: "%{mark} %{name}'s ride: %{from} → %{to}"
+  compact_time: "%b %-d %H:%M"
+  rejected: rejected
+  chosen: "🔁 Switched to another trip%{who}, waiting for approval"
+  deleted: "🗑️ This ride was deleted."
+  hidden: "🔒 This ride is no longer visible."
+  date: "%b %-d, %Y"
+  times: "🕒 %{date} %{from}–%{to} (%{minutes} min)"
+  schedule: "🗓️ Timetable: %{times}%{delay}"
+  on_time: " · on time"
+  late: " · about %{minutes} min late"
+  early: " · about %{minutes} min early"
+  confidence: "🎯 Confidence: %{percent}%{uncertain}"
+  uncertain: " · ⚠️ uncertain"
+  headsign: "➡️ Towards: %{headsign}"
+  footer: "Dawarich · ride #%{id} · %{feed}"
+  reason_no_intermediate: "• no stop in between, the route cannot be checked"
+  reason_no_dwell: "• it did not stop at the stops (maybe a car or bike)"
+  reason_other_line: "• another line fits too: %{lines}"
+  reason_other_trip: "• another trip of the same line fits too"
+  confirm: Approve
+  reject: Reject
+  undo: Undo
+  choose: "Choose another trip…"
+  not_allowed: You may not use this button.
+  unknown_button: Unknown button.
+  gone: This ride is no longer available.
+  failed: "That did not work: %{reason}"
+  try_again: That did not work, please try again.
+  unknown_user: unknown
+  test: "🧪 Test message from the Dawarich Discord settings page (%{user})."
+  attribution: © OpenStreetMap contributors
+  mode:
+    bus: bus
+    tram: tram
+    metro: metro
+    rail: train
+    suburban: HÉV
+    ferry: ferry
+    other: service

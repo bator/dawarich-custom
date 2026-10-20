@@ -14,6 +14,7 @@
 #   DISCORD_TRANSIT_MAX_AGE_HOURS=72        rides older than this are not posted automatically
 #   DISCORD_TRANSIT_MAX_PER_RUN=10
 #   DISCORD_TRANSIT_MAP=true                map image of the ride in the message (rendered in the app)
+#   DISCORD_TRANSIT_LOCALE=hu               language of the messages: hu or en (Gtfs::Discord::Texts)
 #   GTFS_DISCORD_UNCERTAIN_BELOW=0.90       "bizonytalan" (and the orange line) only below this confidence
 #   GTFS_MAP_TILE_URL                       PNG raster tiles {z}/{x}/{y} (default: OpenStreetMap)
 #   GTFS_MAP_TILE_CONTACT                   operator contact for the tile server's User-Agent (OSM policy),
@@ -131,6 +132,13 @@ module Gtfs::Discord::Config
 
   def map_enabled?
     setting('DISCORD_TRANSIT_MAP', 'true') != 'false'
+  end
+
+  # Language of the messages (Gtfs::Discord::Texts::LOCALES), whatever the
+  # locale of the request or job that builds them.
+  def locale
+    value = setting('DISCORD_TRANSIT_LOCALE', Gtfs::Discord::Texts::DEFAULT).to_s
+    Gtfs::Discord::Texts::LOCALES.key?(value) ? value : Gtfs::Discord::Texts::DEFAULT
   end
 
   def tile_url

@@ -36,7 +36,6 @@ class Gtfs::Discord::Gateway
   MAX_BACKOFF = 300
   FATAL_CLOSE_CODES = [4004, 4010, 4011, 4012, 4013, 4014].freeze
   NEW_SESSION_CLOSE_CODES = [4007, 4009].freeze
-  FOLLOWUP_ERROR = 'Nem sikerült, próbáld újra.'
 
   class Reconnect < StandardError
     def initialize(message = nil, resume: true)
@@ -209,7 +208,7 @@ class Gtfs::Discord::Gateway
     @refresher.call(outcome[:segment_id]) if outcome[:segment_id]
   rescue StandardError => e
     @logger.error("[GTFS discord] interaction #{interaction['id']} failed: #{e.class}: #{e.message}")
-    followup(interaction, FOLLOWUP_ERROR) if answered
+    followup(interaction, Gtfs::Discord::Texts.t('try_again')) if answered
   end
 
   def followup(interaction, text)

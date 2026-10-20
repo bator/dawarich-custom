@@ -60,7 +60,7 @@ class TransitDiscordController < ApplicationController
     channel = Gtfs::Discord::Config.channel_id
     return redirect_to(transit_discord_path, alert: t('transit_discord.flash.test_unconfigured')) if token.blank? || channel.blank?
 
-    content = t('transit_discord.flash.test_content', user: Gtfs::Discord::Config.user_label(current_user))
+    content = Gtfs::Discord::Texts.t('test', user: Gtfs::Discord::Config.user_label(current_user))
     Gtfs::Discord::Client.new(token:).post_message(channel, { content:, allowed_mentions: { parse: [] } })
     redirect_to transit_discord_path, notice: t('transit_discord.flash.test_sent')
   rescue StandardError => e
@@ -79,22 +79,26 @@ class TransitDiscordController < ApplicationController
     @pickers = TrackPick::Config.allowed_discord_user_ids.map { |id| directory.user(id) }
   end
 
-  # The message a ride gets, built by the bot's own builder from a recent ride.
+  # The message a ride gets, built by the bot's own builder from a recent ride,
+  # in every language: the page shows the one picked in the dropdown.
   def build_preview(segment)
+    @previews = {}
     return unless segment
 
     image = 'map.png' if Gtfs::Discord::Config.map_enabled?
-    @preview = Gtfs::Discord::MessageBuilder.new(segment, image:).preview_payload
+    @previews = Gtfs::Discord::Texts::LOCALES.keys.index_with do |locale|
+      Gtfs::Discord::MessageBuilder.new(segment, image:, locale:).preview_payload
+    end
     @preview_segment = segment
   rescue StandardError => e
     Rails.logger.warn("[GTFS discord] preview of segment #{segment&.id} failed: #{e.class}: #{e.message}")
-    @preview = nil
+    @previews = {}
   end
 
   def discord_params
     params.fetch(:discord, {}).permit(
       :enabled, :bot_token, :clear_token, :channel_id, :posted_users, :allowed_discord_user_ids,
-      :max_age_hours, :max_per_run, :map, :uncertain_below,
+      :max_age_hours, :max_per_run, :map, :uncertain_below, :locale,
       :track_pick_enabled, :track_pick_target_email, :track_pick_allowed_discord_user_ids,
       posted_user_ids: [], track_pick_source_emails: []
     )
@@ -121,6 +125,8 @@ class TransitDiscordController < ApplicationController
     errors << t('transit_discord.errors.max_per_run', range: MAX_PER_RUN.minmax.join('–')) unless MAX_PER_RUN.cover?(per_run)
     uncertain = Float(p[:uncertain_below].to_s, exception: false)&.round(2)
     errors << t('transit_discord.errors.uncertain') unless UNCERTAIN_CHOICES.include?(uncertain)
+    locale = p[:locale].to_s
+    errors << t('transit_discord.errors.locale') unless Gtfs::Discord::Texts::LOCALES.key?(locale)
 
     posted = if p[:posted_users] == 'all'
                'all'
@@ -148,6 +154,7 @@ class TransitDiscordController < ApplicationController
       'DISCORD_TRANSIT_MAX_PER_RUN' => per_run.to_s,
       'DISCORD_TRANSIT_MAP' => (p[:map] == 'true').to_s,
       'GTFS_DISCORD_UNCERTAIN_BELOW' => format('%.2f', uncertain.to_f),
+      'DISCORD_TRANSIT_LOCALE' => locale,
       'TRACK_PICK_TARGET_EMAIL' => target,
       'TRACK_PICK_SOURCE_EMAILS' => sources.join(','),
       'TRACK_PICK_ALLOWED_DISCORD_USER_IDS' => pickers&.join(',')

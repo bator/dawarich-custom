@@ -26,10 +26,13 @@ class Gtfs::Discord::InteractionHandler
   UPDATE_MESSAGE = 7
   CHANNEL_MESSAGE = 4
   EPHEMERAL = 64
-  NOT_ALLOWED = 'Ehhez a gombhoz nincs jogosultságod.'
-  GONE_ERROR = 'Ez a menet már nem elérhető.'
 
   Plan = Struct.new(:response, :work)
+
+  # In the bot's language (Gtfs::Discord::Texts); track_pick uses it too.
+  def self.not_allowed_text
+    Gtfs::Discord::Texts.t('not_allowed')
+  end
 
   # Answer and work in one go (specs, simple callers). Returns the answer,
   # or the ephemeral error if the work failed.
@@ -50,7 +53,7 @@ class Gtfs::Discord::InteractionHandler
     return nil unless record
 
     user = interaction.dig('member', 'user') || interaction['user'] || {}
-    return Plan.new(ephemeral(NOT_ALLOWED)) unless allowed?(user['id'])
+    return Plan.new(ephemeral(self.class.not_allowed_text)) unless allowed?(user['id'])
 
     plan_for(record, interaction, user)
   end
@@ -63,14 +66,14 @@ class Gtfs::Discord::InteractionHandler
 
   def plan_for(record, interaction, user)
     match = Gtfs::Discord::MessageBuilder::CUSTOM_ID.match(interaction.dig('data', 'custom_id').to_s)
-    return Plan.new(ephemeral('Ismeretlen gomb.')) unless match
+    return Plan.new(ephemeral(text('unknown_button'))) unless match
 
     segment = record.transit_segment
     if segment.nil?
       record.tombstone!
       return Plan.new(update(Gtfs::Discord::MessageBuilder.deleted_payload))
     end
-    return Plan.new(ephemeral('Ismeretlen gomb.')) unless segment.id == match[2].to_i
+    return Plan.new(ephemeral(text('unknown_button'))) unless segment.id == match[2].to_i
 
     values = interaction.dig('data', 'values')
     Plan.new({ type: DEFERRED_UPDATE_MESSAGE }, -> { review(record, segment, match[1], actor_name(user), values) })
@@ -84,9 +87,9 @@ class Gtfs::Discord::InteractionHandler
                       "#{" -> #{segment.route_short_name} (trip #{segment.trip_gtfs_id})" if action == 'choose'}")
     { segment_id: segment.id }
   rescue Gtfs::SegmentReview::NotFound
-    { error: GONE_ERROR, segment_id: segment.id }
+    { error: text('gone'), segment_id: segment.id }
   rescue Gtfs::SegmentReview::Invalid => e
-    { error: "Nem sikerült: #{e.message}" }
+    { error: text('failed', reason: e.message) }
   end
 
   # The select menu sends the chosen option's value: "<feed id>:<trip id>".
@@ -104,7 +107,11 @@ class Gtfs::Discord::InteractionHandler
   end
 
   def actor_name(user)
-    (user['global_name'].presence || user['username'].presence || 'ismeretlen').to_s.truncate(64)
+    (user['global_name'].presence || user['username'].presence || text('unknown_user')).to_s.truncate(64)
+  end
+
+  def text(key, **values)
+    Gtfs::Discord::Texts.t(key, **values)
   end
 
   def update(data)

@@ -30,7 +30,7 @@ class TrackPick::DiscordHandler
 
     user = interaction.dig('member', 'user') || interaction['user'] || {}
     unless TrackPick::Config.allowed_discord_user_ids.include?(user['id'].to_s)
-      return Plan.new(ephemeral(Gtfs::Discord::InteractionHandler::NOT_ALLOWED))
+      return Plan.new(ephemeral(Gtfs::Discord::InteractionHandler.not_allowed_text))
     end
 
     match = TrackPick::Config::CUSTOM_ID.match(interaction.dig('data', 'custom_id').to_s)

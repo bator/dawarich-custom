@@ -66,6 +66,8 @@ en:
       uncertain_label: Uncertain below
       uncertain_hint: Threshold of the "uncertain" mark. Only changes the text and colour of the message, not the detection.
       map_label: Map image
+      locale_label: Language
+      locale_hint: Of the messages, buttons and replies in Discord, and the credit on the map image. Messages already posted change on their next edit.
       trackpick_title: Track pick
       trackpick_intro: Every morning it compares yesterday's tracks and asks which one goes to the target account. Switched off, it only does a dry run.
       flow_label: From → to
@@ -95,7 +97,6 @@ en:
       saved: Saved. The bot picks it up within 10 seconds.
       rate_limited: Too many test messages, try again in a few minutes.
       test_unconfigured: A test message needs a token and a channel.
-      test_content: "🧪 Test message from the Dawarich Discord settings page (%{user})."
       test_sent: Test message sent.
       test_failed: "The test message was not sent: %{reason}"
     errors:
@@ -105,6 +106,7 @@ en:
       max_age: "The ride age limit must be %{range} hours."
       max_per_run: "Messages per run must be %{range}."
       uncertain: Unknown uncertainty threshold.
+      locale: Unknown message language.
       target: Unknown target account.
       sources: "1–%{max} compared accounts are needed, each an existing user."
       pickers_required: Track pick needs at least one Discord ID.

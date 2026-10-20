@@ -2,7 +2,7 @@
 
 # A tiny bitmap font (8 px high) for the map attribution drawn into the
 # Discord map image; chunky_png has no text rendering. Only the characters
-# the attribution needs; anything else is skipped.
+# the attribution needs in Hungarian and English; anything else is skipped.
 module Gtfs::Discord::PixelFont
   HEIGHT = 8
   SPACING = 1
@@ -13,6 +13,12 @@ module Gtfs::Discord::PixelFont
     'S' => %w[.#### #.... #.... .###. ....# ....# ####. .....],
     'M' => %w[#...# ##.## #.#.# #.#.# #...# #...# #...# .....],
     'a' => %w[..... ..... .###. ....# .#### #...# .#### .....],
+    'b' => %w[#.... #.... ####. #...# #...# #...# ####. .....],
+    'c' => %w[..... ..... .#### #.... #.... #.... .#### .....],
+    'i' => %w[.#. ... ##. .#. .#. .#. ### ...],
+    'o' => %w[..... ..... .###. #...# #...# #...# .###. .....],
+    's' => %w[..... ..... .#### #.... .###. ....# ####. .....],
+    'u' => %w[..... ..... #...# #...# #...# #..## .##.# .....],
     'e' => %w[..... ..... .###. #...# ##### #.... .###. .....],
     'n' => %w[..... ..... ####. #...# #...# #...# #...# .....],
     'p' => %w[..... ..... ####. #...# #...# ####. #.... #....],
