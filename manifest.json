@@ -172,6 +172,7 @@
     "db/migrate/20261011130000_add_drawn_to_transit_walk_legs.rb",
     "db/migrate/20261020101959_add_live_points_index_for_transit_coverage.rb",
     "db/migrate/20261020121959_create_gtfs_discord_settings.rb",
+    "db/migrate/20261020153000_rename_gtfs_discord_settings_values_to_data.rb",
     "lib/tasks/gtfs.rake",
     "lib/tasks/gtfs_discord.rake",
     "lib/tasks/gtfs_match.rake",
