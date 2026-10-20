@@ -1,6 +1,6 @@
 # dawarich-custom
 
-Custom code on top of upstream [Dawarich](https://github.com/Freika/dawarich) 1.16.0, running in CT 139 (`minipc`).
+Custom code on top of upstream [Dawarich](https://github.com/Freika/dawarich) 1.16.0.
 It matches recorded location history against Hungarian public-transport timetables (GTFS), and
 `restore_custom.py` puts it back after every community-script upgrade.
 
