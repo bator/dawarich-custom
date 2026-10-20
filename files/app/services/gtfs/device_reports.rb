@@ -7,8 +7,8 @@
 # Imported points are left out, they are history, not reports.
 #
 # Speed: points have no index on the device, so the query reads every live
-# point of the period (about 0.3 s for 7 days, 1.6 s for 30, 5 s for 90 on
-# CT 139); the page caches the result.
+# point of the period from index_points_live_on_user_id_timestamp (index-only);
+# the page caches the result.
 class Gtfs::DeviceReports
   def initialize(user_ids, since:)
     @user_ids = user_ids
@@ -49,9 +49,15 @@ class Gtfs::DeviceReports
         LIMIT 1
       ) l
     SQL
-    rows = ActiveRecord::Base.connection.select_all(
-      ActiveRecord::Base.sanitize_sql_array([sql, { user_ids: @user_ids, since: @since }])
-    ).to_a
+    # The LATERAL makes the planner guess a cost far above jit_above_cost, and
+    # compiling took ~0.7 s of a ~0.8 s query; the query itself is an
+    # index-only scan (index_points_live_on_user_id_timestamp) plus 1 row per device.
+    rows = ActiveRecord::Base.transaction do
+      ActiveRecord::Base.connection.execute('SET LOCAL jit = off')
+      ActiveRecord::Base.connection.select_all(
+        ActiveRecord::Base.sanitize_sql_array([sql, { user_ids: @user_ids, since: @since }])
+      ).to_a
+    end
     rows.sort_by { |row| -row['timestamp'].to_i }
   end
 end
