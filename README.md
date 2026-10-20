@@ -33,8 +33,10 @@ track to copy onto the target account.
 
 ## Docker
 
-The same code also runs as a Docker image built on top of the official `freikin/dawarich` image,
-with the Discord bot as its own container: [docs/docker.md](docs/docker.md).
+The same code also runs as a Docker image built on top of the official Dawarich image
+([`freikin/dawarich`](https://hub.docker.com/r/freikin/dawarich) on Docker Hub, built from
+[Freika/dawarich](https://github.com/Freika/dawarich)), with the Discord bot as its own container:
+[docs/docker.md](docs/docker.md).
 
 ## How it survives upgrades
 

@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
-# Dawarich with this repo's custom code (GTFS/transit, Discord bot, track_pick)
-# on top of the official image. Build from the repo root:
+# Dawarich (https://github.com/Freika/dawarich) with this repo's custom code
+# (GTFS/transit, Discord bot, track_pick) on top of its official image,
+# freikin/dawarich on Docker Hub: the image upstream's docker/docker-compose.yml
+# uses, built from upstream's docker/Dockerfile. Build from the repo root:
 #
 #   docker build -f docker/Dockerfile -t dawarich-custom:1.16.0 .
 #
@@ -36,8 +38,10 @@ RUN DAWARICH_APP=/upstream DAWARICH_CUSTOM_STATE=/tmp/dawarich-custom \
 FROM upstream
 ARG DAWARICH_VERSION
 LABEL org.opencontainers.image.title="dawarich-custom" \
-      org.opencontainers.image.description="Dawarich ${DAWARICH_VERSION} with GTFS public transport matching" \
-      org.opencontainers.image.source="https://github.com/bator/dawarich-custom"
+      org.opencontainers.image.description="Dawarich ${DAWARICH_VERSION} (github.com/Freika/dawarich) with GTFS public transport matching" \
+      org.opencontainers.image.source="https://github.com/bator/dawarich-custom" \
+      org.opencontainers.image.base.name="docker.io/freikin/dawarich:${DAWARICH_VERSION}" \
+      org.opencontainers.image.licenses="AGPL-3.0"
 
 COPY --from=overlay /overlay/ /var/app/
 

@@ -1,9 +1,11 @@
 # Running dawarich-custom with Docker
 
 The custom code (public transport matching against GTFS timetables, the transit pages, the
-Discord approval bot, `track_pick`) can run in a normal Dawarich Docker install. `docker/Dockerfile`
-builds an image on top of the official `freikin/dawarich` image of the same version, and
-`docker/docker-compose.transit.yml` switches the upstream compose file over to it.
+Discord approval bot, `track_pick`) can run in a normal [Dawarich](https://github.com/Freika/dawarich)
+Docker install. `docker/Dockerfile` builds an image on top of the official image of the same
+version, [`freikin/dawarich`](https://hub.docker.com/r/freikin/dawarich) on Docker Hub (the one
+upstream's `docker/docker-compose.yml` uses; the GitHub owner is `Freika`, the Docker Hub one
+`freikin`), and `docker/docker-compose.transit.yml` switches the upstream compose file over to it.
 
 ```
 freikin/dawarich:1.16.0 ──┐
