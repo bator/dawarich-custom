@@ -15,22 +15,35 @@ en:
         save: Save
         status_title: Timetables
         feed_name: Timetable
-        last_import: Last import
         validity: Valid
         no_feeds: No timetable has been imported yet.
         never: never
         expired: expired
         expiring_soon: expires soon
-        attribution_title: Data sources and licences
-        attribution_missing: "%{feed}: no attribution or licence recorded; the administrator has to fill it in."
         licence: licence
-        last_match: 'Last matched day: %{date} (%{status})'
-        backfill_status: 'History matching: %{status}, %{days} days done'
-        rematch_title: Match the whole history again
         rematch_hint: Goes through every day the stored timetables still cover. This takes a while.
+        feeds_selected:
+          one: 1 timetable selected
+          other: "%{count} timetables selected"
+        feeds_all: "None ticked: every timetable is used"
+        today: today
+        last_import_short: Import
+        attribution_missing_count:
+          one: "1 timetable has no attribution or licence recorded; the administrator fills it in."
+          other: "%{count} timetables have no attribution or licence recorded; the administrator fills it in."
+        matching_title: Matching
+        last_match_label: Last matched day
+        backfill_label: History
+        status_ok: ok
+        status_failed: failed
+        status_done: done
+        status_running: running
+        status_cancelled: cancelled
+        days_done:
+          one: 1 day done
+          other: "%{count} days done"
         rematch_button: Rematch the whole history
         rematch_confirm: Match all past days again? This runs in the background and can take a long time.
-        rides_link: Show my rides
     transit_controller:
       saved: Public transit settings saved.
       rematch_started: Matching of the whole history has started.

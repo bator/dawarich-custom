@@ -15,22 +15,35 @@ hu:
         save: Mentés
         status_title: Menetrendek
         feed_name: Menetrend
-        last_import: Utolsó import
         validity: Érvényes
         no_feeds: Még nincs importált menetrend.
         never: soha
         expired: lejárt
         expiring_soon: hamarosan lejár
-        attribution_title: Adatforrások és licencek
-        attribution_missing: "%{feed}: nincs megadva forrásmegjelölés vagy licenc; az adminisztrátornak kell kitöltenie."
         licence: licenc
-        last_match: 'Utoljára illesztett nap: %{date} (%{status})'
-        backfill_status: 'Előzmények illesztése: %{status}, %{days} nap kész'
-        rematch_title: A teljes előzmény újraillesztése
         rematch_hint: Minden napot újra feldolgoz, amelyet a tárolt menetrendek még lefednek. Ez sokáig tart.
+        feeds_selected:
+          one: 1 menetrend kiválasztva
+          other: "%{count} menetrend kiválasztva"
+        feeds_all: "Nincs kijelölés: minden menetrend használatban"
+        today: ma
+        last_import_short: Import
+        attribution_missing_count:
+          one: "1 menetrendnél nincs rögzített forrásmegjelölés vagy licenc; ezt az adminisztrátor tölti ki."
+          other: "%{count} menetrendnél nincs rögzített forrásmegjelölés vagy licenc; ezt az adminisztrátor tölti ki."
+        matching_title: Illesztés
+        last_match_label: Utolsó illesztett nap
+        backfill_label: Előzmények
+        status_ok: rendben
+        status_failed: hiba
+        status_done: kész
+        status_running: folyamatban
+        status_cancelled: megszakítva
+        days_done:
+          one: 1 nap kész
+          other: "%{count} nap kész"
         rematch_button: Újraillesztés a teljes előzményre
         rematch_confirm: Biztosan újraillesszük az összes korábbi napot? A háttérben fut, és sokáig tarthat.
-        rides_link: Utazásaim
     transit_controller:
       saved: A közösségi közlekedés beállításai elmentve.
       rematch_started: Elindult a teljes előzmény újraillesztése.

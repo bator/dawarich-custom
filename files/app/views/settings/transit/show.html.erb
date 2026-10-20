@@ -1,130 +1,168 @@
 <% content_for :title, t('.title') %>
+<%
+  today = Date.current
+  # shared time axis of the validity bars: half a year back, a year ahead
+  axis_from = today << 6
+  axis_to = today >> 12
+  axis_pct = ->(date) { ((date - axis_from).to_f / (axis_to - axis_from) * 100).clamp(0, 100).round(2) }
+  years = ((axis_from.year + 1)..axis_to.year).map { |y| Date.new(y, 1, 1) }
+  selected = Array(@settings.feed_keys)
+  used = ->(feed) { selected.empty? || selected.include?(feed.key) }
+  feeds = @feeds.sort_by { |feed| [used.call(feed) && selected.any? ? 0 : 1, feed.name.to_s.downcase] }
+  missing_attribution = @feeds.count { |feed| feed.attribution.blank? && feed.license_url.blank? }
+  status_word = ->(status) { t(".status_#{status}", default: status.to_s) }
+  status_dot = ->(status) { { 'ok' => 'bg-success', 'done' => 'bg-success', 'running' => 'bg-info', 'failed' => 'bg-error' }.fetch(status.to_s, 'bg-base-content/30') }
+  confidence = (@settings.min_confidence.clamp(0.5, 0.95) * 20).round / 20.0
+%>
 
-<div class="min-h-content w-full my-5">
+<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
   <%= render 'shared/page_header', title: t('.title') %>
   <%= render 'settings/navigation' %>
   <%= render 'shared/transit_tabs', active: :settings %>
 
   <% unless Gtfs.enabled? %>
-    <div role="alert" class="alert alert-warning mb-6"><span><%= t('.disabled_globally') %></span></div>
+    <div role="alert" class="alert alert-warning mb-6"><%= transit_icon('triangle-alert') %><span><%= t('.disabled_globally') %></span></div>
   <% end %>
 
-  <div class="card bg-base-200 shadow-xl mb-6">
-    <%= form_with url: settings_transit_path, method: :patch, scope: :transit, local: true do |f| %>
-      <div class="card-body">
-        <p class="text-sm opacity-80 mb-4"><%= t('.intro') %></p>
-
-        <div class="form-control mb-4">
-          <label class="label cursor-pointer justify-start gap-3">
-            <%= f.check_box :enabled, { checked: @settings.enabled?, class: 'toggle toggle-primary' }, 'true', 'false' %>
-            <span class="label-text font-semibold"><%= t('.enabled_label') %></span>
-          </label>
-        </div>
-
-        <fieldset class="form-control mb-4">
-          <legend class="label-text font-semibold mb-2"><%= t('.feeds_label') %></legend>
-          <% if @feeds.empty? %>
-            <p class="text-sm opacity-70"><%= t('.no_feeds') %></p>
-          <% else %>
-            <div class="flex flex-wrap gap-x-6 gap-y-2">
-              <% @feeds.each do |feed| %>
-                <label class="label cursor-pointer justify-start gap-2 min-h-11">
-                  <%= check_box_tag 'transit[feed_keys][]', feed.key, Array(@settings.feed_keys).include?(feed.key),
-                                    id: "transit_feed_#{feed.key}", class: 'checkbox checkbox-primary' %>
-                  <span class="label-text"><%= feed.name %></span>
-                </label>
-              <% end %>
-            </div>
-            <span class="text-xs opacity-70 mt-1"><%= t('.feeds_hint') %></span>
-          <% end %>
-        </fieldset>
-
-        <div class="form-control mb-4">
-          <%= f.label :min_confidence, t('.min_confidence_label'), class: 'label-text font-semibold' %>
-          <div class="max-w-md">
-            <%= f.range_field :min_confidence, value: @settings.min_confidence.clamp(0.5, 0.95), min: 0.5, max: 0.95,
-                                               step: 0.05, class: 'range range-primary range-sm', list: 'transit-confidence-ticks' %>
-            <datalist id="transit-confidence-ticks">
-              <% [0.5, 0.6, 0.7, 0.8, 0.9].each do |v| %><option value="<%= v %>" label="<%= (v * 100).round %>%"></option><% end %>
-            </datalist>
-            <div class="flex justify-between text-xs opacity-70 px-1" aria-hidden="true">
-              <span>50%</span><span>60%</span><span>70%</span><span>80%</span><span>90%</span>
-            </div>
+  <%= form_with url: settings_transit_path, method: :patch, scope: :transit, local: true do |f| %>
+    <section class="card bg-base-200 shadow mb-4" aria-labelledby="transit-detection">
+      <div class="card-body p-5 gap-4">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h2 id="transit-detection" class="font-semibold text-lg"><%= t('.enabled_label') %></h2>
+            <p class="text-sm opacity-70 mt-1 max-w-prose"><%= t('.intro') %></p>
           </div>
-          <span class="text-xs opacity-70 mt-1"><%= t('.min_confidence_hint') %></span>
+          <%= f.check_box :enabled, { checked: @settings.enabled?, class: 'toggle toggle-primary mt-1 shrink-0', aria: { labelledby: 'transit-detection' } }, 'true', 'false' %>
         </div>
 
-        <div class="card-actions justify-between items-center">
-          <%= link_to t('.rides_link'), transit_segments_path, class: 'btn btn-ghost' %>
-          <%= f.submit t('.save'), class: 'btn btn-primary' %>
+        <div class="flex flex-wrap items-end gap-x-4 gap-y-2 border-t border-base-300 pt-4">
+          <label class="form-control">
+            <span class="label-text"><%= t('.min_confidence_label') %></span>
+            <%= f.select :min_confidence, (10..19).map { |i| v = i * 0.05; ["#{(v * 100).round}%", v.round(2)] }, { selected: confidence.round(2) },
+                         class: 'select select-bordered select-sm min-h-11 tabular-nums' %>
+          </label>
+          <p class="text-xs opacity-70 max-w-sm pb-1"><%= t('.min_confidence_hint') %></p>
+          <div class="flex items-center gap-3 ml-auto">
+            <span class="text-sm opacity-70"><%= selected.any? ? t('.feeds_selected', count: selected.size) : t('.feeds_all') %></span>
+            <%= f.submit t('.save'), class: 'btn btn-primary btn-sm min-h-11' %>
+          </div>
         </div>
       </div>
-    <% end %>
-  </div>
+    </section>
 
-  <div class="card bg-base-200 shadow-xl mb-6">
-    <div class="card-body">
-      <h2 class="text-xl font-bold"><%= t('.status_title') %></h2>
-      <% if @feeds.empty? %>
-        <p class="text-sm opacity-70"><%= t('.no_feeds') %></p>
-      <% else %>
-        <div class="overflow-x-auto">
-          <table class="table table-sm">
-            <thead><tr><th><%= t('.feed_name') %></th><th><%= t('.last_import') %></th><th><%= t('.validity') %></th></tr></thead>
-            <tbody>
-              <% @feeds.each do |feed| %>
-                <tr>
-                  <td><%= feed.name %></td>
-                  <td><%= feed.last_imported_at ? l(feed.last_imported_at, format: :short) : t('.never') %></td>
-                  <td>
-                    <%= [feed.valid_from, feed.valid_until].compact.map { |d| l(d) }.join(' – ') %>
-                    <% if feed.expired? %><span class="badge badge-error badge-sm gap-1"><%= transit_icon('triangle-alert', 'w-3 h-3') %><%= t('.expired') %></span>
-                    <% elsif feed.expiring_soon? %><span class="badge badge-warning badge-sm gap-1"><%= transit_icon('triangle-alert', 'w-3 h-3') %><%= t('.expiring_soon') %></span><% end %>
-                  </td>
-                </tr>
-              <% end %>
-            </tbody>
-          </table>
+    <section class="card bg-base-200 shadow mb-4" aria-labelledby="transit-feeds">
+      <div class="card-body p-5 gap-3">
+        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 id="transit-feeds" class="font-semibold text-lg"><%= t('.status_title') %></h2>
+          <p class="text-xs opacity-70"><%= t('.feeds_hint') %></p>
         </div>
-      <% end %>
-      <% if @state&.last_match.present? %>
-        <p class="text-sm"><%= t('.last_match', date: @state.last_match['date'], status: @state.last_match['status']) %></p>
-      <% end %>
-      <% if @state&.backfill.present? %>
-        <p class="text-sm"><%= t('.backfill_status', status: @state.backfill['status'], days: @state.backfill['days_done'].to_i) %></p>
-      <% end %>
-    </div>
-  </div>
 
-  <div class="card bg-base-200 shadow-xl mb-6">
-    <div class="card-body">
-      <h2 class="text-xl font-bold"><%= t('.rematch_title') %></h2>
-      <p class="text-sm opacity-80"><%= t('.rematch_hint') %></p>
-      <div class="card-actions justify-end">
+        <% if @feeds.empty? %>
+          <p class="text-sm opacity-70"><%= t('.no_feeds') %></p>
+        <% else %>
+          <fieldset>
+            <legend class="sr-only"><%= t('.feeds_label') %></legend>
+            <div class="hidden sm:grid grid-cols-[1.5rem_minmax(0,13rem)_minmax(0,1fr)_3.5rem] gap-x-3 items-end text-[10px] opacity-70 tabular-nums" aria-hidden="true">
+              <span></span><span class="uppercase tracking-wide"><%= t('.feed_name') %></span>
+              <span class="relative h-4">
+                <% years.each do |date| %>
+                  <span class="absolute bottom-0 -translate-x-1/2" style="left: <%= axis_pct.call(date) %>%"><%= date.year %></span>
+                <% end %>
+                <span class="absolute bottom-0 -translate-x-1/2 font-semibold opacity-100" style="left: <%= axis_pct.call(today) %>%"><%= t('.today') %></span>
+              </span>
+              <span class="text-right uppercase tracking-wide"><%= t('.last_import_short') %></span>
+            </div>
+            <ul class="flex flex-col divide-y divide-base-300" role="list">
+              <% feeds.each do |feed| %>
+                <%
+                  on = used.call(feed)
+                  from = feed.valid_from || axis_from
+                  to = feed.valid_until || axis_to
+                  left = axis_pct.call(from)
+                  width = [axis_pct.call(to) - left, 0.8].max
+                  bar = if feed.expired? then 'bg-error'
+                        elsif feed.expiring_soon? then 'bg-warning'
+                        elsif on then 'bg-primary'
+                        else 'bg-base-content/30'
+                        end
+                  validity = [feed.valid_from, feed.valid_until].compact.map { |d| l(d) }.join(' – ')
+                %>
+                <li class="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] sm:grid-cols-[1.5rem_minmax(0,13rem)_minmax(0,1fr)_3.5rem] gap-x-3 gap-y-1 items-center py-2">
+                  <%= check_box_tag 'transit[feed_keys][]', feed.key, selected.include?(feed.key),
+                                    id: "transit_feed_#{feed.key}", class: 'checkbox checkbox-primary checkbox-sm' %>
+                  <span class="flex items-center gap-1.5 min-w-0">
+                    <label for="transit_feed_<%= feed.key %>" class="truncate cursor-pointer <%= 'font-semibold' if on && selected.any? %>" title="<%= feed.name %>"><%= feed.name %></label>
+                    <% if feed.license_url.present? %>
+                      <%= link_to feed.license_url, target: '_blank', rel: 'noopener noreferrer', class: 'opacity-70 hover:opacity-100 shrink-0', title: [feed.attribution.presence, t('.licence')].compact.join(' · ') do %>
+                        <%= transit_icon('external-link', 'w-3.5 h-3.5') %><span class="sr-only"><%= t('.licence') %>: <%= feed.name %></span>
+                      <% end %>
+                    <% elsif feed.attribution.present? %>
+                      <span class="opacity-70 shrink-0" title="<%= feed.attribution %>"><%= transit_icon('info', 'w-3.5 h-3.5') %><span class="sr-only"><%= feed.attribution %></span></span>
+                    <% end %>
+                    <% if feed.expired? %>
+                      <span class="badge badge-sm badge-outline border-error text-error-ink gap-1 shrink-0"><%= transit_icon('triangle-alert', 'w-3 h-3') %><%= t('.expired') %></span>
+                    <% elsif feed.expiring_soon? %>
+                      <span class="badge badge-sm badge-outline border-warning text-warning-ink gap-1 shrink-0"><%= transit_icon('triangle-alert', 'w-3 h-3') %><%= t('.expiring_soon') %></span>
+                    <% end %>
+                  </span>
+                  <span class="sm:order-last text-xs opacity-70 tabular-nums text-right whitespace-nowrap"
+                        title="<%= feed.last_imported_at ? l(feed.last_imported_at, format: :short) : t('.never') %>">
+                    <%= feed.last_imported_at ? l(feed.last_imported_at.to_date, format: '%m.%d') : t('.never') %>
+                  </span>
+                  <span class="col-span-2 col-start-2 sm:col-span-1 sm:col-start-auto flex items-center min-w-0">
+                    <span class="relative h-2.5 flex-1 rounded-full bg-base-100" title="<%= t('.validity') %>: <%= validity.presence || '–' %>">
+                      <span class="absolute inset-y-0 rounded-full <%= bar %>" style="left: <%= left %>%; width: <%= width %>%"></span>
+                      <span class="absolute -inset-y-1 w-px bg-base-content/60" style="left: <%= axis_pct.call(today) %>%" aria-hidden="true"></span>
+                    </span>
+                    <span class="sr-only"><%= t('.validity') %>: <%= validity %></span>
+                  </span>
+                </li>
+              <% end %>
+            </ul>
+          </fieldset>
+          <% if missing_attribution.positive? %>
+            <p class="text-xs opacity-70 border-t border-base-300 pt-3"><%= t('.attribution_missing_count', count: missing_attribution) %></p>
+          <% end %>
+        <% end %>
+      </div>
+    </section>
+  <% end %>
+
+  <section class="card bg-base-200 shadow mb-6" aria-labelledby="transit-matching">
+    <div class="card-body p-5 gap-3">
+      <h2 id="transit-matching" class="font-semibold text-lg"><%= t('.matching_title') %></h2>
+      <div class="flex flex-wrap gap-x-8 gap-y-3">
+        <div>
+          <div class="text-xs opacity-70"><%= t('.last_match_label') %></div>
+          <% if @state&.last_match.present? %>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="w-2.5 h-2.5 rounded-full <%= status_dot.call(@state.last_match['status']) %>" aria-hidden="true"></span>
+              <span class="font-semibold tabular-nums"><%= @state.last_match['date'] %></span>
+              <span class="text-sm opacity-70"><%= status_word.call(@state.last_match['status']) %></span>
+            </div>
+          <% else %>
+            <div class="text-sm opacity-70 mt-0.5">–</div>
+          <% end %>
+        </div>
+        <div>
+          <div class="text-xs opacity-70"><%= t('.backfill_label') %></div>
+          <% if @state&.backfill.present? %>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="w-2.5 h-2.5 rounded-full <%= status_dot.call(@state.backfill['status']) %>" aria-hidden="true"></span>
+              <span class="font-semibold"><%= status_word.call(@state.backfill['status']) %></span>
+              <span class="text-sm opacity-70 tabular-nums"><%= t('.days_done', count: @state.backfill['days_done'].to_i) %></span>
+            </div>
+          <% else %>
+            <div class="text-sm opacity-70 mt-0.5">–</div>
+          <% end %>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-end justify-between gap-3 border-t border-base-300 pt-3">
+        <p class="text-sm opacity-70 max-w-md"><%= t('.rematch_hint') %></p>
         <%= button_to t('.rematch_button'), rematch_all_settings_transit_path, method: :post,
-                      class: 'btn btn-outline btn-warning', disabled: !@settings.enabled?,
+                      class: 'btn btn-outline btn-warning btn-sm min-h-11', disabled: !@settings.enabled?,
                       form: { data: { turbo_confirm: t('.rematch_confirm') } } %>
       </div>
     </div>
-  </div>
-
-  <div class="card bg-base-200 shadow-xl mb-6">
-    <div class="card-body">
-      <h2 class="text-xl font-bold"><%= t('.attribution_title') %></h2>
-      <ul class="text-sm list-disc ml-5 space-y-1">
-        <% @feeds.each do |feed| %>
-          <% if feed.attribution.present? || feed.license_url.present? %>
-            <li>
-              <%= feed.name %>: <%= feed.attribution %>
-              <% if feed.license_url.present? %>
-                (<%= link_to t('.licence'), feed.license_url, target: '_blank', rel: 'noopener noreferrer', class: 'link' %>)
-              <% end %>
-            </li>
-          <% else %>
-            <li class="opacity-70"><%= t('.attribution_missing', feed: feed.name) %></li>
-          <% end %>
-        <% end %>
-      </ul>
-    </div>
-  </div>
+  </section>
 </div>
