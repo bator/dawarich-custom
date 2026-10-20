@@ -1,0 +1,303 @@
+<% content_for :title, t('.title') %>
+<%
+  zone = ActiveSupport::TimeZone[current_user.timezone_iana] || Time.zone
+  parse_time = lambda do |value|
+    value.present? ? Time.zone.iso8601(value.to_s).in_time_zone(zone) : nil
+  rescue ArgumentError, TypeError
+    nil
+  end
+  ago = lambda do |time|
+    return '–' unless time
+
+    seconds = (Time.current - time).to_i
+    if seconds < 90 then t('.ago_s', count: [seconds, 1].max)
+    elsif seconds < 5400 then t('.ago_min', count: (seconds / 60.0).round)
+    elsif seconds < 48 * 3600 then t('.ago_h', count: (seconds / 3600.0).round)
+    else t('.ago_d', count: (seconds / 86_400.0).round)
+    end
+  end
+  status = @status || {}
+  state = status['state'].presence || 'missing'
+  state = 'missing' if @problems.any? && state != 'fatal'
+  dot = { 'connected' => 'bg-success', 'reconnecting' => 'bg-warning', 'restarting' => 'bg-info',
+          'stopped' => 'bg-base-content/40', 'fatal' => 'bg-error', 'missing' => 'bg-base-content/40' }.fetch(state, 'bg-base-content/40')
+  beat = parse_time.call(status['beat_at']) || parse_time.call(status['at'])
+  since = parse_time.call(status['since'])
+  config = Gtfs::Discord::Config
+  token_source = config.token_source
+  posted_ids = config.user_ids
+  all_users = config.all_users?
+  handle = ->(user) { config.user_label(user) }
+  sources = TrackPick::Config.source_emails
+  count_of = ->(key) { @counts.fetch(key, 0) }
+  open = @counts.sum { |key, n| %w[confirmed rejected].include?(key) ? 0 : n }
+  posted_total = @counts.values.sum
+  field = 'input input-bordered input-sm min-h-11 w-full tabular-nums'
+  select_class = 'select select-bordered select-sm min-h-11 w-full'
+  saved_by = @setting&.updated_by
+  problem_text = lambda do |problem|
+    if problem.start_with?('DISCORD_TRANSIT_ENABLED') then t('.problem_off')
+    elsif problem.start_with?('DISCORD_BOT_TOKEN') then t('.problem_token')
+    elsif problem.start_with?('DISCORD_TRANSIT_CHANNEL_ID') then t('.problem_channel')
+    elsif problem.start_with?('DISCORD_TRANSIT_ALLOWED') then t('.problem_approvers')
+    else problem
+    end
+  end
+%>
+
+<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+  <%= render 'shared/page_header', title: t('.title') %>
+  <%= render 'shared/transit_tabs', active: :discord %>
+
+  <section class="card bg-base-200 shadow mb-4" aria-labelledby="discord-status">
+    <div class="card-body p-5 gap-4">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0">
+          <h2 id="discord-status" class="flex items-center gap-2 font-semibold text-lg">
+            <span class="w-2.5 h-2.5 rounded-full <%= dot %>" aria-hidden="true"></span>
+            <%= t(".state_#{state}", bot: status['bot'].presence || 'bot') %>
+          </h2>
+          <p class="text-sm opacity-70 mt-1">
+            <% if state == 'connected' %>
+              <%= t('.last_beat', ago: ago.call(beat)) %><% if since %> · <%= t('.since', ago: ago.call(since)) %><% end %>
+            <% elsif status['message'].present? %>
+              <%= status['message'] %> · <%= ago.call(parse_time.call(status['at'])) %>
+            <% else %>
+              <%= t(".hint_#{state}", default: '') %>
+            <% end %>
+          </p>
+        </div>
+        <%= button_to t('.test_button'), transit_discord_test_path, method: :post, class: 'btn btn-sm min-h-11',
+                                                                       disabled: config.token.blank? || config.channel_id.blank?,
+                                                                       form: { class: 'shrink-0' } %>
+      </div>
+
+      <% if @problems.any? %>
+        <div role="alert" class="alert alert-warning py-3">
+          <%= transit_icon('triangle-alert') %>
+          <div>
+            <div class="font-semibold text-sm"><%= t('.problems_title') %></div>
+            <ul class="text-sm list-disc ml-4">
+              <% @problems.each do |problem| %><li><%= problem_text.call(problem) %></li><% end %>
+            </ul>
+          </div>
+        </div>
+      <% end %>
+      <% @warnings.each do |warning| %>
+        <p class="text-xs opacity-70 flex items-center gap-1.5"><%= transit_icon('info', 'w-3.5 h-3.5') %><%= warning %></p>
+      <% end %>
+
+      <dl class="flex flex-wrap gap-x-8 gap-y-2 border-t border-base-300 pt-4 text-sm" aria-label="<%= t('.stats_label', days: TransitDiscordController::STATS_DAYS) %>">
+        <div><dt class="text-xs opacity-70"><%= t('.stat_posted', days: TransitDiscordController::STATS_DAYS) %></dt><dd class="font-semibold text-lg tabular-nums"><%= posted_total %></dd></div>
+        <div><dt class="text-xs opacity-70"><%= t('.stat_confirmed') %></dt><dd class="font-semibold text-lg tabular-nums text-success-ink"><%= count_of.call('confirmed') %></dd></div>
+        <div><dt class="text-xs opacity-70"><%= t('.stat_rejected') %></dt><dd class="font-semibold text-lg tabular-nums <%= 'text-error-ink' if count_of.call('rejected').positive? %>"><%= count_of.call('rejected') %></dd></div>
+        <div><dt class="text-xs opacity-70"><%= t('.stat_open') %></dt><dd class="font-semibold text-lg tabular-nums"><%= open %></dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <%= form_with url: transit_discord_path, method: :patch, scope: :discord, local: true do |f| %>
+    <section class="card bg-base-200 shadow mb-4" aria-labelledby="discord-connection">
+      <div class="card-body p-5 gap-4">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h2 id="discord-connection" class="font-semibold text-lg"><%= t('.connection_title') %></h2>
+            <p class="text-sm opacity-70 mt-1 max-w-prose"><%= t('.connection_intro') %></p>
+          </div>
+          <%= f.check_box :enabled, { checked: config.switched_on?, class: 'toggle toggle-primary mt-1 shrink-0',
+                                      aria: { labelledby: 'discord-connection' } }, 'true', 'false' %>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4 border-t border-base-300 pt-4">
+          <label class="form-control">
+            <span class="label-text"><%= t('.token_label') %></span>
+            <%= f.password_field :bot_token, value: nil, autocomplete: 'new-password', spellcheck: false, class: field,
+                                             placeholder: t(".token_#{token_source || 'none'}") %>
+            <span class="text-xs opacity-70 mt-1"><%= t('.token_hint') %></span>
+            <% if token_source == :page %>
+              <span class="label cursor-pointer justify-start gap-2 px-0">
+                <%= f.check_box :clear_token, { class: 'checkbox checkbox-sm' }, '1', '0' %>
+                <span class="label-text text-xs"><%= t('.token_clear') %></span>
+              </span>
+            <% end %>
+          </label>
+          <label class="form-control">
+            <span class="label-text"><%= t('.channel_label') %></span>
+            <%= f.text_field :channel_id, value: config.channel_id, inputmode: 'numeric', class: field, placeholder: '1558479229757169764' %>
+            <span class="text-xs opacity-70 mt-1"><%= t('.channel_hint') %></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="card bg-base-200 shadow mb-4" aria-labelledby="discord-rides">
+      <div class="card-body p-5 gap-4">
+        <div>
+          <h2 id="discord-rides" class="font-semibold text-lg"><%= t('.rides_title') %></h2>
+          <p class="text-sm opacity-70 mt-1 max-w-prose"><%= t('.rides_intro') %></p>
+        </div>
+
+        <div class="border-t border-base-300 pt-4">
+        <fieldset>
+          <legend class="label-text mb-2"><%= t('.posted_label') %></legend>
+          <div class="flex flex-wrap gap-x-5 gap-y-2 mb-2">
+            <label class="label cursor-pointer gap-2 p-0">
+              <%= f.radio_button :posted_users, 'all', checked: all_users, class: 'radio radio-primary radio-sm' %>
+              <span class="label-text"><%= t('.posted_all') %></span>
+            </label>
+            <label class="label cursor-pointer gap-2 p-0">
+              <%= f.radio_button :posted_users, 'selected', checked: !all_users, class: 'radio radio-primary radio-sm' %>
+              <span class="label-text"><%= t('.posted_selected') %></span>
+            </label>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-x-5 gap-y-1">
+            <% @users.each do |user| %>
+              <label class="label cursor-pointer justify-start gap-2 py-1 px-0 min-w-0">
+                <%= check_box_tag 'discord[posted_user_ids][]', user.id, all_users || posted_ids.include?(user.id),
+                                  id: "discord_posted_#{user.id}", class: 'checkbox checkbox-primary checkbox-sm' %>
+                <span class="label-text truncate"><%= handle.call(user) %></span>
+                <span class="text-xs opacity-60 truncate"><%= user.email %></span>
+              </label>
+            <% end %>
+          </div>
+        </fieldset>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4 border-t border-base-300 pt-4">
+          <label class="form-control sm:col-span-2">
+            <span class="label-text"><%= t('.approvers_label') %></span>
+            <%= f.text_field :allowed_discord_user_ids, value: config.allowed_discord_user_ids.join(', '), class: field, spellcheck: false %>
+            <span class="text-xs opacity-70 mt-1"><%= t('.discord_ids_hint') %></span>
+          </label>
+          <label class="form-control">
+            <span class="label-text"><%= t('.max_age_label') %></span>
+            <%= f.number_field :max_age_hours, value: (config.max_age / 1.hour).to_i, min: TransitDiscordController::MAX_AGE_HOURS.min,
+                                               max: TransitDiscordController::MAX_AGE_HOURS.max, class: field %>
+          </label>
+          <label class="form-control">
+            <span class="label-text"><%= t('.max_per_run_label') %></span>
+            <%= f.number_field :max_per_run, value: config.max_per_run, min: TransitDiscordController::MAX_PER_RUN.min,
+                                             max: TransitDiscordController::MAX_PER_RUN.max, class: field %>
+          </label>
+          <label class="form-control">
+            <span class="label-text"><%= t('.uncertain_label') %></span>
+            <%= f.select :uncertain_below, TransitDiscordController::UNCERTAIN_CHOICES.map { |v| ["#{(v * 100).round}%", format('%.2f', v)] },
+                         { selected: format('%.2f', config.uncertain_below.round(2)) }, class: select_class %>
+            <span class="text-xs opacity-70 mt-1"><%= t('.uncertain_hint') %></span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3 self-start mt-6 p-0">
+            <%= f.check_box :map, { checked: config.map_enabled?, class: 'toggle toggle-primary toggle-sm' }, 'true', 'false' %>
+            <span class="label-text"><%= t('.map_label') %></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="card bg-base-200 shadow mb-4" aria-labelledby="discord-trackpick">
+      <div class="card-body p-5 gap-4">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h2 id="discord-trackpick" class="font-semibold text-lg"><%= t('.trackpick_title') %></h2>
+            <p class="text-sm opacity-70 mt-1 max-w-prose"><%= t('.trackpick_intro') %></p>
+          </div>
+          <%= f.check_box :track_pick_enabled, { checked: TrackPick::Config.enabled?, class: 'toggle toggle-primary mt-1 shrink-0',
+                                                 aria: { labelledby: 'discord-trackpick' } }, 'true', 'false' %>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4 border-t border-base-300 pt-4">
+          <label class="form-control sm:col-span-2">
+            <span class="label-text"><%= t('.target_label') %></span>
+            <%= f.select :track_pick_target_email, @users.map { |u| ["#{handle.call(u)} · #{u.email}", u.email] },
+                         { selected: TrackPick::Config.target_email }, class: select_class %>
+          </label>
+          <fieldset class="sm:col-span-2">
+            <legend class="label-text mb-1"><%= t('.sources_label', max: TrackPick::Config::MAX_SOURCES) %></legend>
+            <div class="grid sm:grid-cols-3 gap-3">
+              <% TrackPick::Config::MAX_SOURCES.times do |i| %>
+                <span class="flex items-center gap-2 min-w-0">
+                  <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: <%= TrackPick::Config::COLORS[i] %>" aria-hidden="true"></span>
+                  <%= select_tag 'discord[track_pick_source_emails][]',
+                                 options_for_select([[t('.source_none'), '']] + @users.map { |u| [handle.call(u), u.email] }, sources[i]),
+                                 id: "discord_track_pick_source_#{i}", class: select_class,
+                                 aria: { label: t('.source_n', n: i + 1) } %>
+                </span>
+              <% end %>
+            </div>
+          </fieldset>
+          <label class="form-control sm:col-span-2">
+            <span class="label-text"><%= t('.pickers_label') %></span>
+            <%= f.text_field :track_pick_allowed_discord_user_ids, value: TrackPick::Config.allowed_discord_user_ids.join(', '),
+                                                                   class: field, spellcheck: false %>
+            <span class="text-xs opacity-70 mt-1"><%= t('.trackpick_schedule') %></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <div class="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 mb-6">
+      <span class="text-xs opacity-70 mr-auto max-w-prose">
+        <% if @setting && saved_by %>
+          <%= t('.saved_by', ago: ago.call(@setting.updated_at), user: handle.call(saved_by)) %>
+        <% else %>
+          <%= t('.from_env') %>
+        <% end %>
+      </span>
+      <%= f.submit t('.save'), class: 'btn btn-primary btn-sm min-h-11' %>
+    </div>
+  <% end %>
+
+  <section class="card bg-base-200 shadow mb-6" aria-labelledby="discord-recent">
+    <div class="card-body p-5 gap-3">
+      <h2 id="discord-recent" class="font-semibold text-lg"><%= t('.recent_title') %></h2>
+      <div class="grid md:grid-cols-2 gap-x-8 gap-y-4">
+        <div class="min-w-0">
+          <h3 class="text-xs uppercase tracking-wide opacity-70 mb-1"><%= t('.recent_rides') %></h3>
+          <% if @messages.empty? %>
+            <p class="text-sm opacity-70"><%= t('.none') %></p>
+          <% else %>
+            <ul class="divide-y divide-base-300" role="list">
+              <% @messages.each do |message| %>
+                <% segment = message.transit_segment %>
+                <%
+                  badge = if message.tombstoned_at || segment.nil? then ['badge-ghost', t('.msg_deleted')]
+                          elsif message.last_status == 'confirmed' then ['badge-success', t('.msg_confirmed')]
+                          elsif message.last_status == 'rejected' then ['badge-error', t('.msg_rejected')]
+                          else ['badge-ghost', t('.msg_open')]
+                          end
+                %>
+                <li class="flex items-center gap-3 py-2 text-sm">
+                  <span class="tabular-nums opacity-70 w-24 shrink-0"><%= l(message.created_at.in_time_zone(zone), format: '%m.%d %H:%M') %></span>
+                  <span class="min-w-0 flex-1 truncate">
+                    <% if segment %>
+                      <span class="font-semibold"><%= segment.route_short_name.presence || segment.route_long_name %></span>
+                      <span class="opacity-70"><%= segment.boarding_stop_name %> → <%= segment.alighting_stop_name %></span>
+                    <% else %>
+                      <span class="opacity-70">–</span>
+                    <% end %>
+                  </span>
+                  <span class="badge badge-sm <%= badge[0] %> shrink-0" title="<%= message.reviewed_by %>"><%= badge[1] %></span>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-xs uppercase tracking-wide opacity-70 mb-1"><%= t('.recent_trackpick') %></h3>
+          <% if @decisions.empty? %>
+            <p class="text-sm opacity-70"><%= t('.none') %></p>
+          <% else %>
+            <ul class="divide-y divide-base-300" role="list">
+              <% @decisions.each do |date, decision| %>
+                <li class="flex items-center gap-3 py-2 text-sm">
+                  <span class="tabular-nums opacity-70 w-24 shrink-0"><%= l(date, format: '%m.%d') %></span>
+                  <span class="min-w-0 flex-1 truncate font-semibold"><%= decision['choice'] %></span>
+                  <span class="text-xs opacity-70 shrink-0"><%= [decision['user'], parse_time.call(decision['time'])&.strftime('%H:%M')].compact_blank.join(' · ') %></span>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>

@@ -21,6 +21,9 @@
 #   GTFS_MAP_TILE_USER_AGENT                full User-Agent instead of the generated one
 #   GTFS_MAP_TILE_CACHE_DAYS=30             tile cache lifetime (at least 7 days)
 #   GTFS_MAP_TILE_CACHE_DIR                 tile cache directory (default storage/map_tiles, a volume in compose)
+#
+# All of these except DISCORD_TRANSIT_APP_URL and GTFS_MAP_TILE_* can also be set on /transit/discord
+# (admins). A value saved there wins over the environment (Gtfs::DiscordSetting).
 module Gtfs::Discord::Config
   module_function
 
@@ -32,13 +35,18 @@ module Gtfs::Discord::Config
   # includes the token itself.
   def problems
     list = []
-    list << 'DISCORD_TRANSIT_ENABLED is not true' unless ENV.fetch('DISCORD_TRANSIT_ENABLED', 'false') == 'true'
+    list << 'DISCORD_TRANSIT_ENABLED is not true' unless switched_on?
     list << 'DISCORD_BOT_TOKEN is not set' if token.blank?
     list << 'DISCORD_TRANSIT_CHANNEL_ID is not set' if channel_id.blank?
     if allowed_discord_user_ids.empty?
       list << 'DISCORD_TRANSIT_ALLOWED_DISCORD_USER_IDS is empty (who may approve rides?)'
     end
     list
+  end
+
+  # The master switch alone (enabled? also needs token, channel and approvers).
+  def switched_on?
+    setting('DISCORD_TRANSIT_ENABLED', 'false') == 'true'
   end
 
   # Posting automatically for this user's rides.
@@ -53,16 +61,30 @@ module Gtfs::Discord::Config
   end
 
   def all_users?
-    ENV.fetch('DISCORD_TRANSIT_ALL_USERS', 'false') == 'true' ||
+    setting('DISCORD_TRANSIT_ALL_USERS', 'false') == 'true' ||
       list('DISCORD_TRANSIT_USER_IDS').any? { |id| id.casecmp?('all') }
   end
 
   def token
-    ENV['DISCORD_BOT_TOKEN'].presence
+    Gtfs::DiscordSetting.token || ENV['DISCORD_BOT_TOKEN'].presence
+  end
+
+  # :page, :env or nil (no token at all); never the token itself.
+  def token_source
+    return :page if Gtfs::DiscordSetting.token
+    return :env if ENV['DISCORD_BOT_TOKEN'].present?
+
+    nil
+  end
+
+  # Changes when the bot has to reconnect or stop: another token, or the
+  # integration switched on or off. The bot process watches it.
+  def restart_fingerprint
+    Digest::SHA256.hexdigest([token.to_s, problems.empty?].join("\0"))
   end
 
   def channel_id
-    ENV['DISCORD_TRANSIT_CHANNEL_ID'].presence
+    setting('DISCORD_TRANSIT_CHANNEL_ID').presence
   end
 
   def user_ids
@@ -80,11 +102,11 @@ module Gtfs::Discord::Config
   end
 
   def max_age
-    ENV.fetch('DISCORD_TRANSIT_MAX_AGE_HOURS', '72').to_i.hours
+    setting('DISCORD_TRANSIT_MAX_AGE_HOURS', '72').to_i.hours
   end
 
   def max_per_run
-    ENV.fetch('DISCORD_TRANSIT_MAX_PER_RUN', '10').to_i.clamp(1, 50)
+    setting('DISCORD_TRANSIT_MAX_PER_RUN', '10').to_i.clamp(1, 50)
   end
 
   def app_url
@@ -100,7 +122,7 @@ module Gtfs::Discord::Config
   # Discord message calls a ride uncertain only if it is that AND its
   # confidence is below this threshold.
   def uncertain_below
-    Float(ENV.fetch('GTFS_DISCORD_UNCERTAIN_BELOW', '0.90'), exception: false)&.clamp(0.0, 1.0) || 0.9
+    Float(setting('GTFS_DISCORD_UNCERTAIN_BELOW', '0.90'), exception: false)&.clamp(0.0, 1.0) || 0.9
   end
 
   def show_uncertain?(segment)
@@ -108,7 +130,7 @@ module Gtfs::Discord::Config
   end
 
   def map_enabled?
-    ENV.fetch('DISCORD_TRANSIT_MAP', 'true') != 'false'
+    setting('DISCORD_TRANSIT_MAP', 'true') != 'false'
   end
 
   def tile_url
@@ -146,6 +168,11 @@ module Gtfs::Discord::Config
   end
 
   def list(name)
-    ENV.fetch(name, '').split(',').map(&:strip).compact_blank
+    setting(name, '').split(',').map(&:strip).compact_blank
+  end
+
+  # Page value (/transit/discord) first, then the environment.
+  def setting(name, default = nil)
+    Gtfs::DiscordSetting.fetch(name, default)
   end
 end

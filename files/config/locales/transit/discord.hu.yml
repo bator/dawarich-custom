@@ -1,0 +1,96 @@
+hu:
+  transit_discord:
+    show:
+      title: Discord bot
+      ago_s:
+        one: "%{count} mp-e"
+        other: "%{count} mp-e"
+      ago_min:
+        one: "%{count} perce"
+        other: "%{count} perce"
+      ago_h:
+        one: "%{count} órája"
+        other: "%{count} órája"
+      ago_d:
+        one: "%{count} napja"
+        other: "%{count} napja"
+      state_connected: "Kapcsolódva: %{bot}"
+      state_reconnecting: Újracsatlakozik
+      state_restarting: Újraindul az új beállításokkal
+      state_stopped: Leállítva
+      state_fatal: Leállt
+      state_missing: Nem fut
+      hint_missing: Az utolsó 3 percben nem jelzett a bot.
+      hint_restarting: A systemd kb. 30 másodpercen belül újraindítja.
+      hint_stopped: A szolgáltatást leállították.
+      last_beat: "utolsó életjel %{ago}"
+      since: "kapcsolódva %{ago}"
+      test_button: Tesztüzenet
+      problems_title: "A bot addig nem indul el, amíg ezek hiányoznak:"
+      problem_off: ki van kapcsolva
+      problem_token: nincs bot token
+      problem_channel: nincs csatorna ID
+      problem_approvers: nincs megadva, ki hagyhat jóvá
+      stats_label: "Kiküldött utak az elmúlt %{days} napban"
+      stat_posted: "Kiküldve (%{days} nap)"
+      stat_confirmed: Jóváhagyva
+      stat_rejected: Elutasítva
+      stat_open: Nyitott
+      connection_title: Kapcsolat
+      connection_intro: A bot a megadott csatornába küldi a felismert utakat jóváhagyó gombokkal, és ugyanide a napi track-választást. Kikapcsolva semmit nem küld.
+      token_label: Bot token
+      token_page: Mentve ezen az oldalon
+      token_env: A gtfs.env-ből
+      token_none: Nincs megadva
+      token_hint: Csak írható, sosem jelenik meg. Üresen hagyva a mostani marad. Új token után a bot kb. egy percen belül újracsatlakozik.
+      token_clear: Az itt mentett token törlése (vissza a gtfs.env-re)
+      channel_label: Csatorna ID
+      channel_hint: "Discordban: jobb klikk a csatornán → Copy Channel ID."
+      rides_title: Menetjóváhagyás
+      rides_intro: Minden új, felismert út üzenetet kap jóváhagyó és elutasító gombbal. A döntés az Utazások oldalon is megjelenik.
+      posted_label: Kinek az útjai menjenek ki
+      posted_all: Mindenkié, akinél be van kapcsolva a felismerés
+      posted_selected: Csak a kijelölt felhasználóké
+      approvers_label: Ki hagyhat jóvá (Discord user ID-k)
+      discord_ids_hint: "Vesszővel elválasztva. Discordban: jobb klikk a felhasználón → Copy User ID."
+      max_age_label: Ennél régebbi (óra) út nem megy ki
+      max_per_run_label: Legfeljebb ennyi üzenet egy futásban
+      uncertain_label: „Bizonytalan” jelölés e megbízhatóság alatt
+      uncertain_hint: Csak a Discord-üzenet szövegét és színét érinti, a felismerést nem.
+      map_label: Térképkép az üzenetben
+      trackpick_title: Track-választás
+      trackpick_intro: Reggelente összeveti a kijelölt fiókok előző napi trackjeit, és megkérdezi, melyik kerüljön a cél fiókba. Kikapcsolva a napi futás csak próbafutás, nem küld semmit.
+      target_label: Cél fiók
+      sources_label: "Összevetett fiókok (legfeljebb %{max})"
+      source_none: "– nincs –"
+      source_n: "%{n}. összevetett fiók"
+      pickers_label: Ki választhat (Discord user ID-k)
+      trackpick_schedule: "Futás: naponta 05:10-kor (cron a CT 139-en), tartalék 05:40-kor a pve-ről."
+      saved_by: "Utoljára mentve %{ago}, %{user}. Az itt mentett értékek felülírják a gtfs.env-et."
+      from_env: Még nem volt mentés, minden érték a /opt/dawarich/gtfs.env-ből jön. Mentés után az itt megadott értékek érvényesek.
+      save: Mentés
+      recent_title: Legutóbbi üzenetek
+      recent_rides: Utak
+      recent_trackpick: Track-választás
+      none: Még nincs.
+      msg_confirmed: jóváhagyva
+      msg_rejected: elutasítva
+      msg_open: nyitott
+      msg_deleted: törölve
+    flash:
+      saved: Mentve. A bot a beállításokat 10 másodpercen belül átveszi.
+      rate_limited: Túl sok tesztüzenet, próbáld újra pár perc múlva.
+      test_unconfigured: A tesztüzenethez token és csatorna ID kell.
+      test_content: "🧪 Tesztüzenet a Dawarich Discord-beállítás oldaláról (%{user})."
+      test_sent: Tesztüzenet elküldve.
+      test_failed: "A tesztüzenet nem ment ki: %{reason}"
+    errors:
+      channel_id: A csatorna ID 17–20 számjegyből áll.
+      discord_ids: "%{field}: csak Discord ID-k (17–20 számjegy), vesszővel elválasztva."
+      approvers_required: Bekapcsolt botnál legalább egy jóváhagyó kell.
+      max_age: "Az út legfeljebb %{range} órás lehet."
+      max_per_run: "Futásonként %{range} üzenet lehet."
+      uncertain: Ismeretlen bizonytalansági küszöb.
+      target: Ismeretlen cél fiók.
+      sources: "1–%{max} összevetett fiók kell, mindegyik létező felhasználó."
+      pickers_required: A track-választáshoz legalább egy Discord ID kell.

@@ -29,7 +29,7 @@ class TrackPick::DiscordHandler
     end
 
     user = interaction.dig('member', 'user') || interaction['user'] || {}
-    unless TrackPick::Config::ALLOWED_DISCORD_USER_IDS.include?(user['id'].to_s)
+    unless TrackPick::Config.allowed_discord_user_ids.include?(user['id'].to_s)
       return Plan.new(ephemeral(Gtfs::Discord::InteractionHandler::NOT_ALLOWED))
     end
 

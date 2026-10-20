@@ -1,6 +1,6 @@
 --- a/config/routes.rb
 +++ b/config/routes.rb
-@@ -47,6 +47,15 @@
+@@ -47,6 +47,18 @@
                          '/'
                        }, via: :get
  
@@ -11,12 +11,15 @@
 +  get 'transit/punctuality', to: 'transit_punctuality#index', as: :transit_punctuality
 +  get 'transit/savings', to: 'transit_savings#index', as: :transit_savings
 +  get 'transit/coverage', to: 'transit_coverage#index', as: :transit_coverage
++  get 'transit/discord', to: 'transit_discord#show', as: :transit_discord
++  patch 'transit/discord', to: 'transit_discord#update'
++  post 'transit/discord/test', to: 'transit_discord#test_message', as: :transit_discord_test
 +  resources :transit_segments, only: %i[index update], path: 'transit'
 +
    namespace :settings do
      resources :general, only: [:index]
      patch 'general', to: 'general#update'
-@@ -66,6 +75,9 @@
+@@ -66,6 +78,9 @@
      resources :background_jobs, only: %i[index create]
      patch 'background_jobs', to: 'background_jobs#update'
      resource :visits, only: %i[show update]
@@ -26,7 +29,7 @@
      resources :users, only: %i[index show create destroy edit update] do
        member do
          post 'regenerate_api_key'
-@@ -424,6 +436,18 @@
+@@ -424,6 +439,18 @@
  
        resources :flights, only: %i[index]
  

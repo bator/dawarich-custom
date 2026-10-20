@@ -10,10 +10,15 @@ module TrackPick
     module_function
 
     TIME_ZONE = 'Europe/Budapest'
+    # Defaults; /transit/discord can replace them (TRACK_PICK_* in Gtfs::DiscordSetting).
     TARGET_EMAIL = 'minekte@crusand.org'
     SOURCE_EMAILS = %w[minekte@crusand.org toth.bator@crusand.org register@crusand.org].freeze
+    MAX_SOURCES = 3 # one map colour each (COLORS)
     # only crusand may click, independent of the GTFS allow-list
     ALLOWED_DISCORD_USER_IDS = %w[212980510203314177].freeze
+    # The cron script (/usr/local/sbin/dawarich-track-pick-daily) posts for real only while this
+    # file exists; without it the daily run is a dry run. /transit/discord switches it.
+    ENABLED_FILE = '/opt/dawarich/track-pick/ENABLED'
     # trackpick:<date>:<action>. Actions (the selection state travels in the custom_ids):
     #   d:<bp>         whole-day select (value = user id), <bp> = current inner-city pick
     #   b:<day>        inner-city select (value = user id | same), <day> = current whole-day pick
@@ -30,13 +35,43 @@ module TrackPick
       ActiveSupport::TimeZone[TIME_ZONE]
     end
 
+    def target_email
+      Gtfs::DiscordSetting.fetch('TRACK_PICK_TARGET_EMAIL', TARGET_EMAIL).presence || TARGET_EMAIL
+    end
+
+    def source_emails
+      list('TRACK_PICK_SOURCE_EMAILS', SOURCE_EMAILS).first(MAX_SOURCES)
+    end
+
+    def allowed_discord_user_ids
+      list('TRACK_PICK_ALLOWED_DISCORD_USER_IDS', ALLOWED_DISCORD_USER_IDS)
+    end
+
+    def enabled?
+      File.exist?(ENABLED_FILE)
+    end
+
+    def enable!(on)
+      if on
+        FileUtils.mkdir_p(File.dirname(ENABLED_FILE))
+        FileUtils.touch(ENABLED_FILE)
+      else
+        FileUtils.rm_f(ENABLED_FILE)
+      end
+    end
+
+    def list(name, default)
+      Gtfs::DiscordSetting.fetch(name, default.join(',')).split(',').map(&:strip).compact_blank
+    end
+
     def target_user
-      User.find_by!(email: TARGET_EMAIL)
+      User.find_by!(email: target_email)
     end
 
     def source_users
-      by_email = User.where(email: SOURCE_EMAILS).index_by(&:email)
-      SOURCE_EMAILS.filter_map { |e| by_email[e] }
+      emails = source_emails
+      by_email = User.where(email: emails).index_by(&:email)
+      emails.filter_map { |e| by_email[e] }
     end
 
     def day_range(date)
@@ -68,6 +103,14 @@ module TrackPick
       end
     rescue Errno::ENOENT
       nil
+    end
+
+    # [[date, decision], ...] of the last `days` days that have one, newest first (/transit/discord)
+    def recent_decisions(days, today: zone.today)
+      (1..days).filter_map do |n|
+        date = today - n
+        (found = decision(date)) && [date, found]
+      end
     end
 
     # first decision wins (exclusive create); returns false if already decided

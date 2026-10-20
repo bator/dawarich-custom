@@ -77,6 +77,7 @@ class Gtfs::Discord::Gateway
       rescue Fatal => e
         @logger.error("[GTFS discord] gateway closed for good, bot stops: #{e.message} " \
                       '(check DISCORD_BOT_TOKEN and the bot application)')
+        Gtfs::Discord::BotStatus.update!(:fatal, message: e.message, ttl: 1.day)
         @fatal = e
         @stopped = true
       rescue Reconnect => e
@@ -123,6 +124,7 @@ class Gtfs::Discord::Gateway
     when OP_HEARTBEAT then [heartbeat]
     when OP_HEARTBEAT_ACK
       @acked = true
+      Gtfs::Discord::BotStatus.beat!
       []
     when OP_RECONNECT then raise Reconnect, 'server asked to reconnect'
     when OP_INVALID_SESSION then raise Reconnect.new('invalid session', resume: payload['d'] == true)
@@ -170,6 +172,7 @@ class Gtfs::Discord::Gateway
   def wait(attempt, message)
     delay = backoff(attempt)
     @logger.warn("[GTFS discord] #{message}; next attempt in #{delay.round(1)} s")
+    Gtfs::Discord::BotStatus.update!(:reconnecting, message:) unless @stopped
     @sleeper.call(delay) unless @stopped
   end
 
@@ -180,9 +183,11 @@ class Gtfs::Discord::Gateway
       @resume_url = data['resume_gateway_url']
       @ready = true
       @logger.info("[GTFS discord] connected as #{data.dig('user', 'username')}")
+      Gtfs::Discord::BotStatus.connected!(data.dig('user', 'username'))
     when 'RESUMED'
       @ready = true
       @logger.info('[GTFS discord] session resumed')
+      Gtfs::Discord::BotStatus.update!(:connected)
     when 'INTERACTION_CREATE'
       respond(data)
     end

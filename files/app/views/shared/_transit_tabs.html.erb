@@ -15,6 +15,7 @@
     [:coverage, t('transit_tabs.coverage'), transit_coverage_path(days: period.call(TransitCoverageController::PERIODS))]
   ]
   tabs << [:feeds, t('transit_tabs.feeds'), transit_feeds_path] if current_user.admin?
+  tabs << [:discord, t('transit_tabs.discord'), transit_discord_path] if current_user.admin?
   tabs << [:settings, t('transit_tabs.settings'), settings_transit_path]
 %>
 <nav class="overflow-x-auto -mt-3 mb-6" aria-label="<%= t('transit_tabs.label') %>">

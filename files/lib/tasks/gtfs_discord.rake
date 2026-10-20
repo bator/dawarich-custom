@@ -1,5 +1,33 @@
 # frozen_string_literal: true
 
+module GtfsDiscordTasks
+  WATCH_SECONDS = 10
+
+  # The token and the on/off switch can change on /transit/discord while the
+  # bot runs. The gateway holds the token of its session, so on such a change
+  # the bot stops and exits non-zero, and systemd starts it again (the other
+  # settings are read on every use and need no restart).
+  def self.watch_settings(gateway, logger)
+    restart = Concurrent::Event.new
+    started_with = Gtfs::Discord::Config.restart_fingerprint
+    watcher = Thread.new do
+      loop do
+        sleep WATCH_SECONDS
+        changed = Rails.application.executor.wrap { Gtfs::Discord::Config.restart_fingerprint != started_with }
+        next unless changed
+
+        logger.info('[GTFS discord] token or on/off switch changed on /transit/discord, restarting the bot')
+        restart.set
+        gateway.stop
+        break
+      rescue StandardError => e
+        logger.warn("[GTFS discord] settings check failed: #{e.class}: #{e.message}")
+      end
+    end
+    [watcher, restart]
+  end
+end
+
 namespace :gtfs do
   desc 'Run the Discord transit bot (gateway connection for the approve/reject buttons)'
   task discord_bot: :environment do
@@ -10,7 +38,16 @@ namespace :gtfs do
     Gtfs::Discord::Config.warnings.each { |warning| logger.warn("[GTFS discord] #{warning}") }
     gateway = Gtfs::Discord::Gateway.new(logger:)
     %w[INT TERM].each { |signal| Signal.trap(signal) { gateway.stop } }
-    exit 1 unless gateway.run # fatal close code (bad token etc.): do not restart-loop silently
+    watcher, restart = GtfsDiscordTasks.watch_settings(gateway, logger)
+    ok = gateway.run
+    watcher.kill
+    if restart.set?
+      Gtfs::Discord::BotStatus.update!(:restarting)
+      exit 3 # systemd (Restart=on-failure, RestartSec=30) starts the bot again with the new settings
+    end
+    exit 1 unless ok # fatal close code (bad token etc.): do not restart-loop silently
+
+    Gtfs::Discord::BotStatus.update!(:stopped) # INT/TERM, e.g. systemctl stop
   end
 
   desc 'Edit messages of deleted/hidden rides to a neutral text: gtfs:discord_cleanup[USER_ID] (all users without)'

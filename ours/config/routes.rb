@@ -54,6 +54,9 @@ Rails.application.routes.draw do
   get 'transit/punctuality', to: 'transit_punctuality#index', as: :transit_punctuality
   get 'transit/savings', to: 'transit_savings#index', as: :transit_savings
   get 'transit/coverage', to: 'transit_coverage#index', as: :transit_coverage
+  get 'transit/discord', to: 'transit_discord#show', as: :transit_discord
+  patch 'transit/discord', to: 'transit_discord#update'
+  post 'transit/discord/test', to: 'transit_discord#test_message', as: :transit_discord_test
   resources :transit_segments, only: %i[index update], path: 'transit'
 
   namespace :settings do
