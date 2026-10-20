@@ -5,7 +5,7 @@
   ft = ->(value) { "#{number_with_precision(value, precision: 0, delimiter: ' ')} Ft" }
 %>
 
-<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+<div class="min-h-content w-full my-5 px-2">
   <%= render 'shared/page_header', title: t('.title') %>
   <%= render 'shared/transit_tabs', active: :savings, days: @days %>
   <%= render 'shared/transit_period_form', path: transit_savings_path, periods: TransitSavingsController::PERIODS,
@@ -76,6 +76,8 @@
       </div>
     </section>
 
+    <%# wide screens: the cost chart and punctuality side by side %>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-4 items-start">
     <section class="card bg-base-200 shadow-sm mb-6" aria-labelledby="savings-cumulative">
       <div class="card-body p-5 gap-3">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
@@ -174,6 +176,7 @@
         <p class="text-xs opacity-70"><%= t('.punctuality.lines_legend') unless p.lines.empty? %> <%= t('.punctuality.note') %></p>
       </div>
     </section>
+    </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <section class="card bg-base-200 shadow-sm" aria-labelledby="savings-modes">

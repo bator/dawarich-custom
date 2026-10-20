@@ -15,7 +15,7 @@
   line_name = ->(segment) { segment.route_short_name || segment.route_long_name }
 %>
 
-<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+<div class="min-h-content w-full my-5 px-2">
   <%= render 'shared/page_header', title: t('.title') %>
   <%= render 'shared/transit_tabs', active: :stats, days: @days %>
 
@@ -95,7 +95,7 @@
         <p class="text-sm opacity-70"><%= t('transit_commute.index.empty', count: @days) %></p>
       <% else %>
         <p class="text-sm opacity-70 mb-3"><%= t('.commute_share', count: pairs.size, percent: (@commute.coverage * 100).round) %></p>
-        <ol class="flex flex-col gap-4" role="list">
+        <ol class="grid grid-cols-1 <%= 'xl:grid-cols-2' if pairs.size > 1 %> gap-4 items-start" role="list">
           <% pairs.each do |pair| %>
             <%
               main_color, = transit_line_colors(pair.lines.first.first, @colors)

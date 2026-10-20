@@ -15,7 +15,7 @@
   confidence = (@settings.min_confidence.clamp(0.5, 0.95) * 20).round / 20.0
 %>
 
-<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+<div class="min-h-content w-full my-5 px-2">
   <%= render 'shared/page_header', title: t('.title') %>
   <%= render 'settings/navigation' %>
   <%= render 'shared/transit_tabs', active: :settings %>
@@ -24,8 +24,11 @@
     <div role="alert" class="alert alert-warning mb-6"><%= transit_icon('triangle-alert') %><span><%= t('.disabled_globally') %></span></div>
   <% end %>
 
-  <%= form_with url: settings_transit_path, method: :patch, scope: :transit, local: true do |f| %>
-    <section class="card bg-base-200 shadow mb-4" aria-labelledby="transit-detection">
+  <%# wide screens: timetables on the left, detection and matching on the right
+      (the form is display: contents, so its two sections are grid items) %>
+  <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_1fr] gap-x-4 items-start">
+  <%= form_with url: settings_transit_path, method: :patch, scope: :transit, local: true, class: 'contents' do |f| %>
+    <section class="card bg-base-200 shadow mb-4 xl:col-start-2 xl:row-start-1" aria-labelledby="transit-detection">
       <div class="card-body p-5 gap-4">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
@@ -50,7 +53,7 @@
       </div>
     </section>
 
-    <section class="card bg-base-200 shadow mb-4" aria-labelledby="transit-feeds">
+    <section class="card bg-base-200 shadow mb-4 xl:col-start-1 xl:row-start-1 xl:row-span-2" aria-labelledby="transit-feeds">
       <div class="card-body p-5 gap-3">
         <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 id="transit-feeds" class="font-semibold text-lg"><%= t('.status_title') %></h2>
@@ -134,7 +137,7 @@
     </section>
   <% end %>
 
-  <section class="card bg-base-200 shadow mb-6" aria-labelledby="transit-matching">
+  <section class="card bg-base-200 shadow mb-6 xl:col-start-2 xl:row-start-2" aria-labelledby="transit-matching">
     <div class="card-body p-5 gap-3">
       <h2 id="transit-matching" class="font-semibold text-lg"><%= t('.matching_title') %></h2>
       <div class="flex flex-wrap gap-x-8 gap-y-3">
@@ -171,4 +174,5 @@
       </div>
     </div>
   </section>
+  </div>
 </div>

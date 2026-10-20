@@ -74,7 +74,7 @@
   button_tone = { 1 => 'bg-[#5865F2]', 2 => 'bg-[#4E5058]', 3 => 'bg-[#248046]', 4 => 'bg-[#DA373C]' }
 %>
 
-<div class="min-h-content w-full my-5 max-w-5xl mx-auto px-2">
+<div class="min-h-content w-full my-5 px-2">
   <%= render 'shared/page_header', title: t('.title') %>
   <%= render 'shared/transit_tabs', active: :discord %>
 
@@ -138,8 +138,8 @@
     </div>
   </section>
 
-  <div class="grid lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start mb-6">
-    <%= form_with url: transit_discord_path, method: :patch, scope: :discord, local: true, class: 'flex flex-col gap-4 min-w-0' do |f| %>
+  <div class="grid lg:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_26rem] gap-4 items-start mb-6">
+    <%= form_with url: transit_discord_path, method: :patch, scope: :discord, local: true, class: 'grid grid-cols-1 2xl:grid-cols-2 2xl:grid-rows-[auto_1fr_auto] gap-4 items-start min-w-0' do |f| %>
       <%# Connection %>
       <section class="card bg-base-200 shadow" aria-labelledby="discord-connection">
         <div class="card-body p-5 gap-3">
@@ -203,7 +203,7 @@
       </section>
 
       <%# Ride approvals %>
-      <section class="card bg-base-200 shadow" aria-labelledby="discord-rides">
+      <section class="card bg-base-200 shadow 2xl:col-start-2 2xl:row-start-1 2xl:row-span-2" aria-labelledby="discord-rides">
         <div class="card-body p-5 gap-3">
           <div class="flex items-start gap-3">
             <%= module_icon.call('train-front', 'bg-success/15 text-success-ink') %>
@@ -257,7 +257,7 @@
               </div>
             </details>
 
-            <div class="py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+            <div class="py-3 grid grid-cols-2 sm:grid-cols-4 2xl:grid-cols-2 gap-3 items-end">
               <label class="form-control">
                 <span class="label-text text-xs opacity-70 mb-1"><%= t('.max_age_label') %></span>
                 <span class="join">
@@ -364,7 +364,7 @@
         </div>
       </section>
 
-      <div class="sticky bottom-3 z-10 rounded-box border border-base-300 bg-base-100/90 backdrop-blur shadow-lg">
+      <div class="sticky bottom-3 z-10 rounded-box border border-base-300 bg-base-100/90 backdrop-blur shadow-lg 2xl:col-span-2">
         <div class="flex items-center gap-3 p-3">
           <span class="text-xs opacity-70 mr-auto min-w-0">
             <% if @setting && saved_by %>

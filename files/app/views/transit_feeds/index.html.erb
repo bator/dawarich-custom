@@ -48,7 +48,7 @@
   rows = ->(feed) { ((feed.import_stats || {})['rows'] || {}).slice('gtfs_stops', 'gtfs_routes', 'gtfs_trips').map { |k, v| "#{t(".row_#{k.delete_prefix('gtfs_')}")}: #{number_with_delimiter(v, delimiter: ' ')}" }.join(' · ') }
 %>
 
-<div class="min-h-content w-full my-5 max-w-4xl mx-auto px-2">
+<div class="min-h-content w-full my-5 px-2">
   <%= render 'shared/page_header', title: t('.title') %>
   <%= render 'shared/transit_tabs', active: :feeds %>
 

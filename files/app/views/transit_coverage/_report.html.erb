@@ -41,7 +41,7 @@
   <% if with_points.empty? %>
     <p class="opacity-70 py-6"><%= t('transit_coverage.index.no_points', count: @days) %></p>
   <% else %>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <% with_points.each do |user| %>
         <%
           report = @reports[user.id]
