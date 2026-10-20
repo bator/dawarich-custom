@@ -2,9 +2,8 @@ en:
   transit_tabs:
     label: Travel pages
     rides: Rides
-    stats: Statistics
+    stats: Overview
     feeds: Timetables
     settings: Settings
-    commute: Commute
     savings: Savings
     coverage: Tracking

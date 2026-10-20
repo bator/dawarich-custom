@@ -2,9 +2,8 @@ hu:
   transit_tabs:
     label: Utazási oldalak
     rides: Utazások
-    stats: Statisztika
+    stats: Áttekintés
     feeds: Menetrendek
     settings: Beállítások
-    commute: Ingázás
     savings: Megtakarítás
     coverage: Követés

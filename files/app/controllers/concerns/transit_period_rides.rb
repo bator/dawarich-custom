@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Shared by the transit analysis pages (commute, savings with punctuality): the
+# Used by the transit analysis pages (savings with punctuality): the
 # period filter and the counted rides of the period, i.e. the same rows the
 # /transit list shows (Gtfs::SegmentQuery) minus the uncertain ones
 # (Gtfs::PeriodStats).

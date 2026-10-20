@@ -1,7 +1,7 @@
 en:
   transit_stats:
     index:
-      title: Transit statistics
+      title: Overview
       counted_note: Confirmed and automatically accepted rides only. Uncertain rides are shown as "to review".
       all_uncertain:
         one: "No counted ride in this period: the only ride is still uncertain and waits for your decision."
@@ -13,5 +13,16 @@ en:
       by_mode: By vehicle
       by_feed: By operator
       top_lines: Most used lines
-      top_boarding: Most frequent boarding stops
-      top_alighting: Most frequent alighting stops
+      commute: Commute
+      commute_share:
+        one: "This trip makes up %{percent}% of your rides."
+        other: "These %{count} trips make up %{percent}% of your rides."
+      out: there
+      back: back
+      times:
+        one: 1 ride
+        other: "%{count} rides"
+      no_way_back: not recurring
+      more_lines:
+        one: "+1 line"
+        other: "+%{count} lines"

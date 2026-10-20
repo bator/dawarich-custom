@@ -123,7 +123,6 @@
     "app/views/settings/transit/show.html.erb",
     "app/views/shared/_transit_period_form.html.erb",
     "app/views/shared/_transit_tabs.html.erb",
-    "app/views/transit_commute/index.html.erb",
     "app/views/transit_coverage/_report.html.erb",
     "app/views/transit_coverage/index.html.erb",
     "app/views/transit_feeds/index.html.erb",

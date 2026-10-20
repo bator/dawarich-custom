@@ -1,7 +1,7 @@
 hu:
   transit_stats:
     index:
-      title: Közlekedési statisztika
+      title: Áttekintés
       counted_note: Csak a megerősített és az automatikusan elfogadott utazások. A bizonytalanok az „ellenőrizendő” számban szerepelnek.
       all_uncertain:
         one: "Nincs számolt utazás az időszakban: az egyetlen utazás még bizonytalan, a döntésedre vár."
@@ -13,5 +13,16 @@ hu:
       by_mode: Jármű szerint
       by_feed: Szolgáltató szerint
       top_lines: Leggyakoribb vonalak
-      top_boarding: Leggyakoribb felszállási megállók
-      top_alighting: Leggyakoribb leszállási megállók
+      commute: Ingázás
+      commute_share:
+        one: "Ez az út adja az utazásaid %{percent}%-át."
+        other: "Ez a %{count} út adja az utazásaid %{percent}%-át."
+      out: oda
+      back: vissza
+      times:
+        one: 1 út
+        other: "%{count} út"
+      no_way_back: nincs rendszeres
+      more_lines:
+        one: "+1 járat"
+        other: "+%{count} járat"

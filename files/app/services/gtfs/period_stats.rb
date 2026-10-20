@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Totals of the rides of a period for /transit/stats, from the already
+# Totals of the rides of a period for the /transit/stats overview, from the already
 # loaded rides (the same rows the /transit list shows). Like
 # Gtfs::SegmentStats, but for a rolling period instead of a calendar
 # month/year, and only counted rides: confirmed and auto-accepted. Uncertain
@@ -31,16 +31,14 @@ class Gtfs::PeriodStats
   end
 
   # [{ segment:, line:, count:, duration_s: }]: segment is a sample ride of
-  # the line, for its mode and route colour.
+  # the line, for its mode and route colour. Grouped by mode and name, like
+  # Gtfs::CommuteStats.lines.
   def top_lines
-    rides.group_by { |s| [s.feed_id, s.route_gtfs_id, s.route_short_name || s.route_long_name] }
-         .map { |(_, _, line), list| { segment: list.first, line:, count: list.size, duration_s: list.sum { |s| duration(s) } } }
+    rides.group_by { |s| [s.mode, s.route_short_name || s.route_long_name] }
+         .map { |(_, line), list| { segment: list.first, line:, count: list.size, duration_s: list.sum { |s| duration(s) } } }
          .sort_by { |row| [-row[:count], -row[:duration_s], row[:line].to_s] }
          .first(TOP)
   end
-
-  def top_boarding = top(rides.map(&:boarding_stop_name))
-  def top_alighting = top(rides.map(&:alighting_stop_name))
 
   # Ride counts per local week (Monday) or per month, oldest first, with
   # empty buckets filled in: [[Date, count, partial], ...]. The first bucket
@@ -69,9 +67,5 @@ class Gtfs::PeriodStats
   def totals(groups)
     groups.map { |key, list| [key, { count: list.size, duration_s: list.sum { |s| duration(s) }, distance_m: list.sum { |s| s.distance_m.to_f } }] }
           .sort_by { |_, row| -row[:count] }
-  end
-
-  def top(names)
-    names.compact.tally.sort_by { |name, count| [-count, name] }.first(TOP)
   end
 end

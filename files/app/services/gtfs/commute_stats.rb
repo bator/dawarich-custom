@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# Recurring trips for /transit/commute: counted rides grouped by direction
-# (boarding stop -> alighting stop), with travel times, lines, delays and
-# when they are taken. A trip needs MIN_RIDES rides to count as recurring.
+# Recurring trips for the /transit/stats overview: counted rides grouped by
+# direction (boarding stop -> alighting stop), with travel times, lines,
+# delays and when they are taken, and paired with the way back (Pair). A trip
+# needs MIN_RIDES rides to count as recurring.
 class Gtfs::CommuteStats
   MIN_RIDES = 2
   TOP = 12
@@ -16,11 +17,7 @@ class Gtfs::CommuteStats
     def last_at = rides.map(&:started_at).max
 
     # [[sample_segment, count], ...] most used line first
-    def lines
-      rides.group_by { |s| [s.feed_id, s.route_gtfs_id, s.route_short_name || s.route_long_name] }
-           .map { |_, list| [list.first, list.size] }
-           .sort_by { |_, n| -n }
-    end
+    def lines = Gtfs::CommuteStats.lines(rides)
 
     def delays = rides.select(&:delay_reliable?).map { |s| s.debug['delay_secs'].to_f }
     def median_delay_s = delays.empty? ? nil : Gtfs::CommuteStats.median(delays.sort)
@@ -49,6 +46,24 @@ class Gtfs::CommuteStats
     end
   end
 
+  # A trip and its way back (B -> A), when that is recurring too.
+  Pair = Struct.new(:out, :back, keyword_init: true) do
+    def trips = [out, back].compact
+    def count = trips.sum(&:count)
+    def rides = trips.flat_map(&:rides)
+    def lines = Gtfs::CommuteStats.lines(rides)
+    def by_weekday = trips.map(&:by_weekday).transpose.map(&:sum)
+  end
+
+  # [[sample_segment, count], ...] most used first. A line is its mode and
+  # name: the same train or route can come from several feeds or route ids
+  # (both showed as "IC 849 TÓPART"), and the user knows it by its name.
+  def self.lines(rides)
+    rides.group_by { |s| [s.mode, s.route_short_name || s.route_long_name] }
+         .map { |_, list| [list.first, list.size] }
+         .sort_by { |segment, n| [-n, (segment.route_short_name || segment.route_long_name).to_s] }
+  end
+
   def self.median(sorted)
     return nil if sorted.empty?
 
@@ -68,6 +83,20 @@ class Gtfs::CommuteStats
                      .select { |trip| trip.count >= MIN_RIDES }
                      .sort_by { |trip| [-trip.count, -trip.last_at] }
                      .first(TOP)
+  end
+
+  # Recurring trips with their way back, most rides first.
+  def pairs
+    @pairs ||= begin
+      left = trips.dup
+      list = []
+      while (trip = left.shift)
+        back = left.find { |other| other.from == trip.to && other.to == trip.from }
+        left.delete(back)
+        list << Pair.new(out: trip, back:)
+      end
+      list.sort_by { |pair| -pair.count }
+    end
   end
 
   # Share of all counted rides that belong to the shown recurring trips.
