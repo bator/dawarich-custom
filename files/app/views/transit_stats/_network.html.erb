@@ -30,6 +30,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_15rem] gap-5 items-stretch">
       <%# fixed height: MapLibre makes its container position: relative, so it cannot just fill an absolute box %>
       <div data-controller="transit-network-map" data-transit-network-map-bounds-value="<%= map.bounds.to_json %>"
+           data-transit-network-map-unsupported-value="<%= t("#{scope}.network_unsupported") %>"
            class="rounded-box overflow-hidden bg-base-100">
         <div data-transit-network-map-target="map" class="w-full h-[24rem] lg:h-[30rem]" role="img"
              aria-label="<%= t("#{scope}.network_label", paths: map.paths.size, stops: map.stops.size) %>"></div>

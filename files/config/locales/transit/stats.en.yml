@@ -22,6 +22,7 @@ en:
       network_note: Along the timetable's line, in the line colour; the thicker, the more rides. Ctrl + scroll zooms.
       network_label: "Map of %{paths} routes and %{stops} stops ridden in the period."
       network_paths: Routes
+      network_unsupported: The map needs WebGL, which this browser does not offer. The routes are listed beside it.
       network_rides:
         one: 1 ride
         other: "%{count} rides"

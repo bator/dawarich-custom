@@ -22,6 +22,7 @@ hu:
       network_note: "A menetrend vonalán, a vonal színével; minél vastagabb, annál több út. Nagyítás: Ctrl + görgetés."
       network_label: "Térkép: %{paths} útvonal és %{stops} megálló az időszakban."
       network_paths: Útvonalak
+      network_unsupported: A térképhez WebGL kell, ezt ez a böngésző nem támogatja. Az útvonalak mellette vannak felsorolva.
       network_rides:
         one: 1 út
         other: "%{count} út"
