@@ -1,10 +1,9 @@
 # dawarich-custom
 
-Custom code on top of upstream [Dawarich](https://github.com/Freika/dawarich) 1.16.0, running in CT 139 (`minipc`).
+Custom code on top of upstream [Dawarich](https://github.com/Freika/dawarich) 1.16.0.
 It matches recorded location history against Hungarian public-transport timetables (GTFS), and
 `restore_custom.py` puts it back after every community-script upgrade.
 
-Source of truth: OneDev `dawarich-custom`. The GitHub copy is a one-way mirror, so push to OneDev only.
 
 ## What it adds
 
@@ -53,7 +52,7 @@ State: `/var/lib/dawarich-custom/` (`state.json`, backups, `conflicts/<version>/
 Not stored: `tailwind.css` and `sprockets-manifest.json` (rebuilt by `assets:precompile`) and secrets
 (`/opt/dawarich/.env`, `/opt/dawarich/gtfs.env`).
 
-## Commands (in CT 139)
+## Commands 
 
 ```bash
 python3 /opt/dawarich-custom/restore_custom.py --dry-run   # plan only
