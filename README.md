@@ -31,6 +31,11 @@ It matches recorded location history against Hungarian public-transport timetabl
 Also: **Settings** (opt-in, feeds, minimum confidence, rematch the whole history), transit layers on `/map/v2`, and `track_pick`, a daily Discord pick of which user's
 track to copy onto the target account.
 
+## Docker
+
+The same code also runs as a Docker image built on top of the official `freikin/dawarich` image,
+with the Discord bot as its own container: [docs/docker.md](docs/docker.md).
+
 ## How it survives upgrades
 
 <img src="docs/restore-flow.svg" width="560" alt="Restore flow: upgrade, path unit, OSRM overlays, restore_custom.py plan, guards, write and migrate, restart, smoke check">
@@ -49,6 +54,7 @@ State: `/var/lib/dawarich-custom/` (`state.json`, backups, `conflicts/<version>/
 | `patches/<rel>.patch` | `upstream` → `ours` diff, for reading only (generated) |
 | `manifest.json` | `base_version`, `custom_files`, `patched_files` |
 | `systemd/` | drop-in that chains the restore after the OSRM overlay restore |
+| `docker/` | `Dockerfile`, compose override, bot entrypoint and env example ([docs/docker.md](docs/docker.md)) |
 
 Not stored: `tailwind.css` and `sprockets-manifest.json` (rebuilt by `assets:precompile`) and secrets
 (`/opt/dawarich/.env`, `/opt/dawarich/gtfs.env`).
@@ -60,6 +66,7 @@ python3 /opt/dawarich-custom/restore_custom.py --dry-run   # plan only
 python3 /opt/dawarich-custom/restore_custom.py             # restore now
 python3 /opt/dawarich-custom/restore_custom.py capture     # live app -> repo after editing on the box
 python3 /opt/dawarich-custom/restore_custom.py rebase      # after a clean restore on a new upstream version
+python3 restore_custom.py export OUT --version 1.16.0      # Docker build: merged files into OUT (DAWARICH_APP=upstream copy)
 ```
 
 After `capture` or `rebase`: `git diff`, commit, push to OneDev.
@@ -71,5 +78,9 @@ A custom migration version must never equal an upstream one: `db:migrate` silent
 `create_gtfs_tables` is `20261010115959` because upstream 1.16.0 ships `20261010120000`. On a collision
 the restore stops. Fix: rename ours to a free version, insert the new version into `schema_migrations`,
 and delete the upstream version's row so upstream's migration runs.
+A new custom migration also goes into `GtfsSchemaRepair::VERSIONS` (`files/lib/tasks/gtfs_schema.rake`):
+on an empty database Rails loads upstream's `schema.rb` and marks older migrations as run, and the
+hook after `db:migrate` runs the listed ones. `restore_custom.py export` (the Docker build) refuses a
+migration that is not listed.
 
 <sub>Screenshots: 2026-10-20, dark theme, own account only.</sub>

@@ -1,0 +1,9 @@
+# docker/Dockerfile needs only restore_custom.py, manifest.json, files/,
+# ours/, upstream/ and docker/bot-entrypoint.sh.
+.git/
+docs/
+patches/
+systemd/
+__pycache__/
+*.pyc
+docker/transit.env

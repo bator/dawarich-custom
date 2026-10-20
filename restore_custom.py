@@ -29,6 +29,11 @@ Commands:
                                   (after editing on the box; then git commit)
   restore_custom.py rebase        after a clean merge on a new upstream version:
                                   make that version the new merge base
+  restore_custom.py export OUT [--version V]
+                                  Docker build: merge onto a copy of the upstream
+                                  app (DAWARICH_APP) and write the changed files to
+                                  OUT; no state, systemd or Discord; exit 2 on a
+                                  conflict (docker/Dockerfile)
 """
 from __future__ import annotations
 
@@ -581,8 +586,48 @@ def write_patches(manifest: dict) -> None:
         out.write_bytes(r.stdout)
 
 
+def export(out: Path, version: str | None) -> int:
+    """The image build's restore: plan against DAWARICH_APP (a copy of the
+    upstream image's app) with no previous state, and write every file that
+    differs from upstream under `out`, to be copied over the app. The upstream
+    image has no .app_version, so the build passes the version."""
+    if not APP.is_dir():
+        log(f"{APP} missing", err=True)
+        return 1
+    manifest = load_manifest()
+    version = version or app_version()
+    writes, _archive, _records, conflicts, conflict_output, notes = plan_restore(manifest, {}, version)
+    # A fresh database gets upstream's schema.rb loaded, which marks our older
+    # migrations as run; lib/tasks/gtfs_schema.rake runs them, but only those it lists.
+    repair = read(REPO / "files" / "lib/tasks/gtfs_schema.rake") or b""
+    for rel in manifest["custom_files"]:
+        m = MIGRATION_RE.match(rel)
+        if m and m.group(1).encode() not in repair:
+            conflicts.append(f"migration {m.group(1)} missing from GtfsSchemaRepair::VERSIONS (lib/tasks/gtfs_schema.rake)")
+    for n in notes:
+        log(f"note  {n}")
+    if conflicts:
+        for c in conflicts:
+            log(f"CONFLICT {c}", err=True)
+        for rel, data in conflict_output.items():
+            atomic_write(out.parent / f"{out.name}-conflicts" / rel, data)
+        return 2
+    for rel, data in sorted(writes.items()):
+        if data is not None:
+            atomic_write(out / rel, data)
+    log(f"exported {sum(1 for d in writes.values() if d is not None)} file(s) for upstream {version} "
+        f"(custom base {manifest['base_version']}) into {out}")
+    return 0
+
+
 def main() -> int:
     args = sys.argv[1:]
+    if args[:1] == ["export"]:
+        if len(args) < 2:
+            log("usage: restore_custom.py export OUT [--version V]", err=True)
+            return 1
+        version = args[args.index("--version") + 1] if "--version" in args[2:-1] else None
+        return export(Path(args[1]), version)
     fd = acquire_lock()
     if fd is None:
         log("another restore is running; skip")

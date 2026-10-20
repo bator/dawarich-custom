@@ -1,0 +1,71 @@
+# Adds the custom code to the upstream Dawarich compose file of the same
+# version (docker/docker-compose.yml in Freika/dawarich). Put both files and
+# transit.env next to each other, clone this repo into ./dawarich-custom, then:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.transit.yml up -d --build
+#
+# The Discord bot only starts with the `discord` profile (docs/docker.md).
+x-transit-env: &transit-env
+  env_file:
+    - path: transit.env
+      required: false
+
+services:
+  dawarich_app:
+    image: dawarich-custom:${DAWARICH_VERSION:-1.16.0}
+    build:
+      context: ${DAWARICH_CUSTOM_DIR:-./dawarich-custom}
+      dockerfile: docker/Dockerfile
+      args:
+        DAWARICH_VERSION: ${DAWARICH_VERSION:-1.16.0}
+    <<: *transit-env
+
+  dawarich_sidekiq:
+    image: dawarich-custom:${DAWARICH_VERSION:-1.16.0}
+    pull_policy: never # built by dawarich_app
+    <<: *transit-env
+
+  # Gateway connection for the approve / reject buttons of the ride messages.
+  # Configure it on /transit/discord (admins) first, then:
+  #   docker compose -f docker-compose.yml -f docker-compose.transit.yml --profile discord up -d
+  dawarich_discord_bot:
+    image: dawarich-custom:${DAWARICH_VERSION:-1.16.0}
+    pull_policy: never
+    container_name: dawarich_discord_bot
+    profiles: [discord]
+    entrypoint: bot-entrypoint.sh
+    command: ['rails', 'gtfs:discord_bot']
+    restart: unless-stopped
+    networks:
+      - dawarich
+    volumes:
+      - dawarich_storage:/var/app/storage # map tile cache of the ride images
+    <<: *transit-env
+    environment:
+      RAILS_ENV: ${RAILS_ENV:-production}
+      REDIS_URL: ${REDIS_URL:-redis://dawarich_redis:6379}
+      DATABASE_HOST: ${DATABASE_HOST:-dawarich_db}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-password}
+      DATABASE_NAME: ${DATABASE_NAME:-dawarich_development}
+      APPLICATION_HOSTS: ${APPLICATION_HOSTS:-localhost,::1,127.0.0.1}
+      APPLICATION_PROTOCOL: ${APPLICATION_PROTOCOL:-http}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-"CHANGE_ME"}
+      RAILS_LOG_TO_STDOUT: ${RAILS_LOG_TO_STDOUT:-true}
+      SELF_HOSTED: ${SELF_HOSTED:-true}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: ${LOG_MAX_SIZE:-100m}
+        max-file: ${LOG_MAX_FILE:-5}
+    healthcheck:
+      test: [ "CMD-SHELL", "pgrep -f gtfs:discord_bot" ]
+      interval: 30s
+      retries: 5
+      start_period: 60s
+      timeout: 10s
+    depends_on:
+      dawarich_app:
+        condition: service_healthy
+        restart: true

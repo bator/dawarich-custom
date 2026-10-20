@@ -176,6 +176,7 @@
     "lib/tasks/gtfs.rake",
     "lib/tasks/gtfs_discord.rake",
     "lib/tasks/gtfs_match.rake",
+    "lib/tasks/gtfs_schema.rake",
     "lib/tasks/gtfs_shapes.rake",
     "lib/tasks/gtfs_verify.rake",
     "lib/tasks/gtfs_walk.rake",
