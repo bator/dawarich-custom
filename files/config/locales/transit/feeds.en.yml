@@ -2,18 +2,6 @@ en:
   transit_feeds:
     index:
       title: Timetables (GTFS)
-      summary: Feed status
-      kpi_ok: Valid
-      kpi_expiring: "Ends within %{days} days"
-      kpi_expired: Expired
-      kpi_failed: Failed
-      timeline:
-        one: Validity of 1 enabled feed
-        other: "Validity of %{count} enabled feeds"
-      legend_ok: valid
-      legend_expiring: "ends within %{days} days"
-      legend_expired: expired
-      freshness: Last sync
       ago: "%{time} ago"
       ago_min:
         one: 1 min ago
@@ -28,23 +16,59 @@ en:
       days_left:
         one: 1 day left
         other: "%{count} days left"
+      days_short:
+        one: 1 day
+        other: "%{count} days"
       expired_ago:
         one: expired 1 day ago
         other: "expired %{count} days ago"
       no_validity: no validity data
+      valid_until: "valid until %{date}"
       checked: last checked
       imported: last imported
+      synced: synced
       status_failed: failed
       status_importing: importing
-      today: today
-      timeline_note: "Window: %{past} days back, %{future} days ahead. Faded part: already past. Most urgent feed first; hover a row for dates and row counts."
-      row_stops: stops
-      row_routes: routes
-      row_trips: trips
+      strip_sync: Sync
+      strip_queue: "%{queue} queue"
+      strip_idle: idle
+      strip_running:
+        one: 1 running
+        other: "%{count} running"
+      strip_queued:
+        one: 1 waiting
+        other: "%{count} waiting"
+      strip_retries:
+        one: 1 retry
+        other: "%{count} retries"
+      strip_history: History
+      strip_history_done: "%{done}/%{total} done"
+      strip_history_running:
+        one: 1 running
+        other: "%{count} running"
+      strip_feeds:
+        one: 1 enabled timetable
+        other: "%{count} enabled timetables"
+      expired_short: expired
+      attention_note: A timetable in use or picked by someone has a problem.
+      attention_title: Needs attention
+      used_by:
+        one: used by 1 ride
+        other: "used by %{count} rides"
+      unused: no ride from it yet
+      used_title: In use
+      used_note: "Detected rides come from these. Big number: the last %{days} days; bars: per week."
+      routes:
+        one: 1 route
+        other: "%{count} routes"
+      rides_recent: "rides · %{days} days"
+      rides_total:
+        one: 1 ride
+        other: "%{count} rides"
+      weekly_label: "Rides per week, last %{weeks} weeks"
+      standby_title: Standing by
+      standby_note: No recent ride came from these. The ring shows what is left of the validity. Problems come first; only a timetable in use or picked by someone gets its own warning.
       jobs_title: "Background jobs (%{queue} queue)"
-      running_label: running
-      queued_label: queued
-      retries_label: retries
       no_jobs: No job is running or waiting.
       more_queued: "and %{count} more"
       backfills_title: History matching per user
@@ -53,9 +77,6 @@ en:
       backfill_done: done
       backfill_cancelled: cancelled
       backfill_never: never ran
-      finished: "finished %{time}"
-      at_day: "at %{day}"
-      updated: "updated %{time} ago"
       disabled_feeds:
         one: 1 disabled feed
         other: "%{count} disabled feeds"

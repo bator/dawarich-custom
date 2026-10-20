@@ -13,12 +13,7 @@
     nil
   end
   warn_days = TransitFeedsController::EXPIRY_WARNING_DAYS
-  win_from = @today - TransitFeedsController::WINDOW_PAST
-  win_to = @today + TransitFeedsController::WINDOW_FUTURE
-  win_days = (win_to - win_from).to_f
-  pos = ->(d) { ((d - win_from) / win_days * 100).clamp(0, 100).round(2) }
-  # Validity of the timetable alone (bar colour) and the overall state
-  # (KPI, sort order), where a failed sync wins.
+  # Validity of the timetable alone and the overall state, where a failed sync wins.
   validity = lambda do |feed|
     if !feed.imported? || feed.valid_until.nil? then :pending
     elsif feed.expired?(on: @today) then :expired
@@ -27,15 +22,21 @@
     end
   end
   state = ->(feed) { feed.failed? || feed.last_error.present? ? :failed : validity.call(feed) }
-  bar = { ok: 'bg-success', expiring: 'bg-warning', expired: 'bg-error', pending: 'bg-base-content/30' }
+  urgency = { failed: 0, expired: 1, pending: 2, expiring: 3, ok: 4 }
   enabled, disabled = @feeds.partition(&:enabled)
-  # Most urgent first: expired, then the soonest end of validity.
-  enabled = enabled.sort_by { |f| [{ failed: 0, expired: 1, expiring: 2, pending: 3, ok: 4 }.fetch(state.call(f)), f.valid_until || Date.new(9999), f.name] }
-  counts = enabled.map { |f| state.call(f) }.tally
-  months = (win_from..win_to).select { |d| d.day == 1 }
-  # Compact age of the last sync, coloured: up to 26 h fine, up to 72 h late, older stale.
-  fresh = lambda do |feed|
-    at = feed.last_checked_at || feed.last_imported_at
+  total = ->(feed) { @usage[:total].fetch(feed.id, 0) }
+  recent = ->(feed) { @usage[:recent].fetch(feed.id, 0) }
+  # Only problems that matter get a big card (see RELEVANT_DAYS); the others
+  # stay small tiles among the unused feeds, problems first.
+  relevant = ->(feed) { @usage[:relevant].fetch(feed.id, 0).positive? || @selected_keys.include?(feed.key) }
+  by_urgency = ->(f) { [urgency.fetch(state.call(f)), f.valid_until || Date.new(9999), f.name] }
+  attention, rest = enabled.partition { |f| state.call(f) != :ok && relevant.call(f) }
+  attention = attention.sort_by(&by_urgency)
+  used, standby = rest.partition { |f| state.call(f) == :ok && total.call(f).positive? }
+  used = used.sort_by { |f| [-recent.call(f), -total.call(f), f.name] }
+  standby = standby.sort_by(&by_urgency)
+  # Compact age of a time, coloured: up to 26 h fine, up to 72 h late, older stale.
+  age_of = lambda do |at|
     return ['opacity-70', '–'] unless at
 
     age = Time.current - at
@@ -45,186 +46,253 @@
            end
     [age <= 26.hours ? 'text-success-ink' : (age <= 72.hours ? 'text-warning-ink' : 'text-error-ink'), text]
   end
-  rows = ->(feed) { ((feed.import_stats || {})['rows'] || {}).slice('gtfs_stops', 'gtfs_routes', 'gtfs_trips').map { |k, v| "#{t(".row_#{k.delete_prefix('gtfs_')}")}: #{number_with_delimiter(v, delimiter: ' ')}" }.join(' · ') }
+  synced = ->(feed) { feed.last_checked_at || feed.last_imported_at }
+  left_text = lambda do |feed|
+    to = feed.valid_until
+    next t('.no_validity') unless to
+
+    to >= @today ? t('.days_left', count: (to - @today).to_i) : t('.expired_ago', count: (@today - to).to_i)
+  end
+  tone = { ok: 'text-success-ink', expiring: 'text-warning-ink', expired: 'text-error-ink', failed: 'text-error-ink', pending: 'opacity-70' }
+  stroke = { ok: 'var(--success-ink)', expiring: 'var(--warning-ink)', expired: 'var(--error-ink)', failed: 'var(--error-ink)', pending: 'currentColor' }
+  # Remaining share of the active version's validity, as a small ring.
+  ring = lambda do |feed, size: 30|
+    from = feed.valid_from
+    to = feed.valid_until
+    share = from && to && to > from ? ((to - @today).to_f / (to - from)).clamp(0, 1) : 0
+    r = 12
+    c = (2 * Math::PI * r).round(2)
+    tag.svg(viewBox: '0 0 30 30', width: size, height: size, class: 'shrink-0 -rotate-90', 'aria-hidden': true) do
+      safe_join([tag.circle(cx: 15, cy: 15, r:, fill: 'none', stroke: 'currentColor', 'stroke-opacity': 0.15, 'stroke-width': 4),
+                 tag.circle(cx: 15, cy: 15, r:, fill: 'none', stroke: stroke[validity.call(feed)], 'stroke-width': 4,
+                            'stroke-linecap': 'round', 'stroke-dasharray': "#{(c * share).round(2)} #{c}")])
+    end
+  end
+  modes = ->(feed) { (@routes.dig(feed.id, :modes) || {}).sort_by { |_, n| -n }.map(&:first) }
+  mode_icons = lambda do |feed, css = 'w-4 h-4'|
+    content_tag(:span, safe_join(modes.call(feed).first(4).map { |m| content_tag(:span, transit_mode_icon(m, css), title: t("transit_modes.#{m}")) }),
+                class: 'flex items-center gap-1 opacity-70 shrink-0')
+  end
+  # status strip
+  newest_sync = enabled.filter_map { |f| synced.call(f) }.max
+  sync_tone, sync_ago = age_of.call(newest_sync)
+  queue_busy = @running.any? || @queue_size.positive?
+  backfill_states = @backfills.map { |_, st| st['status'] }
+  backfills_running = backfill_states.count('running')
+  backfills_done = backfill_states.count('done')
+  jobs = @running.map { |w| [w.job.display_class, w.job.display_args, w.run_at, true] } +
+         @queued.first(5).map { |j| [j.display_class, j.display_args, j.enqueued_at, false] }
+  dot = ->(cls) { tag.span(class: "inline-block w-2 h-2 rounded-full shrink-0 #{cls}", 'aria-hidden': true) }
 %>
 
 <div class="min-h-content w-full my-5 px-2">
   <%= render 'shared/page_header', title: t('.title') %>
   <%= render 'shared/transit_tabs', active: :feeds %>
 
-  <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" aria-label="<%= t('.summary') %>">
-    <% [[:ok, 'text-success-ink', 'border-success/30 bg-success/10'], [:expiring, 'text-warning-ink', 'border-warning/40 bg-warning/10'],
-        [:expired, 'text-error-ink', 'border-error/40 bg-error/10'], [:failed, 'text-error-ink', 'border-error/40 bg-error/10']].each do |key, text, box| %>
-      <% n = counts.fetch(key, 0) %>
-      <div class="rounded-box border p-4 <%= n.positive? ? box : 'border-transparent bg-base-200' %>">
-        <div class="text-xs uppercase tracking-wide <%= n.positive? ? text : 'opacity-70' %>"><%= t(".kpi_#{key}", days: warn_days) %></div>
-        <div class="text-3xl font-bold tabular-nums mt-1"><%= n %></div>
-      </div>
-    <% end %>
-  </section>
-
-  <section class="card bg-base-200 shadow-sm mb-6" aria-labelledby="feeds-timeline">
-    <div class="card-body p-5 gap-3">
-      <div class="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="feeds-timeline" class="font-semibold"><%= t('.timeline', count: enabled.size) %></h2>
-        <ul class="flex flex-wrap gap-x-3 gap-y-1 text-xs" role="list">
-          <% [[:ok, 'bg-success'], [:expiring, 'bg-warning'], [:expired, 'bg-error']].each do |key, cls| %>
-            <li class="flex items-center gap-1.5"><span class="inline-block w-3 h-2 rounded-sm <%= cls %>"></span><%= t(".legend_#{key}", days: warn_days) %></li>
-          <% end %>
-        </ul>
-      </div>
-
-      <div class="grid grid-cols-[minmax(0,9rem)_1fr_4.5rem] gap-x-3 text-[10px] opacity-70 tabular-nums">
-        <span></span>
-        <span class="relative h-4">
-          <% months.each do |m| %>
-            <span class="absolute -translate-x-1/2 whitespace-nowrap" style="left: <%= pos.call(m) %>%"><%= l(m, format: '%b') %></span>
+  <%# One line of system state; the job and backfill lists open on demand (open while something runs) %>
+  <details class="card bg-base-200 shadow-sm mb-6 group" <%= 'open' if queue_busy || backfills_running.positive? || @retries.positive? %>>
+    <summary class="card-body p-4 flex-row flex-wrap items-center gap-x-8 gap-y-2 text-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+      <span class="flex items-center gap-2" title="<%= stamp.call(newest_sync) %>">
+        <%= dot.call(sync_tone.sub('text-', 'bg-').sub('-ink', '')) %><span class="opacity-70"><%= t('.strip_sync') %></span><span class="font-semibold <%= sync_tone %>"><%= sync_ago %></span>
+      </span>
+      <span class="flex items-center gap-2">
+        <%= dot.call(@retries.positive? ? 'bg-warning' : (queue_busy ? 'bg-info animate-pulse' : 'bg-success')) %>
+        <span class="opacity-70"><%= t('.strip_queue', queue: TransitFeedsController::QUEUE) %></span>
+        <span class="font-semibold">
+          <% if queue_busy || @retries.positive? %>
+            <%= [(t('.strip_running', count: @running.size) if @running.any?), (t('.strip_queued', count: @queue_size) if @queue_size.positive?),
+                 (t('.strip_retries', count: @retries) if @retries.positive?)].compact.join(' · ') %>
+          <% else %>
+            <%= t('.strip_idle') %>
           <% end %>
         </span>
-        <span class="text-right"><%= t('.freshness') %></span>
-      </div>
-
-      <ul class="flex flex-col" role="list">
-        <% enabled.each do |feed| %>
-          <%
-            st = state.call(feed)
-            vs = validity.call(feed)
-            color, ago = fresh.call(feed)
-            from = feed.valid_from
-            to = feed.valid_until
-            visible = from && to && to >= win_from && from <= win_to
-          %>
-          <li class="grid grid-cols-[minmax(0,9rem)_1fr_4.5rem] gap-x-3 items-center py-1.5 border-b border-base-300 last:border-b-0">
-            <span class="min-w-0" title="<%= [feed.key, rows.call(feed)].compact_blank.join(' · ') %>">
-              <span class="block text-sm font-medium truncate"><%= feed.name %></span>
-              <span class="block text-[10px] opacity-70 tabular-nums"><%= feed.imported? ? "v#{feed.active_version}" : t('.not_imported') %></span>
-            </span>
-
-            <span class="relative h-5 rounded bg-base-100"
-                  title="<%= from || '?' %> – <%= to || '?' %><%= to ? " · #{to >= @today ? t('.days_left', count: (to - @today).to_i) : t('.expired_ago', count: (@today - to).to_i)}" : '' %>">
-              <% months.each do |m| %>
-                <span class="absolute inset-y-0 w-px bg-base-content/10" style="left: <%= pos.call(m) %>%"></span>
-              <% end %>
-              <% if visible %>
-                <% left = pos.call([from, win_from].max) %>
-                <% mid = pos.call([[@today, from].max, to].min) %>
-                <% right = pos.call([to, win_to].min) %>
-                <span class="absolute inset-y-1 <%= bar[vs] %> opacity-50 <%= 'rounded-l' if from >= win_from %>" style="left: <%= left %>%; width: <%= (mid - left).round(2) %>%"></span>
-                <span class="absolute inset-y-1 <%= bar[vs] %> <%= 'rounded-r' if to <= win_to %> <%= 'rounded-l' if from > @today %>" style="left: <%= mid %>%; width: <%= (right - mid).round(2) %>%"></span>
-                <% if to > win_to %><span class="absolute right-0.5 inset-y-0 flex items-center text-[10px] font-bold text-success-content">→</span><% end %>
-                <% if to <= win_to %>
-                  <span class="absolute inset-y-0 flex items-center text-[10px] tabular-nums pl-1 whitespace-nowrap <%= vs == :ok ? 'opacity-70' : (vs == :expiring ? 'text-warning-ink' : 'text-error-ink') %>" style="left: <%= right %>%">
-                    <%= l(to, format: '%m.%d') %>
-                  </span>
-                <% end %>
-              <% elsif to && to < win_from %>
-                <span class="absolute inset-y-0 left-1 flex items-center gap-1 text-[10px] text-error-ink whitespace-nowrap">
-                  <span class="inline-block w-1.5 h-3 rounded-sm bg-error"></span><%= t('.expired_ago', count: (@today - to).to_i) %> (<%= to %>)
-                </span>
-              <% else %>
-                <span class="absolute inset-y-0 left-1 flex items-center text-[10px] opacity-70"><%= t('.no_validity') %></span>
-              <% end %>
-              <span class="absolute -inset-y-1 w-0.5 bg-primary" style="left: calc(<%= pos.call(@today) %>% - 1px)"></span>
-            </span>
-
-            <span class="text-right text-xs leading-tight" title="<%= t('.checked') %>: <%= stamp.call(feed.last_checked_at) %> · <%= t('.imported') %>: <%= stamp.call(feed.last_imported_at) %>">
-              <% if st == :failed %>
-                <span class="badge badge-error badge-sm" title="<%= feed.last_error.to_s.truncate(300) %>"><%= t('.status_failed') %></span>
-              <% elsif feed.importing? %>
-                <span class="badge badge-info badge-sm"><%= t('.status_importing') %></span>
-              <% else %>
-                <span class="<%= color %> tabular-nums"><%= ago %></span>
-              <% end %>
-            </span>
-          </li>
-        <% end %>
-      </ul>
-      <div class="grid grid-cols-[minmax(0,9rem)_1fr_4.5rem] gap-x-3 text-[10px] opacity-70">
-        <span></span>
-        <span class="relative h-3"><span class="absolute -translate-x-1/2 text-primary-ink font-semibold" style="left: <%= pos.call(@today) %>%"><%= t('.today') %></span></span>
-        <span></span>
-      </div>
-      <p class="text-xs opacity-70"><%= t('.timeline_note', past: TransitFeedsController::WINDOW_PAST, future: TransitFeedsController::WINDOW_FUTURE) %></p>
-    </div>
-  </section>
-
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-    <section class="card bg-base-200 shadow-sm" aria-labelledby="feeds-jobs">
-      <div class="card-body p-5 gap-3">
-        <h2 id="feeds-jobs" class="font-semibold"><%= t('.jobs_title', queue: TransitFeedsController::QUEUE) %></h2>
-        <div class="grid grid-cols-3 gap-2 text-center">
-          <div class="rounded-box bg-base-100 p-2">
-            <div class="text-2xl font-bold tabular-nums <%= 'text-info-ink' if @running.any? %>"><%= @running.size %></div>
-            <div class="text-[11px] opacity-70"><%= t('.running_label') %></div>
-          </div>
-          <div class="rounded-box bg-base-100 p-2">
-            <div class="text-2xl font-bold tabular-nums"><%= @queue_size %></div>
-            <div class="text-[11px] opacity-70"><%= t('.queued_label') %></div>
-          </div>
-          <div class="rounded-box bg-base-100 p-2">
-            <div class="text-2xl font-bold tabular-nums <%= 'text-warning-ink' if @retries.positive? %>"><%= @retries %><%= '+' if @retries_capped %></div>
-            <div class="text-[11px] opacity-70"><%= t('.retries_label') %></div>
-          </div>
-        </div>
-        <% jobs = @running.map { |w| [w.job.display_class, w.job.display_args, w.run_at, true] } + @queued.first(5).map { |j| [j.display_class, j.display_args, j.enqueued_at, false] } %>
+      </span>
+      <span class="flex items-center gap-2">
+        <%= dot.call(backfills_running.positive? ? 'bg-info animate-pulse' : 'bg-success') %>
+        <span class="opacity-70"><%= t('.strip_history') %></span>
+        <span class="font-semibold"><%= backfills_running.positive? ? t('.strip_history_running', count: backfills_running) : t('.strip_history_done', done: backfills_done, total: @backfills.size) %></span>
+      </span>
+      <span class="ml-auto flex items-center gap-3 text-xs opacity-70">
+        <span><%= t('.strip_feeds', count: enabled.size) %></span>
+        <span class="flex items-center gap-1 group-open:rotate-180 transition-transform"><%= transit_icon('chevron-down', 'w-4 h-4') %></span>
+      </span>
+    </summary>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 px-5 pb-5 border-t border-base-300 pt-4">
+      <section aria-labelledby="feeds-jobs">
+        <h2 id="feeds-jobs" class="text-xs uppercase tracking-wide opacity-70 mb-2"><%= t('.jobs_title', queue: TransitFeedsController::QUEUE) %></h2>
         <% if jobs.empty? %>
           <p class="text-sm opacity-70"><%= t('.no_jobs') %></p>
         <% else %>
           <ul class="flex flex-col gap-1 text-xs" role="list">
             <% jobs.each do |klass, args, at, running| %>
               <li class="flex items-center justify-between gap-2" title="<%= args.inspect.truncate(200) %>">
-                <span class="flex items-center gap-1.5 min-w-0">
-                  <span class="inline-block w-1.5 h-1.5 rounded-full shrink-0 <%= running ? 'bg-info animate-pulse' : 'bg-base-content/30' %>"></span>
-                  <span class="truncate"><%= klass.to_s.delete_prefix('Gtfs::') %></span>
-                </span>
+                <span class="flex items-center gap-1.5 min-w-0"><%= dot.call(running ? 'bg-info animate-pulse' : 'bg-base-content/30') %><span class="truncate"><%= klass.to_s.delete_prefix('Gtfs::') %></span></span>
                 <span class="opacity-70 whitespace-nowrap"><%= at ? t('.ago', time: time_ago_in_words(at)) : '' %></span>
               </li>
             <% end %>
             <% if @queue_size > 5 %><li class="opacity-70"><%= t('.more_queued', count: @queue_size - [@queued.size, 5].min) %></li><% end %>
           </ul>
         <% end %>
-      </div>
-    </section>
-
-    <section class="card bg-base-200 shadow-sm" aria-labelledby="feeds-backfills">
-      <div class="card-body p-5 gap-3">
-        <h2 id="feeds-backfills" class="font-semibold"><%= t('.backfills_title') %></h2>
-        <ul class="flex flex-col gap-3" role="list">
+      </section>
+      <section aria-labelledby="feeds-backfills">
+        <h2 id="feeds-backfills" class="text-xs uppercase tracking-wide opacity-70 mb-2"><%= t('.backfills_title') %></h2>
+        <ul class="flex flex-col gap-1.5" role="list">
           <% @backfills.each do |user, st| %>
             <%
               from = date.call(st['from'])
               oldest = date.call(st['until'])
-              total = from && oldest ? [(from - oldest).to_i + 1, 1].max : nil
+              days = from && oldest ? [(from - oldest).to_i + 1, 1].max : nil
               done = st['days_done'].to_i
-              percent = total ? [(done * 100.0 / total).round, 100].min : nil
+              percent = days ? [(done * 100.0 / days).round, 100].min : nil
               status = st['status']
-              color = { 'running' => 'bg-info', 'done' => 'bg-success', 'cancelled' => 'bg-warning' }.fetch(status, 'bg-base-content/30')
-              updated = time.call(st['updated_at'])
               finished = time.call(st['finished_at'])
             %>
-            <li class="text-sm"
-                title="<%= t('.backfill_detail', cursor: st['cursor'] || '–', from: st['from'] || '–', until: st['until'] || '–', done:, total: total || '?') %>">
-              <div class="flex items-baseline justify-between gap-2">
-                <span class="font-medium truncate"><%= user.display_name %></span>
-                <span class="text-xs whitespace-nowrap <%= status == 'running' ? 'text-info-ink' : 'opacity-70' %>">
-                  <%= status ? t(".backfill_#{status}", default: status) : t('.backfill_never') %><%= " · #{percent}%" if percent && status != 'done' %>
-                </span>
-              </div>
-              <% if st.present? %>
-                <div class="h-1.5 rounded-full bg-base-100 mt-1 overflow-hidden">
-                  <span class="block h-full rounded-full <%= color %>" style="width: <%= status == 'done' ? 100 : (percent || 0) %>%"></span>
-                </div>
-                <div class="text-[11px] opacity-70 mt-0.5 tabular-nums">
-                  <% if status == 'done' && finished %><%= t('.finished', time: stamp.call(finished)) %>
-                  <% elsif st['cursor'] %><%= t('.at_day', day: st['cursor']) %><%= " · #{t('.updated', time: time_ago_in_words(updated))}" if updated %><% end %>
-                </div>
+            <li class="flex items-center gap-3 text-sm"
+                title="<%= t('.backfill_detail', cursor: st['cursor'] || '–', from: st['from'] || '–', until: st['until'] || '–', done:, total: days || '?') %>">
+              <span class="font-medium truncate min-w-0 flex-1"><%= user.display_name %></span>
+              <% if status == 'running' %>
+                <span class="w-24 h-1.5 rounded-full bg-base-100 overflow-hidden"><span class="block h-full bg-info" style="width: <%= percent || 0 %>%"></span></span>
+                <span class="text-xs text-info-ink tabular-nums w-10 text-right"><%= percent %>%</span>
+              <% else %>
+                <span class="text-xs opacity-70 whitespace-nowrap"><%= status ? t(".backfill_#{status}", default: status) : t('.backfill_never') %><%= " · #{l(finished.in_time_zone(@zone), format: '%m.%d')}" if status == 'done' && finished %></span>
               <% end %>
             </li>
           <% end %>
         </ul>
-      </div>
+      </section>
+    </div>
+  </details>
+
+  <% if attention.any? %>
+    <section class="mb-6" aria-labelledby="feeds-attention">
+      <h2 id="feeds-attention" class="flex items-center gap-2 font-semibold text-lg mb-3">
+        <%= transit_icon('triangle-alert', 'w-5 h-5 text-warning-ink') %><%= t('.attention_title') %>
+        <span class="badge badge-sm badge-warning"><%= attention.size %></span>
+        <span class="text-xs font-normal opacity-70"><%= t('.attention_note') %></span>
+      </h2>
+      <% attention_cols = { 1 => 'xl:grid-cols-2', 2 => 'xl:grid-cols-2', 3 => 'xl:grid-cols-3' }.fetch(attention.size, 'xl:grid-cols-4') %>
+      <ul class="grid grid-cols-1 sm:grid-cols-2 <%= attention_cols %> gap-4" role="list">
+        <% attention.each do |feed| %>
+          <% st = state.call(feed) %>
+          <li class="rounded-box border p-4 flex flex-col gap-2 <%= %i[failed expired].include?(st) ? 'border-error/40 bg-error/10' : 'border-warning/40 bg-warning/10' %>"
+              title="<%= feed.key %> · <%= t('.checked') %>: <%= stamp.call(feed.last_checked_at) %>">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-semibold truncate"><%= feed.name %></span><%= mode_icons.call(feed) %>
+            </div>
+            <div class="text-2xl font-bold leading-tight <%= tone[st] %>">
+              <%= st == :failed ? t('.status_failed') : (st == :pending ? t('.not_imported') : left_text.call(feed)) %>
+            </div>
+            <% if st == :failed && feed.last_error.present? %>
+              <p class="text-xs font-mono opacity-80 line-clamp-2"><%= feed.last_error.to_s.truncate(160) %></p>
+            <% end %>
+            <div class="text-xs opacity-70 flex flex-wrap gap-x-2">
+              <% if feed.valid_until %><span class="tabular-nums"><%= t('.valid_until', date: l(feed.valid_until, format: '%Y.%m.%d')) %></span><% end %>
+              <% if feed.imported? %><span>v<%= feed.active_version %></span><% end %>
+              <span><%= total.call(feed).positive? ? t('.used_by', count: total.call(feed)) : t('.unused') %></span>
+            </div>
+          </li>
+        <% end %>
+      </ul>
     </section>
-  </div>
+  <% end %>
+
+  <% if used.any? %>
+    <section class="mb-6" aria-labelledby="feeds-used">
+      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-3">
+        <h2 id="feeds-used" class="font-semibold text-lg"><%= t('.used_title') %></h2>
+        <p class="text-xs opacity-70"><%= t('.used_note', days: TransitFeedsController::USAGE_DAYS) %></p>
+      </div>
+      <ul class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" role="list">
+        <% used.each do |feed| %>
+          <%
+            weeks = @usage[:weekly][feed.id] || Array.new(TransitFeedsController::SPARK_WEEKS, 0)
+            peak = [weeks.max, 1].max
+            sync_cls, sync_text = age_of.call(synced.call(feed))
+            routes = @routes.dig(feed.id, :count).to_i
+          %>
+          <li class="card bg-base-200 shadow-sm">
+            <div class="card-body p-5 gap-4">
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 class="font-semibold truncate" title="<%= feed.key %>"><%= feed.name %></h3>
+                  <p class="text-xs opacity-70"><%= t('.routes', count: routes) %> · v<%= feed.active_version %></p>
+                </div>
+                <%= mode_icons.call(feed, 'w-5 h-5') %>
+              </div>
+
+              <div class="flex items-end justify-between gap-4">
+                <div class="shrink-0">
+                  <div class="text-3xl font-bold tabular-nums leading-none"><%= recent.call(feed) %></div>
+                  <div class="text-xs opacity-70 mt-1"><%= t('.rides_recent', days: TransitFeedsController::USAGE_DAYS) %> · <%= t('.rides_total', count: total.call(feed)) %></div>
+                </div>
+                <ol class="flex items-end gap-[3px] h-10 flex-1 max-w-[12rem]" role="list" aria-label="<%= t('.weekly_label', weeks: weeks.size) %>">
+                  <% weeks.each_with_index do |n, i| %>
+                    <li class="flex-1 rounded-sm <%= n.positive? ? 'bg-primary' : 'bg-base-content/15' %>"
+                        style="height: <%= n.positive? ? [(n * 100.0 / peak).round, 12].max : 6 %>%"
+                        title="<%= l(@usage[:week_start] + (i * 7), format: '%m.%d') %>: <%= t('.rides_total', count: n) %>"></li>
+                  <% end %>
+                </ol>
+              </div>
+
+              <% lines = @usage[:lines][feed.id] || [] %>
+              <% if lines.any? %>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <% lines.each do |segment, n| %>
+                    <span class="flex items-center gap-1"><%= transit_line_badge(segment, @colors, extra_class: 'badge-sm') %><span class="text-[11px] opacity-70 tabular-nums">×<%= n %></span></span>
+                  <% end %>
+                </div>
+              <% end %>
+
+              <div class="flex items-center justify-between gap-3 border-t border-base-300 pt-3 text-sm">
+                <span class="flex items-center gap-2 min-w-0" title="<%= feed.valid_from %> – <%= feed.valid_until %>">
+                  <%= ring.call(feed) %>
+                  <span class="min-w-0">
+                    <span class="block font-medium <%= tone[validity.call(feed)] %>"><%= left_text.call(feed) %></span>
+                    <span class="block text-[11px] opacity-70 tabular-nums"><%= l(feed.valid_until, format: '%Y.%m.%d') if feed.valid_until %></span>
+                  </span>
+                </span>
+                <span class="text-xs text-right" title="<%= t('.checked') %>: <%= stamp.call(feed.last_checked_at) %> · <%= t('.imported') %>: <%= stamp.call(feed.last_imported_at) %>">
+                  <span class="block opacity-70"><%= t('.synced') %></span>
+                  <span class="<%= sync_cls %> tabular-nums"><%= feed.importing? ? t('.status_importing') : sync_text %></span>
+                </span>
+              </div>
+            </div>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+
+  <% if standby.any? %>
+    <section class="mb-6" aria-labelledby="feeds-standby">
+      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-3">
+        <h2 id="feeds-standby" class="font-semibold text-lg"><%= t('.standby_title') %> <span class="opacity-60 font-normal"><%= standby.size %></span></h2>
+        <p class="text-xs opacity-70"><%= t('.standby_note') %></p>
+      </div>
+      <ul class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2" role="list">
+        <% standby.each do |feed| %>
+          <% sync_cls, sync_text = age_of.call(synced.call(feed)) %>
+          <li class="rounded-box bg-base-200 px-3 py-2.5 flex items-center gap-3"
+              title="<%= feed.key %> · <%= feed.valid_from %> – <%= feed.valid_until %> · <%= left_text.call(feed) %> · <%= t('.synced') %>: <%= sync_text %><%= " · #{feed.last_error.to_s.truncate(200)}" if feed.last_error.present? %>">
+            <%= ring.call(feed, size: 26) %>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-medium truncate"><%= feed.name %></span>
+              <span class="flex items-center gap-1.5 text-[11px] opacity-70">
+                <%= mode_icons.call(feed, 'w-3 h-3') %><span class="tabular-nums"><%= t('.routes', count: @routes.dig(feed.id, :count).to_i) %></span>
+              </span>
+            </span>
+            <% st = state.call(feed) %>
+            <span class="text-xs tabular-nums whitespace-nowrap <%= tone[st] %> <%= 'font-semibold' unless st == :ok %>">
+              <% if st == :failed %><%= t('.status_failed') %>
+              <% elsif st == :pending %><%= t('.not_imported') %>
+              <% elsif st == :expired %><%= t('.expired_short') %>
+              <% else %><%= t('.days_short', count: (feed.valid_until - @today).to_i) %><% end %>
+            </span>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
 
   <% if disabled.any? %>
     <details class="card bg-base-200 shadow-sm">

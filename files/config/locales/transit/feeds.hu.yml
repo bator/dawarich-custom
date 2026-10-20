@@ -2,18 +2,6 @@ hu:
   transit_feeds:
     index:
       title: Menetrendek (GTFS)
-      summary: Források állapota
-      kpi_ok: Érvényes
-      kpi_expiring: "%{days} napon belül lejár"
-      kpi_expired: Lejárt
-      kpi_failed: Hibás
-      timeline:
-        one: 1 bekapcsolt forrás érvényessége
-        other: "%{count} bekapcsolt forrás érvényessége"
-      legend_ok: érvényes
-      legend_expiring: "%{days} napon belül lejár"
-      legend_expired: lejárt
-      freshness: Utolsó szinkron
       ago: "%{time} ezelőtt"
       ago_min:
         one: 1 perce
@@ -28,23 +16,59 @@ hu:
       days_left:
         one: még 1 nap
         other: "még %{count} nap"
+      days_short:
+        one: 1 nap
+        other: "%{count} nap"
       expired_ago:
         one: 1 napja lejárt
         other: "%{count} napja lejárt"
       no_validity: nincs érvényességi adat
+      valid_until: "érvényes eddig: %{date}"
       checked: utolsó ellenőrzés
       imported: utolsó import
+      synced: szinkron
       status_failed: hiba
       status_importing: importálás
-      today: ma
-      timeline_note: "Ablak: %{past} nap vissza, %{future} nap előre. Halvány rész: már elmúlt. A legsürgősebb forrás felül; a sorra mutatva látszanak a dátumok és a sorok száma."
-      row_stops: megálló
-      row_routes: vonal
-      row_trips: járat
+      strip_sync: Szinkron
+      strip_queue: "%{queue} sor"
+      strip_idle: üres
+      strip_running:
+        one: 1 fut
+        other: "%{count} fut"
+      strip_queued:
+        one: 1 vár
+        other: "%{count} vár"
+      strip_retries:
+        one: 1 újrapróba
+        other: "%{count} újrapróba"
+      strip_history: Előzmények
+      strip_history_done: "%{done}/%{total} kész"
+      strip_history_running:
+        one: 1 fut
+        other: "%{count} fut"
+      strip_feeds:
+        one: 1 bekapcsolt menetrend
+        other: "%{count} bekapcsolt menetrend"
+      expired_short: lejárt
+      attention_note: Használt vagy kiválasztott menetrend, amivel gond van.
+      attention_title: Figyelmet igényel
+      used_by:
+        one: 1 út használta
+        other: "%{count} út használta"
+      unused: még nem jött belőle út
+      used_title: Használatban
+      used_note: "Ezekből jönnek a felismert utak. Nagy szám: az utolsó %{days} nap; oszlopok: hetente."
+      routes:
+        one: 1 vonal
+        other: "%{count} vonal"
+      rides_recent: "út · %{days} nap"
+      rides_total:
+        one: 1 út
+        other: "%{count} út"
+      weekly_label: "Utak hetente, az utolsó %{weeks} hét"
+      standby_title: Készenlétben
+      standby_note: Ezekből az utóbbi időben nem jött út. A gyűrű az érvényességből hátralévő részt mutatja. A problémásak elöl állnak; külön figyelmeztetést csak a használt vagy kiválasztott menetrend kap.
       jobs_title: "Háttérfeladatok (%{queue} sor)"
-      running_label: fut
-      queued_label: vár
-      retries_label: újrapróbálás
       no_jobs: Nincs futó vagy várakozó feladat.
       more_queued: "és még %{count}"
       backfills_title: Előzmények illesztése felhasználónként
@@ -53,9 +77,6 @@ hu:
       backfill_done: kész
       backfill_cancelled: megszakítva
       backfill_never: még nem futott
-      finished: "befejezve: %{time}"
-      at_day: "most: %{day}"
-      updated: "frissítve %{time} ezelőtt"
       disabled_feeds:
         one: 1 kikapcsolt forrás
         other: "%{count} kikapcsolt forrás"
