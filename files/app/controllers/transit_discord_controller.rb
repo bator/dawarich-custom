@@ -31,6 +31,10 @@ class TransitDiscordController < ApplicationController
     @counts = TransitSegmentDiscordMessage.where(created_at: STATS_DAYS.days.ago..).where.not(message_id: nil)
                                           .group(:last_status).count
     @decisions = TrackPick::Config.recent_decisions(RECENT_DECISION_DAYS)
+    segments = @messages.filter_map(&:transit_segment)
+    @colors = Api::TransitSegmentSerializer.colors_for(segments)
+    lookup_discord_names
+    build_preview(segments.first || TransitSegment.order(started_at: :desc).first)
   end
 
   def update
@@ -65,6 +69,27 @@ class TransitDiscordController < ApplicationController
   end
 
   private
+
+  # Avatars and names instead of snowflakes (cached Discord lookups).
+  def lookup_discord_names
+    directory = Gtfs::Discord::Directory
+    @bot = directory.bot
+    @channel_name = directory.channel_name(Gtfs::Discord::Config.channel_id)
+    @approvers = Gtfs::Discord::Config.allowed_discord_user_ids.map { |id| directory.user(id) }
+    @pickers = TrackPick::Config.allowed_discord_user_ids.map { |id| directory.user(id) }
+  end
+
+  # The message a ride gets, built by the bot's own builder from a recent ride.
+  def build_preview(segment)
+    return unless segment
+
+    image = 'map.png' if Gtfs::Discord::Config.map_enabled?
+    @preview = Gtfs::Discord::MessageBuilder.new(segment, image:).preview_payload
+    @preview_segment = segment
+  rescue StandardError => e
+    Rails.logger.warn("[GTFS discord] preview of segment #{segment&.id} failed: #{e.class}: #{e.message}")
+    @preview = nil
+  end
 
   def discord_params
     params.fetch(:discord, {}).permit(

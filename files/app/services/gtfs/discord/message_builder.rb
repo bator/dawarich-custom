@@ -83,6 +83,12 @@ class Gtfs::Discord::MessageBuilder
     { content: result_line, embeds: [embed], components: rows, allowed_mentions: { parse: [] } }
   end
 
+  # The full message (embed and buttons) even for a ride already decided:
+  # /transit/discord shows what the message of a new ride looks like.
+  def preview_payload
+    { embeds: [embed], components: [{ type: 1, components: buttons }] }
+  end
+
   private
 
   # One text line and the undo button; attachments: [] removes the map image

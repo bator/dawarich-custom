@@ -14,63 +14,77 @@ en:
       ago_d:
         one: "%{count} day ago"
         other: "%{count} days ago"
-      state_connected: "Connected as %{bot}"
+      state_connected: Online
       state_reconnecting: Reconnecting
-      state_restarting: Restarting with the new settings
+      state_restarting: Restarting
       state_stopped: Stopped
       state_fatal: Stopped for good
-      state_missing: Not running
-      hint_missing: No sign of life from the bot in the last 3 minutes.
-      hint_restarting: systemd starts it again within about 30 seconds.
-      hint_stopped: The service was stopped.
-      last_beat: "last heartbeat %{ago}"
-      since: "connected %{ago}"
+      state_missing: Offline
+      hint_missing: no sign of life in the last 3 minutes
+      hint_restarting: back in about 30 seconds
+      hint_stopped: the service was stopped
+      last_beat: "seen %{ago}"
+      since: "up since %{ago}"
       test_button: Test message
-      problems_title: "The bot does not start until these are set:"
+      problems_title: "It does not start until these are set:"
       problem_off: it is switched off
       problem_token: no bot token
-      problem_channel: no channel ID
-      problem_approvers: nobody may approve rides
+      problem_channel: no channel
+      problem_approvers: nobody may approve
       stats_label: "Rides posted in the last %{days} days"
-      stat_posted: "Posted (%{days} days)"
+      stat_posted: "Posted · %{days} days"
       stat_confirmed: Approved
       stat_rejected: Rejected
       stat_open: Open
+      edit: Edit
+      close: Close
+      nobody: nobody
       connection_title: Connection
-      connection_intro: The bot posts detected rides with approve and reject buttons to this channel, and the daily track pick as well. Switched off, it sends nothing.
-      token_label: Bot token
-      token_page: Saved on this page
-      token_env: From gtfs.env
-      token_none: Not set
+      connection_intro: Where the bot posts rides and the daily track pick. Switched off, it stays quiet.
+      token_label: Token
+      token_page: saved here
+      token_env: from gtfs.env
+      token_none: not set
+      token_placeholder: Paste a new token
       token_hint: Write-only, never shown. Leave it empty to keep the current one. After a new token the bot reconnects within about a minute.
       token_clear: Remove the token saved here (back to gtfs.env)
-      channel_label: Channel ID
-      channel_hint: "In Discord: right-click the channel → Copy Channel ID."
+      channel_label: Channel
+      channel_none: not set
+      channel_hint: "Channel ID. In Discord: right-click the channel → Copy Channel ID."
       rides_title: Ride approvals
-      rides_intro: Every newly detected ride gets a message with approve and reject buttons. The decision also shows on the Rides page.
-      posted_label: Whose rides are posted
-      posted_all: Everyone who has detection switched on
-      posted_selected: Only the selected users
-      approvers_label: Who may approve (Discord user IDs)
-      discord_ids_hint: "Separated by commas. In Discord: right-click the user → Copy User ID."
-      max_age_label: Rides older than this (hours) are not posted
-      max_per_run_label: At most this many messages per run
-      uncertain_label: Mark as "uncertain" below this confidence
-      uncertain_hint: Only changes the text and colour of the Discord message, not the detection.
-      map_label: Map image in the message
+      rides_intro: Every new ride gets a message with two buttons. The decision also shows on the Rides page.
+      posted_label: Whose rides
+      posted_all: Everyone
+      posted_selected: Selected
+      posted_chips_hint: With "Everyone" the selection does not matter.
+      approvers_label: Who approves
+      discord_ids_hint: "Discord user IDs, separated by commas. In Discord: right-click the user → Copy User ID."
+      max_age_label: At most this old
+      unit_hours: hours
+      max_per_run_label: Per run
+      unit_messages: msgs
+      uncertain_label: Uncertain below
+      uncertain_hint: Threshold of the "uncertain" mark. Only changes the text and colour of the message, not the detection.
+      map_label: Map image
       trackpick_title: Track pick
-      trackpick_intro: Every morning it compares yesterday's tracks of the selected accounts and asks which one goes to the target account. Switched off, the daily run is a dry run and sends nothing.
-      target_label: Target account
+      trackpick_intro: Every morning it compares yesterday's tracks and asks which one goes to the target account. Switched off, it only does a dry run.
+      flow_label: From → to
       sources_label: "Compared accounts (at most %{max})"
       source_none: "– none –"
       source_n: "Compared account %{n}"
-      pickers_label: Who may pick (Discord user IDs)
+      target_label: Target account
+      pickers_label: Who picks
       trackpick_schedule: "Runs daily at 05:10 (cron in CT 139), fallback at 05:40 from pve."
-      saved_by: "Last saved %{ago} by %{user}. Values saved here win over gtfs.env."
-      from_env: Never saved yet, so every value comes from /opt/dawarich/gtfs.env. After saving, the values given here apply.
+      saved_by: "Saved %{ago} by %{user}. Values saved here win over gtfs.env."
+      from_env: Never saved yet, so everything comes from gtfs.env.
       save: Save
-      recent_title: Recent messages
-      recent_rides: Rides
+      aside_label: Preview and recent messages
+      preview_title: How it looks in Discord
+      preview_from: "Built from the latest ride (%{when})"
+      preview_map: Where the map image goes
+      preview_none: No ride yet to build a preview from.
+      today_at: "Today at %{time}"
+      recent_title: Recent
       recent_trackpick: Track pick
       none: None yet.
       msg_confirmed: approved
@@ -78,9 +92,9 @@ en:
       msg_open: open
       msg_deleted: deleted
     flash:
-      saved: Saved. The bot picks the settings up within 10 seconds.
+      saved: Saved. The bot picks it up within 10 seconds.
       rate_limited: Too many test messages, try again in a few minutes.
-      test_unconfigured: A test message needs a token and a channel ID.
+      test_unconfigured: A test message needs a token and a channel.
       test_content: "🧪 Test message from the Dawarich Discord settings page (%{user})."
       test_sent: Test message sent.
       test_failed: "The test message was not sent: %{reason}"

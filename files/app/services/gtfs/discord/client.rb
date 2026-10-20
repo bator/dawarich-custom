@@ -30,10 +30,12 @@ class Gtfs::Discord::Client
     end
   end
 
-  def initialize(token: Gtfs::Discord::Config.token)
+  # timeout: seconds for connect and read (a page lookup uses a short one).
+  def initialize(token: Gtfs::Discord::Config.token, timeout: TIMEOUT)
     raise ArgumentError, 'DISCORD_BOT_TOKEN is not set' if token.blank?
 
     @token = token
+    @timeout = timeout
   end
 
   # With files, the payload's `attachments` list them (id = position) unless
@@ -71,6 +73,15 @@ class Gtfs::Discord::Client
     request(:get, '/users/@me')
   end
 
+  # Any user by id (name and avatar for /transit/discord).
+  def user(user_id)
+    request(:get, "/users/#{id!(user_id)}")
+  end
+
+  def channel(channel_id)
+    request(:get, "/channels/#{id!(channel_id)}")
+  end
+
   def gateway_url
     request(:get, '/gateway/bot').fetch('url')
   end
@@ -94,8 +105,8 @@ class Gtfs::Discord::Client
       req['Content-Type'] = 'application/json'
       req.body = JSON.generate(payload)
     end
-    response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: TIMEOUT,
-read_timeout: TIMEOUT) do |http|
+    response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: @timeout,
+read_timeout: @timeout) do |http|
       http.request(req)
     end
     handle(response, method, path)

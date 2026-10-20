@@ -60,6 +60,7 @@
     "app/services/gtfs/discord/bot_status.rb",
     "app/services/gtfs/discord/client.rb",
     "app/services/gtfs/discord/config.rb",
+    "app/services/gtfs/discord/directory.rb",
     "app/services/gtfs/discord/gateway.rb",
     "app/services/gtfs/discord/interaction_handler.rb",
     "app/services/gtfs/discord/map_renderer.rb",
