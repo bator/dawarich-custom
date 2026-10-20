@@ -4,7 +4,6 @@ Custom code on top of upstream [Dawarich](https://github.com/Freika/dawarich) 1.
 It matches recorded location history against Hungarian public-transport timetables (GTFS), and
 `restore_custom.py` puts it back after every community-script upgrade.
 
-Source of truth: OneDev `dawarich-custom`. The GitHub copy is a one-way mirror, so push to OneDev only.
 
 ## What it adds
 
