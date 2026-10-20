@@ -6,13 +6,14 @@
   end
   km = ->(meters) { "#{number_with_precision(meters / 1000.0, precision: meters < 10_000 ? 1 : 0, delimiter: ' ')} km" }
   defaults = Api::TransitSegmentSerializer::DEFAULT_COLORS
-  max_bar = [@histogram.map { |_date, count, _partial| count }.max.to_i, 1].max
   weekdays = t('transit_commute.index.weekdays')
   pairs = @commute.pairs
   # departures per 15 minutes of the day (96 slots), so many rides at the same
   # time still show as a taller bar, not as one thin mark
   slots = ->(trip) { trip.rides.map { |s| t = @zone.at(s.started_at); (t.hour * 60 + t.min) / 15 }.tally }
   line_name = ->(segment) { segment.route_short_name || segment.route_long_name }
+  ft = ->(value) { "#{number_with_precision(value, precision: 0, delimiter: ' ')} Ft" }
+  sv = @savings
 %>
 
 <div class="min-h-content w-full my-5 px-2">
@@ -28,65 +29,62 @@
 
   <%= render 'shared/transit_period_form', path: transit_stats_path, periods: TransitStatsController::PERIODS, note: t('.counted_note') %>
 
-  <section class="card bg-base-200 shadow mb-4" aria-label="<%= t('.totals') %>">
-    <div class="card-body p-4">
-      <div class="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-        <div>
-          <div class="text-3xl font-bold tabular-nums"><%= @stats.count %></div>
-          <div class="text-xs opacity-70"><%= t('transit_segments.index.rides', count: @stats.count) %></div>
-        </div>
-        <div>
-          <div class="text-3xl font-bold tabular-nums"><%= hours_minutes.call(@stats.duration_s) %></div>
-          <div class="text-xs opacity-70"><%= t('transit_segments.index.on_board') %></div>
-        </div>
-        <div>
-          <div class="text-3xl font-bold tabular-nums"><%= km.call(@stats.distance_m) %></div>
-          <div class="text-xs opacity-70"><%= t('transit_segments.index.distance') %></div>
-        </div>
-        <div class="ml-auto self-center">
-          <% if @stats.to_review.positive? %>
-            <%= link_to transit_segments_path(days: @days, uncertain: '1'), class: 'btn btn-sm btn-outline btn-warning' do %>
-              <%= transit_icon('triangle-alert') %> <%= t('transit_segments.index.to_review', count: @stats.to_review) %>
+<%
+    # KPI tiles: this period and the change against the one before it
+    delta = lambda do |now, before, format|
+      diff = now - before
+      return content_tag(:span, t('.same_as_before'), class: 'opacity-70') if diff.abs < 1e-9
+
+      arrow = diff.positive? ? '▲' : '▼'
+      content_tag(:span, "#{arrow} #{diff.positive? ? '+' : '−'}#{format.call(diff.abs)}", class: diff.positive? ? 'text-success-ink' : 'opacity-70')
+    end
+    count_fmt = ->(n) { n.round.to_s }
+    tiles = [
+      [t('.kpi_rides'), @stats.count.to_s, delta.call(@stats.count, @previous.count, count_fmt)],
+      [t('.kpi_on_board'), hours_minutes.call(@stats.duration_s), delta.call(@stats.duration_s, @previous.duration_s, hours_minutes)],
+      [t('.kpi_distance'), km.call(@stats.distance_m), delta.call(@stats.distance_m, @previous.distance_m, km)]
+    ]
+  %>
+  <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6" aria-label="<%= t('.totals') %>">
+    <% tiles.each_with_index do |(label, value, change), i| %>
+      <div class="rounded-box bg-base-200 p-4">
+        <div class="flex items-start justify-between gap-2">
+          <span class="text-xs uppercase tracking-wide opacity-70"><%= label %></span>
+          <% if i.zero? %>
+            <% if @stats.to_review.positive? %>
+              <%= link_to transit_segments_path(days: @days, uncertain: '1'), class: 'badge badge-warning badge-sm gap-1 shrink-0' do %>
+                <%= transit_icon('triangle-alert', 'w-3 h-3') %><%= t('transit_segments.index.to_review', count: @stats.to_review) %>
+              <% end %>
+            <% else %>
+              <span class="badge badge-success badge-outline badge-sm gap-1 shrink-0" title="<%= t('transit_segments.index.all_reviewed') %>"><%= transit_icon('circle-check', 'w-3 h-3') %><%= t('.reviewed_short') %></span>
             <% end %>
-          <% else %>
-            <span class="badge badge-success badge-outline gap-1"><%= transit_icon('circle-check', 'w-3.5 h-3.5') %> <%= t('transit_segments.index.all_reviewed') %></span>
           <% end %>
         </div>
+        <div class="text-3xl font-bold tabular-nums mt-1 leading-tight"><%= value %></div>
+        <div class="text-xs mt-1 tabular-nums"><%= change %> <span class="opacity-60"><%= t('.vs_previous', days: @days) %></span></div>
       </div>
-    </div>
+    <% end %>
+    <%= link_to '#impact', class: 'rounded-box border border-success/30 bg-success/10 p-4 hover:border-success/60 transition block' do %>
+      <div class="text-xs uppercase tracking-wide text-success-ink"><%= t('.kpi_co2') %></div>
+      <div class="text-3xl font-bold tabular-nums mt-1 leading-tight"><%= number_with_precision(sv.saved_kg, precision: 0, delimiter: ' ') %> kg</div>
+      <div class="text-xs mt-1 opacity-70"><%= t('.kpi_co2_more') %></div>
+    <% end %>
+    <%= link_to '#impact', class: 'col-span-2 md:col-span-1 rounded-box border border-primary/30 bg-primary/10 p-4 hover:border-primary/60 transition block' do %>
+      <div class="text-xs uppercase tracking-wide text-primary-ink"><%= t(sv.saved_ft.positive? ? '.kpi_money' : '.kpi_money_more') %></div>
+      <div class="text-3xl font-bold tabular-nums mt-1 leading-tight"><%= ft.call(sv.saved_ft.abs) %></div>
+      <div class="text-xs mt-1 opacity-70"><%= t('.kpi_money_more_info', option: t(sv.cheaper_option == :pass ? 'transit_savings.index.option_pass' : 'transit_savings.index.option_tickets')) %></div>
+    <% end %>
   </section>
 
   <% if @stats.count.zero? %>
     <p class="opacity-70"><%= t(@stats.to_review.positive? ? '.all_uncertain' : 'transit_segments.index.empty', count: @stats.to_review) %></p>
   <% else %>
-    <section class="card bg-base-200 shadow mb-6" aria-labelledby="stats-histogram">
-      <div class="card-body p-4 gap-3">
-        <h2 id="stats-histogram" class="font-semibold"><%= t(@bucket == :month ? '.per_month' : '.per_week') %></h2>
-        <ol class="flex items-end gap-1 h-36" role="list">
-          <% @histogram.each do |date, count, partial| %>
-            <%
-              label = @bucket == :month ? l(date, format: '%Y-%m') : l(date, format: '%m.%d')
-              detail = t('transit_segments.index.day_rides', count:)
-              detail = "#{detail} (#{t('.partial_bucket', date: l(@zone.at(@since.to_i).to_date, format: '%m.%d'))})" if partial
-              bar = if count.zero? then 'bg-base-content/10'
-                    elsif partial then 'bg-primary/40 border-2 border-dashed border-primary'
-                    else 'bg-primary'
-                    end
-            %>
-            <li class="flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1"
-                title="<%= label %>: <%= detail %>">
-              <span class="text-[10px] tabular-nums opacity-70"><%= count if count.positive? %></span>
-              <span class="w-full rounded-t <%= bar %>"
-                    style="height: <%= count.zero? ? 3 : (count * 100.0 / max_bar).round(1) %>%"></span>
-              <span class="text-[10px] tabular-nums opacity-70 truncate w-full text-center"><%= partial ? '…' : '' %><%= label %></span>
-              <span class="sr-only"><%= detail %></span>
-            </li>
-          <% end %>
-        </ol>
-      </div>
-    </section>
-
-    <section id="commute" class="mb-6 scroll-mt-20" aria-labelledby="stats-commute">
+    <%# two independent columns (unequal card heights): network, commute and
+        breakdowns on the left, punctuality and the car comparison on the right %>
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4 items-start">
+      <div class="xl:col-span-2 flex flex-col gap-4 min-w-0">
+    <%= render 'network', map: @network unless @network.empty? %>
+    <section id="commute" class="scroll-mt-20" aria-labelledby="stats-commute">
       <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-2">
         <h2 id="stats-commute" class="font-semibold text-lg"><%= t('.commute') %></h2>
         <p class="text-xs opacity-70 max-w-md"><%= t('transit_commute.index.note', min: Gtfs::CommuteStats::MIN_RIDES) %></p>
@@ -95,7 +93,7 @@
         <p class="text-sm opacity-70"><%= t('transit_commute.index.empty', count: @days) %></p>
       <% else %>
         <p class="text-sm opacity-70 mb-3"><%= t('.commute_share', count: pairs.size, percent: (@commute.coverage * 100).round) %></p>
-        <ol class="grid grid-cols-1 <%= 'xl:grid-cols-2' if pairs.size > 1 %> gap-4 items-start" role="list">
+        <ol class="grid grid-cols-1 <%= '2xl:grid-cols-2' if pairs.size > 1 %> gap-4 items-start" role="list">
           <% pairs.each do |pair| %>
             <%
               main_color, = transit_line_colors(pair.lines.first.first, @colors)
@@ -188,8 +186,7 @@
         </ol>
       <% end %>
     </section>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
       <section class="card bg-base-200 shadow" aria-labelledby="stats-modes">
         <div class="card-body p-4 gap-3">
           <h2 id="stats-modes" class="font-semibold"><%= t('.by_mode') %></h2>
@@ -200,9 +197,12 @@
                     title="<%= t("transit_modes.#{mode}") %>: <%= row[:count] %>"></span>
             <% end %>
           </div>
+          <% co2 = sv.by_mode.to_h { |mode, _km, transit_kg, car_kg| [mode, [transit_kg, car_kg]] } %>
+          <% max_car = [co2.values.map(&:last).max.to_f, 0.001].max %>
           <ul class="flex flex-col text-sm" role="list">
             <% @stats.by_mode.each do |mode, row| %>
-              <li class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-3 py-1">
+              <% transit_kg, car_kg = co2[mode] %>
+              <li class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-3 pt-1.5">
                 <span class="flex items-center gap-1.5 min-w-0">
                   <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: <%= defaults.fetch(mode) %>" aria-hidden="true"></span>
                   <%= transit_mode_icon(mode) %><span class="truncate"><%= t("transit_modes.#{mode}") %></span>
@@ -210,28 +210,44 @@
                 <span class="tabular-nums text-right"><%= row[:count] %></span>
                 <span class="tabular-nums text-right whitespace-nowrap"><%= hours_minutes.call(row[:duration_s]) %></span>
                 <span class="tabular-nums text-right whitespace-nowrap opacity-70"><%= km.call(row[:distance_m]) %></span>
+                <% if car_kg %>
+                  <span class="col-span-4 relative h-1.5 rounded-full bg-base-100 mt-1" title="CO₂: <%= number_with_precision(transit_kg, precision: 1) %> kg / <%= number_with_precision(car_kg, precision: 1) %> kg">
+                    <span class="absolute inset-y-0 left-0 rounded-full bg-base-content/25" style="width: <%= (car_kg / max_car * 100).round(1) %>%"></span>
+                    <span class="absolute inset-y-0 left-0 rounded-full bg-success" style="width: <%= (transit_kg / max_car * 100).clamp(0.5, 100).round(1) %>%"></span>
+                  </span>
+                <% end %>
               </li>
             <% end %>
           </ul>
-          <div class="border-t border-base-300 pt-2">
-            <div class="text-[11px] uppercase tracking-wide opacity-70 mb-1"><%= t('.by_feed') %></div>
+          <p class="text-[11px] opacity-60"><%= t('transit_savings.index.by_mode_legend') %></p>
+        </div>
+      </section>
+      <section class="card bg-base-200 shadow" aria-labelledby="stats-feeds">
+        <div class="card-body p-4 gap-2">
+          <h2 id="stats-feeds" class="font-semibold"><%= t('.by_feed') %></h2>
             <ul class="flex flex-col text-sm" role="list">
               <% @stats.by_feed.each do |feed, row| %>
-                <li class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 py-0.5">
+                <li class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 py-1 border-b border-base-300 last:border-b-0">
                   <span class="truncate" title="<%= feed&.name %>"><%= feed&.name || '–' %></span>
                   <span class="tabular-nums text-right"><%= row[:count] %></span>
                   <span class="tabular-nums text-right whitespace-nowrap opacity-70"><%= hours_minutes.call(row[:duration_s]) %></span>
                 </li>
               <% end %>
             </ul>
-          </div>
         </div>
       </section>
+        </div>
+      </div>
+      <div class="flex flex-col gap-4 min-w-0">
+    <%= render 'punctuality', punctuality: @punctuality, total: @stats.count, days: @days %>
+    <%= render 'impact', savings: sv %>
+      </div>
+    </div>
 
-      <section class="card bg-base-200 shadow" aria-labelledby="stats-lines">
+      <section class="card bg-base-200 shadow mb-6" aria-labelledby="stats-lines">
         <div class="card-body p-4 gap-2">
           <h2 id="stats-lines" class="font-semibold"><%= t('.top_lines') %></h2>
-          <ol class="flex flex-col" role="list">
+          <ol class="grid grid-cols-1 lg:grid-cols-2 gap-x-10" role="list">
             <% @stats.top_lines.each do |row| %>
               <li class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 py-1 border-b border-base-300 last:border-b-0">
                 <span class="min-w-0 truncate"><%= transit_line_badge(row[:segment], @colors, extra_class: 'badge-sm max-w-full') %></span>
@@ -242,6 +258,24 @@
           </ol>
         </div>
       </section>
-    </div>
   <% end %>
+
+  <details class="card bg-base-200 shadow-sm">
+    <summary class="card-body p-4 cursor-pointer font-semibold list-none [&::-webkit-details-marker]:hidden"><%= t('transit_savings.index.assumptions') %> ▾</summary>
+    <div class="px-4 pb-4 text-sm flex flex-col gap-2">
+      <p class="opacity-70"><%= t('transit_savings.index.assumptions_intro') %></p>
+      <table class="table table-xs">
+        <tbody>
+          <tr><td><%= t('transit_savings.index.a_car_co2') %></td><td class="tabular-nums"><%= sv.car_g_km.round %> g/km</td><td class="text-xs opacity-70">TRANSIT_CO2_CAR_G_KM</td></tr>
+          <% Gtfs::SavingsEstimate::DEFAULT_CO2_G_PKM.each_key do |mode| %>
+            <tr><td><span class="flex items-center gap-1.5"><%= transit_mode_icon(mode, 'w-3.5 h-3.5') %><%= t("transit_modes.#{mode}") %></span></td><td class="tabular-nums"><%= sv.co2_g_pkm(mode).round %> g/<%= t('transit_savings.index.pkm') %></td><td class="text-xs opacity-70">TRANSIT_CO2_<%= mode.upcase %>_G_PKM</td></tr>
+          <% end %>
+          <tr><td><%= t('transit_savings.index.a_car_cost') %></td><td class="tabular-nums"><%= ft.call(sv.car_ft_km) %>/km</td><td class="text-xs opacity-70">TRANSIT_CAR_FT_KM</td></tr>
+          <tr><td><%= t('transit_savings.index.a_ticket') %></td><td class="tabular-nums"><%= ft.call(sv.ticket_ft) %></td><td class="text-xs opacity-70">TRANSIT_TICKET_FT</td></tr>
+          <tr><td><%= t('transit_savings.index.a_pass', days: Gtfs::SavingsEstimate::PASS_DAYS) %></td><td class="tabular-nums"><%= ft.call(sv.pass_ft) %></td><td class="text-xs opacity-70">TRANSIT_PASS_FT</td></tr>
+          <tr><td><%= t('transit_savings.index.a_tree') %></td><td class="tabular-nums"><%= sv.tree_kg_year.round %> kg/<%= t('transit_savings.index.year') %></td><td class="text-xs opacity-70">TRANSIT_TREE_KG_YEAR</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
 </div>

@@ -2,7 +2,9 @@
 
 # What the Discord map image of one ride shows: the matched line between the
 # boarding and alighting stop (the trip's shape, e.g. the pfaedle-matched MÁV
-# railway; else the line through the timetable stops; else a straight line),
+# railway; else the line through the timetable stops; else a straight line;
+# for an older ride whose feed version has been replaced since, a trip of the
+# active version through the same two stops stands in for its own trip),
 # the GPS trace and the two stops. Nothing that lies in one of the user's
 # privacy zones (plus ZONE_BUFFER_M) is returned: every edge of the lines
 # and the trace is clipped exactly at the zone circle (review A1: an edge
@@ -35,20 +37,51 @@ class Gtfs::Discord::RideMap
   private
 
   def line_coordinates
-    shape = shape_coordinates
+    own = [@segment.feed_version, @segment.trip_gtfs_id]
+    shape = shape_coordinates(*own)
     return ['shape', shape] if shape.size >= 2
 
-    stops = stop_coordinates
-    return ['stops', stops] if stops.size >= 2
+    current = current_trip
+    shape = current ? shape_coordinates(*current) : []
+    return ['shape', shape] if shape.size >= 2
+
+    [own, current].compact.each do |version, trip|
+      stops = stop_coordinates(version, trip)
+      return ['stops', stops] if stops.size >= 2
+    end
 
     ['straight', [lonlat(@segment.boarding_lonlat), lonlat(@segment.alighting_lonlat)].compact]
   end
 
+  # [version, trip id] of a trip in the feed's active version that calls at the
+  # boarding and then at the alighting stop (stop ids stay across versions):
+  # one of the ride's route and with a shape first. Only asked for when the
+  # ride's own trip has no shape, e.g. its feed version is gone since.
+  def current_trip
+    version = Gtfs::Feed.where(id: @segment.feed_id).pick(:active_version)
+    return unless version && @segment.boarding_stop_gtfs_id && @segment.alighting_stop_gtfs_id
+
+    sql = <<~SQL.squish
+      SELECT gtfs_trips.gtfs_id
+      FROM gtfs_stop_times board
+      JOIN gtfs_stop_times alight ON alight.feed_id = board.feed_id AND alight.version = board.version
+                                 AND alight.trip_gtfs_id = board.trip_gtfs_id AND alight.stop_sequence > board.stop_sequence
+      JOIN gtfs_trips ON gtfs_trips.feed_id = board.feed_id AND gtfs_trips.version = board.version
+                     AND gtfs_trips.gtfs_id = board.trip_gtfs_id
+      WHERE board.feed_id = ? AND board.version = ? AND board.stop_gtfs_id = ? AND alight.stop_gtfs_id = ?
+      ORDER BY gtfs_trips.route_gtfs_id IS DISTINCT FROM ?, gtfs_trips.shape_gtfs_id IS NULL
+      LIMIT 1
+    SQL
+    trip = select_value(sql, @segment.feed_id, version, @segment.boarding_stop_gtfs_id,
+                        @segment.alighting_stop_gtfs_id, @segment.route_gtfs_id)
+    [version, trip] if trip
+  end
+
   # The trip's shape between the points closest to the two stops.
-  def shape_coordinates
+  def shape_coordinates(version, trip)
     board = lonlat(@segment.boarding_lonlat)
     alight = lonlat(@segment.alighting_lonlat)
-    return [] unless board && alight && @segment.trip_gtfs_id
+    return [] unless board && alight && trip
 
     sql = <<~SQL.squish
       WITH shape AS (
@@ -65,13 +98,13 @@ class Gtfs::Discord::RideMap
       )
       SELECT ST_AsGeoJSON(ST_LineSubstring(g, LEAST(a, b), GREATEST(a, b)), 6) FROM located WHERE a <> b
     SQL
-    json = select_value(sql, @segment.feed_id, @segment.feed_version, @segment.trip_gtfs_id, *board, *alight)
+    json = select_value(sql, @segment.feed_id, version, trip, *board, *alight)
     json ? Array(JSON.parse(json)['coordinates']) : []
   end
 
   # The timetable stops from the boarding to the alighting stop.
-  def stop_coordinates
-    return [] unless @segment.trip_gtfs_id
+  def stop_coordinates(version, trip)
+    return [] unless trip
 
     sql = <<~SQL.squish
       SELECT gtfs_stop_times.stop_gtfs_id, ST_X(gtfs_stops.lonlat::geometry), ST_Y(gtfs_stops.lonlat::geometry)
@@ -81,7 +114,7 @@ class Gtfs::Discord::RideMap
       WHERE gtfs_stop_times.feed_id = ? AND gtfs_stop_times.version = ? AND gtfs_stop_times.trip_gtfs_id = ?
       ORDER BY gtfs_stop_times.stop_sequence
     SQL
-    rows = select_rows(sql, @segment.feed_id, @segment.feed_version, @segment.trip_gtfs_id)
+    rows = select_rows(sql, @segment.feed_id, version, trip)
     from = rows.index { |row| row[0] == @segment.boarding_stop_gtfs_id }
     to = from && rows.each_index.find { |i| i > from && rows[i][0] == @segment.alighting_stop_gtfs_id }
     return [] unless to

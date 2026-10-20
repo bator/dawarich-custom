@@ -1,6 +1,6 @@
 <%#
   Period filter of the transit analysis pages.
-    render 'shared/transit_period_form', path: transit_savings_path, periods: TransitPeriodRides::ANALYSIS_PERIODS
+    render 'shared/transit_period_form', path: transit_stats_path, periods: TransitStatsController::PERIODS
 %>
 <%= form_with url: path, method: :get, local: true, class: 'flex flex-wrap items-end gap-3 mb-4' do %>
   <label class="form-control">

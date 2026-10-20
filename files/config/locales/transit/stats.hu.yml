@@ -6,10 +6,32 @@ hu:
       all_uncertain:
         one: "Nincs számolt utazás az időszakban: az egyetlen utazás még bizonytalan, a döntésedre vár."
         other: "Nincs számolt utazás az időszakban: mind a %{count} utazás még bizonytalan, a döntésedre vár."
-      partial_bucket: "részleges, %{date}-tól"
+      reviewed_short: mind ellenőrizve
+      impact_title: Amit az autóhoz képest nyertél
+      kpi_money: Megtakarított pénz
+      kpi_money_more: Drágább, mint autóval
+      kpi_money_more_info: "%{option}, az üzemanyaghoz képest"
+      kpi_rides: Utak
+      kpi_on_board: Úton
+      kpi_distance: Megtett táv
+      kpi_co2: Megtakarított CO₂
+      kpi_co2_more: az autóhoz képest
+      vs_previous: "az előző %{days} naphoz"
+      same_as_before: "ugyanannyi"
+      network_title: A hálózatod
+      network_note: "A menetrend vonalán, a vonal színével; minél vastagabb, annál több út. Nagyítás: Ctrl + görgetés."
+      network_label: "Térkép: %{paths} útvonal és %{stops} megálló az időszakban."
+      network_paths: Útvonalak
+      network_rides:
+        one: 1 út
+        other: "%{count} út"
+      network_stop:
+        one: 1 fel- vagy leszállás
+        other: "%{count} fel- és leszállás"
+      network_more:
+        one: "+1 útvonal a térképen"
+        other: "+%{count} útvonal a térképen"
       totals: Az időszak összesítése
-      per_week: Utazások hetente
-      per_month: Utazások havonta
       by_mode: Jármű szerint
       by_feed: Szolgáltató szerint
       top_lines: Leggyakoribb vonalak

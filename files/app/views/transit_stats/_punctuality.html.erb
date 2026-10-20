@@ -1,0 +1,69 @@
+<%# Punctuality card of the overview (Gtfs::PunctualityStats; it was a section
+    of the Savings page until 2026-10-20). Locals: punctuality, total (counted
+    rides of the period), days. Uses @colors for the line badges. %>
+<%
+  p = punctuality
+  scope = 'transit_savings.index.punctuality'
+  colors = { early: 'bg-info', on_time: 'bg-success', slight: 'bg-warning', late: 'bg-error' }
+  pct = ->(share) { share.nil? ? '–' : "#{(share * 100).round}%" }
+  cat_title = ->(shares) { Gtfs::PunctualityStats::CATEGORIES.map { |c| "#{t("#{scope}.cat_#{c}")} #{pct.call(shares[c])}" }.join(' · ') }
+  stacked = lambda do |shares|
+    safe_join(Gtfs::PunctualityStats::CATEGORIES.reject { |c| shares[c].zero? }.map do |c|
+      tag.span(class: "h-full #{colors[c]}", style: "width: #{(shares[c] * 100).round(2)}%")
+    end)
+  end
+%>
+<section id="punctuality" class="card bg-base-200 shadow scroll-mt-20" aria-labelledby="stats-punctuality">
+  <div class="card-body p-5 gap-4">
+    <h2 id="stats-punctuality" class="font-semibold"><%= t("#{scope}.title") %></h2>
+    <% if p.measured.empty? %>
+      <p class="text-sm opacity-70"><%= t("#{scope}.empty", count: days) %></p>
+    <% else %>
+      <div class="flex items-end justify-between gap-4">
+        <div>
+          <div class="text-xs uppercase tracking-wide text-success-ink"><%= t("#{scope}.within_5") %></div>
+          <div class="text-5xl font-bold tabular-nums leading-none mt-1"><%= pct.call(p.within_5) %></div>
+        </div>
+        <dl class="grid grid-cols-3 gap-x-4 text-right">
+          <div><dt class="text-[11px] opacity-70"><%= t("#{scope}.within_1") %></dt><dd class="text-lg font-bold tabular-nums"><%= pct.call(p.within_1) %></dd></div>
+          <div><dt class="text-[11px] opacity-70"><%= t("#{scope}.median") %></dt><dd class="text-lg font-bold tabular-nums"><%= transit_delay(p.median_s) %></dd></div>
+          <div><dt class="text-[11px] opacity-70"><%= t("#{scope}.measured") %></dt><dd class="text-lg font-bold tabular-nums"><%= p.measured.size %><span class="text-xs font-normal opacity-70">/<%= total %></span></dd></div>
+        </dl>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <span class="flex h-3 rounded-full overflow-hidden bg-base-100" title="<%= cat_title.call(p.shares) %>"><%= stacked.call(p.shares) %></span>
+        <ul class="flex flex-wrap gap-x-3 gap-y-1 text-xs" role="list">
+          <% Gtfs::PunctualityStats::CATEGORIES.each do |cat| %>
+            <li class="flex items-center gap-1.5">
+              <span class="inline-block w-2.5 h-2.5 rounded-sm <%= colors[cat] %>"></span>
+              <%= t("#{scope}.cat_#{cat}") %> <span class="opacity-70 tabular-nums"><%= pct.call(p.shares[cat]) %></span>
+            </li>
+          <% end %>
+        </ul>
+      </div>
+
+      <div class="flex flex-col gap-2.5 border-t border-base-300 pt-4">
+        <h3 class="text-xs uppercase tracking-wide opacity-70"><%= t("#{scope}.per_line", min: Gtfs::PunctualityStats::MIN_RIDES) %></h3>
+        <% if p.lines.empty? %>
+          <p class="text-sm opacity-70"><%= t("#{scope}.no_lines", min: Gtfs::PunctualityStats::MIN_RIDES) %></p>
+        <% else %>
+          <ul class="flex flex-col gap-2.5" role="list">
+            <% p.lines.first(6).each do |line| %>
+              <li class="grid grid-cols-[6.5rem_1fr_3.25rem] items-center gap-3">
+                <span class="flex items-center gap-1 min-w-0"><%= transit_line_badge(line.segment, @colors, extra_class: 'badge-sm') %><span class="text-[11px] opacity-70 tabular-nums">×<%= line.count %></span></span>
+                <span class="flex h-2.5 rounded-full overflow-hidden bg-base-100"
+                      title="<%= cat_title.call(line.shares) %> · <%= t("#{scope}.median") %> <%= transit_delay(line.median_s) %>"><%= stacked.call(line.shares) %></span>
+                <span class="text-right leading-tight">
+                  <span class="text-sm font-semibold tabular-nums"><%= pct.call(line.within_5) %></span>
+                  <span class="block text-[10px] opacity-70 tabular-nums"><%= transit_delay(line.median_s) %></span>
+                </span>
+              </li>
+            <% end %>
+          </ul>
+        <% end %>
+      </div>
+    <% end %>
+    <p class="text-[11px] opacity-60"><%= t("#{scope}.note") %></p>
+  </div>
+</section>

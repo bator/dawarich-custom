@@ -1,0 +1,76 @@
+<%# CO2 and cost against the same distance by car (Gtfs::SavingsEstimate), the
+    former Savings page condensed into one card of the overview (2026-10-20).
+    Locals: savings. %>
+<%
+  s = savings
+  scope = 'transit_savings.index'
+  kg = ->(value) { value.abs >= 100 ? number_with_precision(value, precision: 0, delimiter: ' ') : number_with_precision(value, precision: 1) }
+  ft = ->(value) { "#{number_with_precision(value, precision: 0, delimiter: ' ')} Ft" }
+  max_kg = [s.car_kg, s.transit_kg, 0.001].max
+  costs = [[:car, t("#{scope}.series_car"), s.car_cost_ft, 'bg-base-content/40'],
+           [:tickets, t("#{scope}.series_tickets"), s.tickets_ft, 'bg-warning'],
+           [:pass, t("#{scope}.series_pass"), s.passes_ft, 'bg-primary']]
+  max_ft = [costs.map { |c| c[2] }.max.to_f, 1].max
+  pace = s.rides_per_pass_period
+  months = s.by_month
+  max_month = [months.map { |_, saved, _| saved }.max.to_f, 0.001].max
+  bar = lambda do |label, value, max, cls, text, strong: false|
+    content_tag(:div, class: 'grid grid-cols-[7rem_1fr_5rem] items-center gap-2 text-sm') do
+      safe_join([content_tag(:span, label, class: "truncate #{strong ? 'font-semibold' : 'opacity-80'}"),
+                 content_tag(:span, content_tag(:span, '', class: "block h-full rounded-full #{cls}", style: "width: #{(value / max * 100).clamp(1, 100).round(1)}%"),
+                             class: 'h-2.5 rounded-full bg-base-100 overflow-hidden'),
+                 content_tag(:span, text, class: "text-right tabular-nums #{'font-semibold' if strong}")])
+    end
+  end
+%>
+<section id="impact" class="card bg-base-200 shadow scroll-mt-20" aria-labelledby="stats-impact">
+  <div class="card-body p-5 gap-4">
+    <div>
+      <h2 id="stats-impact" class="font-semibold"><%= t('transit_stats.index.impact_title') %></h2>
+      <p class="text-[11px] opacity-60"><%= t("#{scope}.note") %></p>
+    </div>
+
+    <div class="flex items-start gap-3">
+      <%= transit_icon('trees', 'w-10 h-10 text-success-ink') %>
+      <div class="min-w-0">
+        <div class="text-xs uppercase tracking-wide text-success-ink"><%= t("#{scope}.co2_saved") %></div>
+        <div class="text-3xl font-bold tabular-nums leading-tight"><%= kg.call(s.saved_kg) %> kg CO₂</div>
+        <div class="text-xs opacity-70 mt-0.5"><%= t("#{scope}.trees", count: s.trees.round(1)) %> · <%= t("#{scope}.car_km", km: number_with_precision(s.car_km_equivalent, precision: 0, delimiter: ' ')) %></div>
+      </div>
+    </div>
+    <div class="flex flex-col gap-1.5">
+      <%= bar.call(t("#{scope}.you"), s.transit_kg, max_kg, 'bg-success', "#{kg.call(s.transit_kg)} kg", strong: true) %>
+      <%= bar.call(t("#{scope}.car"), s.car_kg, max_kg, 'bg-base-content/40', "#{kg.call(s.car_kg)} kg") %>
+    </div>
+
+    <div class="border-t border-base-300 pt-4 flex flex-col gap-3">
+      <div>
+        <div class="text-xs uppercase tracking-wide opacity-70"><%= t(s.saved_ft.positive? ? "#{scope}.money_saved" : "#{scope}.money_more") %></div>
+        <div class="text-3xl font-bold tabular-nums leading-tight <%= s.saved_ft.positive? ? 'text-primary-ink' : 'text-warning-ink' %>"><%= ft.call(s.saved_ft.abs) %></div>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <% costs.each do |key, label, value, cls| %>
+          <%= bar.call(label, value, max_ft, cls, ft.call(value), strong: key == s.cheaper_option) %>
+        <% end %>
+      </div>
+      <div class="rounded-box bg-base-100 px-3 py-2 text-sm">
+        <div class="font-medium"><%= t("#{scope}.break_even", count: s.break_even_rides, days: Gtfs::SavingsEstimate::PASS_DAYS) %></div>
+        <div class="text-xs opacity-70"><%= t("#{scope}.your_pace", count: pace.round(1)) %> → <%= t(pace >= s.break_even_rides ? "#{scope}.pace_pass" : "#{scope}.pace_tickets") %></div>
+      </div>
+    </div>
+
+    <% if months.size > 1 %>
+      <div class="border-t border-base-300 pt-4">
+        <div class="text-xs uppercase tracking-wide opacity-70 mb-2"><%= t("#{scope}.by_month") %></div>
+        <ol class="flex items-end gap-1.5 h-16" role="list">
+          <% months.each do |month, saved, km| %>
+            <li class="flex-1 h-full flex flex-col justify-end items-center gap-0.5" title="<%= l(month, format: '%Y-%m') %>: <%= kg.call(saved) %> kg, <%= number_with_precision(km, precision: 0) %> km">
+              <span class="w-full max-w-8 rounded-t bg-success" style="height: <%= (saved.clamp(0, Float::INFINITY) / max_month * 100).clamp(6, 100).round(1) %>%"></span>
+              <span class="text-[10px] opacity-70 tabular-nums"><%= l(month, format: '%m') %></span>
+            </li>
+          <% end %>
+        </ol>
+      </div>
+    <% end %>
+  </div>
+</section>

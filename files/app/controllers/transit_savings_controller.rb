@@ -1,19 +1,13 @@
 # frozen_string_literal: true
 
-# /transit/savings: CO2 and cost estimate of the rides vs the car
-# (Gtfs::SavingsEstimate) and, in the same period, the measured delays per
-# line (Gtfs::PunctualityStats; the former /transit/punctuality).
+# /transit/savings was merged into the /transit/stats overview on 2026-10-20
+# (its CO2 and cost card, anchor #impact); old links and bookmarks land there.
+# A plain 302, so browsers do not cache it if the page ever comes back.
 class TransitSavingsController < ApplicationController
-  include TransitPeriodRides
-
-  PERIODS = TransitPeriodRides::ANALYSIS_PERIODS
-
   before_action :authenticate_user!
 
   def index
-    load_period_rides
-    @savings = Gtfs::SavingsEstimate.new(@period_stats.rides, days: @days, since: @since, zone: @zone)
-    @punctuality = Gtfs::PunctualityStats.new(@period_stats.rides, zone: @zone)
-    @colors = Api::TransitSegmentSerializer.colors_for(@punctuality.lines.map(&:segment))
+    days = params[:days].to_i
+    redirect_to transit_stats_path(days: (days if TransitStatsController::PERIODS.include?(days)), anchor: 'impact')
   end
 end

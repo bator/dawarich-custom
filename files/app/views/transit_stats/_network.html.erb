@@ -1,0 +1,68 @@
+<%# The rides of the period as a network on the Dawarich basemap
+    (Gtfs::NetworkMap, drawn by the transit-network-map Stimulus controller with
+    MapLibre). Locals: map. Uses @colors for line colours. %>
+<% content_for :head, stylesheet_link_tag('maplibre-gl', 'data-turbo-track': 'reload') %>
+<%
+  scope = 'transit_stats.index'
+  width_of = ->(count) { (2.5 + (1.6 * Math.log2(count + 1))).clamp(3, 8).round(1) }
+  radius_of = ->(count) { (4 + (1.3 * Math.log2(count + 1))).clamp(4, 8.5).round(1) }
+  line_name = ->(segment) { segment.route_short_name.presence || segment.route_long_name }
+  features = map.paths.map do |path|
+    { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: path.runs },
+      properties: { kind: 'path', color: transit_line_colors(path.segment, @colors).first, width: width_of.call(path.count),
+                    title: "#{path.from} ⇄ #{path.to} · #{t("#{scope}.network_rides", count: path.count)} · " \
+                           "#{path.lines.first(3).map { |segment, n| "#{line_name.call(segment)} ×#{n}" }.join(', ')}" } }
+  end
+  features += map.stops.each_with_index.map do |stop, i|
+    { type: 'Feature', geometry: { type: 'Point', coordinates: [stop.lon, stop.lat] },
+      properties: { kind: 'stop', name: stop.name, radius: radius_of.call(stop.count), label: i < Gtfs::NetworkMap::LABELS,
+                    title: "#{stop.name} · #{t("#{scope}.network_stop", count: stop.count)}" } }
+  end
+  geojson = { type: 'FeatureCollection', features: }
+  top = map.paths.first(6)
+%>
+<section class="card bg-base-200 shadow" aria-labelledby="stats-network">
+  <div class="card-body p-5 gap-4">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <h2 id="stats-network" class="font-semibold"><%= t("#{scope}.network_title") %></h2>
+      <p class="text-xs opacity-70"><%= t("#{scope}.network_note") %></p>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_15rem] gap-5 items-stretch">
+      <%# fixed height: MapLibre makes its container position: relative, so it cannot just fill an absolute box %>
+      <div data-controller="transit-network-map" data-transit-network-map-bounds-value="<%= map.bounds.to_json %>"
+           class="rounded-box overflow-hidden bg-base-100">
+        <div data-transit-network-map-target="map" class="w-full h-[24rem] lg:h-[30rem]" role="img"
+             aria-label="<%= t("#{scope}.network_label", paths: map.paths.size, stops: map.stops.size) %>"></div>
+        <script type="application/json" data-transit-network-map-target="data"><%= raw ERB::Util.json_escape(geojson.to_json) %></script>
+      </div>
+
+      <div class="min-w-0">
+        <h3 class="text-xs uppercase tracking-wide opacity-70 mb-2"><%= t("#{scope}.network_paths") %></h3>
+        <ol class="flex flex-col divide-y divide-base-300" role="list">
+          <% top.each do |path| %>
+            <li class="py-2.5 flex flex-col gap-1.5">
+              <div class="flex items-start justify-between gap-2">
+                <span class="text-sm font-medium leading-snug min-w-0" title="<%= path.from %> ⇄ <%= path.to %>">
+                  <span class="block truncate"><%= path.from %></span>
+                  <span class="block truncate"><span class="opacity-50">⇄</span> <%= path.to %></span>
+                </span>
+                <span class="text-lg font-bold tabular-nums leading-none shrink-0">×<%= path.count %></span>
+              </div>
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <% path.lines.first(3).each do |segment, n| %>
+                  <span class="flex items-center gap-1"><%= transit_line_badge(segment, @colors, extra_class: 'badge-sm max-w-[9rem]') %><span class="text-[11px] opacity-70 tabular-nums">×<%= n %></span></span>
+                <% end %>
+                <% if path.lines.size > 3 %>
+                  <span class="text-[11px] opacity-70" title="<%= path.lines.drop(3).map { |segment, n| "#{line_name.call(segment)} ×#{n}" }.join(', ') %>"><%= t("#{scope}.more_lines", count: path.lines.size - 3) %></span>
+                <% end %>
+              </div>
+            </li>
+          <% end %>
+        </ol>
+        <% if map.paths.size > top.size %>
+          <p class="text-xs opacity-60 mt-1"><%= t("#{scope}.network_more", count: map.paths.size - top.size) %></p>
+        <% end %>
+      </div>
+    </div>
+  </div>
+</section>

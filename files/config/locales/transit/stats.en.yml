@@ -6,10 +6,32 @@ en:
       all_uncertain:
         one: "No counted ride in this period: the only ride is still uncertain and waits for your decision."
         other: "No counted ride in this period: all %{count} rides are still uncertain and wait for your decision."
-      partial_bucket: "partial, from %{date}"
+      reviewed_short: all checked
+      impact_title: Saved against the car
+      kpi_money: Money saved
+      kpi_money_more: Costs more than the car
+      kpi_money_more_info: "fuel vs %{option}"
+      kpi_rides: Rides
+      kpi_on_board: On board
+      kpi_distance: Travelled
+      kpi_co2: CO₂ saved
+      kpi_co2_more: compared with going by car
+      vs_previous: "vs the %{days} days before"
+      same_as_before: "same"
+      network_title: Your network
+      network_note: Along the timetable's line, in the line colour; the thicker, the more rides. Ctrl + scroll zooms.
+      network_label: "Map of %{paths} routes and %{stops} stops ridden in the period."
+      network_paths: Routes
+      network_rides:
+        one: 1 ride
+        other: "%{count} rides"
+      network_stop:
+        one: 1 boarding or alighting
+        other: "%{count} boardings and alightings"
+      network_more:
+        one: "+1 more route on the map"
+        other: "+%{count} more routes on the map"
       totals: Totals of the period
-      per_week: Rides per week
-      per_month: Rides per month
       by_mode: By vehicle
       by_feed: By operator
       top_lines: Most used lines
