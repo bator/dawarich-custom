@@ -10,6 +10,8 @@
 #   CORRIDORS_MIN_TRIPS=5            trips a route needs
 #   CORRIDORS_SNAP_BUFFER_M=30       a track snaps when CORRIDORS_SNAP_SHARE of it
 #   CORRIDORS_SNAP_SHARE=0.9         lies within this distance of a route
+#   CORRIDORS_FILL_GAPS=true         route the gaps of walking routes (tunnels) through
+#                                    the walk snap's Atlas (GTFS_WALK_VALHALLA_URL)
 #   CORRIDORS_SYNTHETIC_TRACKERS=gpx,osrm-,track-pick-,legacy-import
 #                                    tracker_id prefixes of generated points (GPX
 #                                    backfills, routing fills, timetable lines):
@@ -22,6 +24,8 @@ module Corridors::Config
   def enabled? = flag('CORRIDORS_ENABLED')
 
   def snap_enabled? = enabled? && flag('CORRIDORS_SNAP_ENABLED')
+
+  def fill_gaps? = !ENV.fetch('CORRIDORS_FILL_GAPS', 'true').to_s.strip.casecmp?('false')
 
   def modes
     list('CORRIDORS_MODES', %w[walking cycling]) & Track.dominant_modes.keys

@@ -7,9 +7,9 @@ namespace :corridors do
     user = User.find(args[:user_id])
     routes = Corridors::Builder.new(user).call(dry_run: ENV['DRY_RUN'].present?)
     routes.each do |r|
-      puts format('%-8<mode>s %3<trips>d trips  %5.2<km>f km  spread p50 %4.1<p50>f m  p90 %5.1<p90>f m  gaps %<gaps>s',
+      puts format('%-8<mode>s %3<trips>d trips  %5.2<km>f km  spread p50 %4.1<p50>f m  p90 %5.1<p90>f m  gaps %<gaps>s  filled %<filled>s',
                   mode: r.mode, trips: r.trips, km: Corridors::Geometry.length(r.line) / 1000.0,
-                  p50: r.spread_p50.to_f, p90: r.spread_p90.to_f, gaps: r.gaps.inspect)
+                  p50: r.spread_p50.to_f, p90: r.spread_p90.to_f, gaps: r.gaps.inspect, filled: r.filled.inspect)
     end
     puts "#{routes.size} frequent route(s)#{' (dry run, nothing stored)' if ENV['DRY_RUN'].present?}"
   end

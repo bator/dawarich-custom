@@ -2,13 +2,15 @@
 
 Routes you walk or cycle many times get one clean middle line, built from your own GPS, and new
 recordings of the same route can be snapped onto it. On the map (`/map/v2`, layer panel:
-*Frequent routes*) they are drawn as an orange trail, wider the more trips they have.
+*Frequent routes*) they are drawn as an orange trail, wider the more trips they have; a stretch
+where GPS was missing and the way was routed (a tunnel, an underpass) is dashed.
 
 Off by default. In `/opt/dawarich/gtfs.env` (LXC) or `transit.env` (Docker):
 
 ```bash
 CORRIDORS_ENABLED=true        # build the routes every Monday 04:15, map layer
 CORRIDORS_SNAP_ENABLED=true   # also snap new tracks every night at 04:45 (rewrites them, logged, revertible)
+CORRIDORS_FILL_GAPS=true      # default: route the gaps of walking routes (see below); false: keep the median
 ```
 
 ## How a route is built (`Corridors::Builder`)
@@ -28,8 +30,28 @@ CORRIDORS_SNAP_ENABLED=true   # also snap new tracks every night at 04:45 (rewri
    zigzags (over 1000° of turning per km, e.g. inside a station hall) is dropped, and of two routes
    that mostly overlap the one with fewer trips.
 
-Stored in `track_corridors`, replaced as a whole every week. Inner stretches where few trips had a
-fix (a tunnel, an underpass) are kept as `gaps` for a later filling step.
+Stored in `track_corridors`, replaced as a whole every week.
+
+## How a gap is filled (`Corridors::GapFiller`)
+
+An inner stretch of at least 100 m where fewer than 20% of the trips had a real fix (a tunnel, an
+underpass) is a gap: the median there is only a straight chord between the fixes on both sides.
+On walking and running routes the gap is routed through the Atlas the walk snap uses
+(`GTFS_WALK_VALHALLA_URL`, `GTFS_WALK_VALHALLA_API=atlas`): two points of the
+line on each side of the gap go to `POST /api/v1/map-match` (pedestrian, `map_snap`), and the path
+Valhalla finds between them replaces the median there. It is used only when it is one continuous
+path, it starts and ends within 25 m of the line, and it is no detour: at most 1.5 times the
+median's length + 50 m, and nowhere farther from the median than 35% of its length (at least
+30 m). Otherwise the median stays and the stretch remains a gap.
+
+Nothing is sent when `CORRIDORS_FILL_GAPS=false`, when the walk snap's own rules refuse the address
+or the user (`GTFS_WALK_VALHALLA_ALLOWED_HOSTS`, `GTFS_WALK_SNAP_EXCLUDE_EMAILS`, the user's opt-out),
+or with a raw Valhalla (`GTFS_WALK_VALHALLA_API=valhalla`); when the server is unavailable, the rest
+of that build keeps the medians. Cycling routes are not filled.
+
+`track_corridors.gaps` holds the gaps left as they were and `filled` the routed stretches, both as
+`[[from_m, to_m], ...]` along the stored line. The API returns each route in pieces (`part`: `gps`
+or `filled`), so the layer can dash the routed ones.
 
 ## How a track is snapped (`Corridors::Snapper`)
 
@@ -54,4 +76,5 @@ bin/rails "corridors:revert[USER_ID]"       # put back every snapped track's geo
   the road and rail network by other means, and repeated commutes recorded by GPX imports are
   already clean lines.
 - A route appears only after 5 similar real recordings; generated history does not count.
-- Gaps are marked but not yet filled from OpenStreetMap.
+- Gaps are filled only on walking and running routes, and only where OpenStreetMap has a walkable
+  way (an unmapped underpass, a station hall or a platform crossing keeps the median).

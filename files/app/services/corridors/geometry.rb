@@ -53,6 +53,18 @@ module Corridors::Geometry
     out
   end
 
+  # The part of the line between arc lengths `from` and `to` (`s`: its arc
+  # lengths), the ends interpolated.
+  def slice(line, s, from, to)
+    at = lambda do |t|
+      i = (bsearch_index(s, t) - 1).clamp(0, line.size - 2)
+      span = s[i + 1] - s[i]
+      f = span.positive? ? ((t - s[i]) / span).clamp(0.0, 1.0) : 0.0
+      [line[i][0] + ((line[i + 1][0] - line[i][0]) * f), line[i][1] + ((line[i + 1][1] - line[i][1]) * f)]
+    end
+    [at.call(from)] + line.each_index.select { |i| s[i] > from && s[i] < to }.map { |i| line[i] } + [at.call(to)]
+  end
+
   # `k` points at equal shares of the length (for comparing trips' shapes).
   def fractions(line, k = 50)
     s = lengths(line)

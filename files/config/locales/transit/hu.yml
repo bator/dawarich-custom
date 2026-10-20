@@ -126,7 +126,7 @@ hu:
         walk_legs: Gyaloglás a járművekhez
         walk_legs_hint: "Járdára illesztve: sötét szaggatott vonal; nyers GPS: világosszürke pontozott."
         corridors: Gyakori útjaim
-        corridors_hint: A sokszor megtett gyalogos és bringás utak középvonala; minél vastagabb, annál többször.
+        corridors_hint: A sokszor megtett gyalogos és bringás utak középvonala; minél vastagabb, annál többször. Szaggatott, ahol nem volt GPS (alagút, aluljáró), és az utat útvonaltervező adta.
   javascript:
     transit:
       failed_to_load: Nem sikerült betölteni a közlekedési szakaszokat
@@ -159,6 +159,8 @@ hu:
       trips: Utak
       length: Hossz
       spread: Az utak szórása
+      filled: GPS nélkül, útvonaltervezésből
+      gaps: Kevés GPS-pont
       failed_to_load: Nem sikerült betölteni a gyakori utakat
       mode_walking: gyalog
       mode_cycling: bringával

@@ -12,11 +12,13 @@
 #   3. trips far off the others (a detour) are left out; bins at the ends that
 #      fewer than END_SUPPORT of the trips reach are cut; loops the line made
 #      (stations, poor signal) are cut out; inner bins with few real fixes are
-#      gaps (a tunnel, lost signal), kept for filling later
+#      gaps (a tunnel, lost signal)
 #   4. the line is smoothed (SMOOTH_M); a route wider than MAX_SPREAD_P90 or
 #      still zigzagging (MAX_TURN_PER_KM, e.g. inside a station hall with poor
 #      signal) is dropped, and of two routes that mostly overlap
 #      (OVERLAP_SHARE within OVERLAP_M) the one with fewer trips
+#   5. the gaps of walking and running routes are routed through
+#      (Corridors::GapFiller), else they stay the median
 class Corridors::Builder
   G = Corridors::Geometry
   ENDPOINT_M = 200.0
@@ -36,7 +38,8 @@ class Corridors::Builder
   OVERLAP_M = 15.0
   OVERLAP_SHARE = 0.7
 
-  Route = Struct.new(:mode, :line, :trips, :track_ids, :spread_p50, :spread_p90, :gaps, keyword_init: true)
+  # gaps / filled: [[from_m, to_m], ...] along the line (filled: routed through a gap)
+  Route = Struct.new(:mode, :line, :trips, :track_ids, :spread_p50, :spread_p90, :gaps, :filled, keyword_init: true)
 
   def initialize(user, source: nil)
     @user = user
@@ -48,6 +51,7 @@ class Corridors::Builder
     routes = @source.trips.group_by(&:mode).flat_map do |mode, trips|
       distinct(clusters(trips, mode).filter_map { |members| route(mode, members) })
     end
+    routes.each { |r| fill(r) }
     store(routes) unless dry_run
     routes
   end
@@ -165,6 +169,16 @@ class Corridors::Builder
               gaps: gaps(share))
   end
 
+  # gaps of bins => routed or kept, both in metres along the final line
+  def fill(route)
+    result = gap_filler.call(route.mode, route.line, route.gaps)
+    route.line = result.line
+    route.gaps = result.gaps
+    route.filled = result.filled
+  end
+
+  def gap_filler = @gap_filler ||= Corridors::GapFiller.new(@user, @source.frame)
+
   # Moving average over SMOOTH_M on each side; the ends stay.
   def smooth(line)
     w = (SMOOTH_M / BIN).round
@@ -223,7 +237,7 @@ class Corridors::Builder
     G.project(other, s, line, back: Float::INFINITY, forward: Float::INFINITY).count { |_, offset| offset.abs <= OVERLAP_M }.fdiv(line.size)
   end
 
-  # [[from_m, to_m], ...] where under GAP_SUPPORT of the trips have a real fix
+  # [[first, last], ...] bins where under GAP_SUPPORT of the trips have a real fix
   def gaps(share)
     runs = []
     start = nil
@@ -232,7 +246,7 @@ class Corridors::Builder
       next unless start && (v >= GAP_SUPPORT || i == share.size - 1)
 
       stop = v < GAP_SUPPORT ? i : i - 1
-      runs << [(start * BIN).round, (stop * BIN).round] if (stop - start + 1) * BIN >= GAP_MIN_M
+      runs << [start, stop] if (stop - start + 1) * BIN >= GAP_MIN_M
       start = nil
     end
     runs
@@ -247,7 +261,8 @@ class Corridors::Builder
         TrackCorridor.create!(
           user_id: @user.id, mode: r.mode, trips: r.trips, track_ids: r.track_ids,
           path: "SRID=4326;LINESTRING(#{coords.map { |lon, lat| "#{lon.round(7)} #{lat.round(7)}" }.join(', ')})",
-          length_m: G.length(r.line).round, spread_p50: r.spread_p50, spread_p90: r.spread_p90, gaps: r.gaps
+          length_m: G.length(r.line).round, spread_p50: r.spread_p50, spread_p90: r.spread_p90, gaps: r.gaps,
+          filled: r.filled
         )
       end
     end

@@ -34,6 +34,10 @@ class Gtfs::Walk::AtlasClient < Gtfs::Walk::BaseClient
     self.class.runs_from(post_json('/api/v1/map-match', request_body(points)), points.size)
   end
 
+  # The parsed answer to a request body of the caller's own (the frequent
+  # routes' gap filling, Corridors::GapFiller), same errors as #trace_runs.
+  def map_match(body) = post_json('/api/v1/map-match', body)
+
   def request_body(points)
     {
       shape: points.map { |p| self.class.shape_point(p) },
