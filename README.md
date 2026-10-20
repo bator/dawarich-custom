@@ -49,7 +49,7 @@ State: `/var/lib/dawarich-custom/` (`state.json`, backups, `conflicts/<version>/
 Not stored: `tailwind.css` and `sprockets-manifest.json` (rebuilt by `assets:precompile`) and secrets
 (`/opt/dawarich/.env`, `/opt/dawarich/gtfs.env`).
 
-## Commands (in CT 139)
+## Commands 
 
 ```bash
 python3 /opt/dawarich-custom/restore_custom.py --dry-run   # plan only
