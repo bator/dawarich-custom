@@ -30,7 +30,8 @@ CORRIDORS_FILL_GAPS=true      # default: route the gaps of walking routes (see b
    zigzags (over 1000° of turning per km, e.g. inside a station hall) is dropped, and of two routes
    that mostly overlap the one with fewer trips.
 
-Stored in `track_corridors`, replaced as a whole every week.
+Each route is computed in metres around its own trips, stored in `track_corridors`, replaced as a
+whole every week. A dry run (`DRY_RUN=1`) sends nothing to the Atlas: gaps stay unrouted.
 
 ## How a gap is filled (`Corridors::GapFiller`)
 
@@ -56,11 +57,16 @@ or `filled`), so the layer can dash the routed ones.
 ## How a track is snapped (`Corridors::Snapper`)
 
 A track of a route's mode snaps when 90% of its real fixes (`CORRIDORS_SNAP_SHARE`) lie within
-30 m (`CORRIDORS_SNAP_BUFFER_M`) of the route: it gets the route's line between where it joins and
-leaves it, the recorded parts before and after stay. The snapped length must be within 75–133% of
-the recorded one. Tracks the OSRM snap already rewrote are not touched. The geometry before the
-snap is kept in `track_corridor_snaps`; when Dawarich rebuilds a track, it is snapped again the
-next night.
+30 m (`CORRIDORS_SNAP_BUFFER_M`) of the route: where its stored geometry runs along the route it
+gets the route's line, the stored parts before and after stay. The snapped length must be within
+75–133% of the stored one. Tracks the OSRM snap already rewrote are not touched. Distances are
+measured in metres around each track's own start, so routes far from home snap the same.
+
+The geometry before the snap is kept in `track_corridor_snaps`, with a digest of the geometry
+written. While the track still has that geometry it is not snapped again, whatever else changes
+it (e.g. its mode); when Dawarich rebuilds its geometry, the new one becomes the recorded one and
+the track is snapped again the next night. `corridors:revert` puts back only the geometry of
+tracks that still have the snapped one.
 
 ## Commands
 

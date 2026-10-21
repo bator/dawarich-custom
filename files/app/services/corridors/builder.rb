@@ -38,20 +38,27 @@ class Corridors::Builder
   OVERLAP_M = 15.0
   OVERLAP_SHARE = 0.7
 
-  # gaps / filled: [[from_m, to_m], ...] along the line (filled: routed through a gap)
-  Route = Struct.new(:mode, :line, :trips, :track_ids, :spread_p50, :spread_p90, :gaps, :filled, keyword_init: true)
+  # line in local metres of `frame` (centred on the route's trips, so distances
+  # hold wherever the source's frame is); gaps / filled: [[from_m, to_m], ...]
+  # along the line (filled: routed through a gap)
+  Route = Struct.new(:mode, :frame, :line, :trips, :track_ids, :spread_p50, :spread_p90, :gaps, :filled,
+                     keyword_init: true)
 
   def initialize(user, source: nil)
     @user = user
     @source = source || Corridors::TripSource.new(user)
   end
 
-  # => [Route]; stored unless dry_run
-  def call(dry_run: false)
+  # => [Route]; stored unless dry_run. A dry run does not route the gaps either
+  # (no request to the Atlas) unless fill: true.
+  def call(dry_run: false, fill: !dry_run)
     routes = @source.trips.group_by(&:mode).flat_map do |mode, trips|
-      distinct(clusters(trips, mode).filter_map { |members| route(mode, members) })
+      distinct(clusters(trips, mode).filter_map do |members|
+        frame = G::Frame.around(members.map { |t| t.lonlat.first })
+        route(mode, members.map { |t| t.in_frame(frame) }, frame)
+      end)
     end
-    routes.each { |r| fill(r) }
+    routes.each { |r| fill ? fill(r) : unfilled(r) }
     store(routes) unless dry_run
     routes
   end
@@ -82,14 +89,12 @@ class Corridors::Builder
       head = left.max_by { |i| links[i].keys.count { |j| left.include?(j) } }
       members = [head] + links[head].keys.select { |j| left.include?(j) }
       left.subtract(members)
-      oriented = members.map { |j| j == head || !links[head][j] ? trips[j] : reversed_trip(trips[j]) }
+      oriented = members.map { |j| j == head || !links[head][j] ? trips[j] : trips[j].reversed }
       oriented = unique(oriented)
       out << oriented if oriented.size >= Corridors::Config.min_trips
     end
     out
   end
-
-  def reversed_trip(trip) = trip.dup.tap { |t| t.xy = trip.xy.reverse }
 
   def unique(trips)
     shapes = trips.map { |t| G.fractions(t.xy) }
@@ -98,7 +103,7 @@ class Corridors::Builder
     kept.map { |i| trips[i] }
   end
 
-  def route(mode, trips)
+  def route(mode, trips, frame)
     resampled = trips.map { |t| G.resample(t.xy, STEP) }
     line = G.resample(reference(resampled), BIN)
     kept = Array.new(trips.size, true)
@@ -114,7 +119,7 @@ class Corridors::Builder
       normals = G.normals(line)
       line = G.resample(line.each_with_index.map { |p, b| [p[0] + (normals[b][0] * shift[b]), p[1] + (normals[b][1] * shift[b])] }, BIN)
     end
-    finish(mode, line, trips, kept)
+    finish(mode, frame, line, trips, kept)
   end
 
   # Longest of the trips that are closer than the median to the others: the
@@ -143,7 +148,7 @@ class Corridors::Builder
     per_trip.each_index.map { |i| scores[i] <= limit && per_trip[i].size >= MIN_COVERAGE * bins }
   end
 
-  def finish(mode, line, trips, kept)
+  def finish(mode, frame, line, trips, kept)
     used = trips.each_index.select { |i| kept[i] }
     return nil if used.size < Corridors::Config.min_trips
 
@@ -164,20 +169,27 @@ class Corridors::Builder
     return nil if line.size < 3 || G.percentile(spreads, 0.9).to_f > MAX_SPREAD_P90
     return nil if turn_per_km(line) > MAX_TURN_PER_KM
 
-    Route.new(mode:, line:, trips: used.size, track_ids: used.map { |i| trips[i].track_id },
+    Route.new(mode:, frame:, line:, trips: used.size, track_ids: used.map { |i| trips[i].track_id },
               spread_p50: G.median(spreads)&.round(1), spread_p90: G.percentile(spreads, 0.9)&.round(1),
               gaps: gaps(share))
   end
 
   # gaps of bins => routed or kept, both in metres along the final line
   def fill(route)
-    result = gap_filler.call(route.mode, route.line, route.gaps)
+    result = gap_filler.call(route.mode, route.line, route.gaps, frame: route.frame)
     route.line = result.line
     route.gaps = result.gaps
     route.filled = result.filled
   end
 
-  def gap_filler = @gap_filler ||= Corridors::GapFiller.new(@user, @source.frame)
+  # gaps of bins => metres, nothing routed (dry run)
+  def unfilled(route)
+    s = G.lengths(route.line)
+    route.gaps = route.gaps.map { |first, last| [s[first].round, s[last].round] }
+    route.filled = []
+  end
+
+  def gap_filler = @gap_filler ||= Corridors::GapFiller.new(@user)
 
   # Moving average over SMOOTH_M on each side; the ends stay.
   def smooth(line)
@@ -225,12 +237,15 @@ class Corridors::Builder
     [a[0] + (t * r[0]), a[1] + (t * r[1])] if t.between?(0.0, 1.0) && u.between?(0.0, 1.0)
   end
 
-  # Of routes that mostly run on top of each other, the one with more trips.
+  # Of routes that mostly run on top of each other, the one with more trips
+  # (compared in the frame of the one kept: each route has its own).
   def distinct(routes)
     routes.sort_by { |r| -r.trips }.each_with_object([]) do |r, kept|
-      kept << r unless kept.any? { |k| overlap(r.line, k.line) >= OVERLAP_SHARE }
+      kept << r unless kept.any? { |k| overlap(in_frame(r, k.frame), k.line) >= OVERLAP_SHARE }
     end
   end
+
+  def in_frame(route, frame) = route.line.map { |x, y| frame.xy(*route.frame.lonlat(x, y)) }
 
   def overlap(line, other)
     s = G.lengths(other)
@@ -253,11 +268,10 @@ class Corridors::Builder
   end
 
   def store(routes)
-    frame = @source.frame
     TrackCorridor.transaction do
       TrackCorridor.where(user_id: @user.id).delete_all
       routes.each do |r|
-        coords = r.line.map { |x, y| frame.lonlat(x, y) }
+        coords = r.line.map { |x, y| r.frame.lonlat(x, y) }
         TrackCorridor.create!(
           user_id: @user.id, mode: r.mode, trips: r.trips, track_ids: r.track_ids,
           path: "SRID=4326;LINESTRING(#{coords.map { |lon, lat| "#{lon.round(7)} #{lat.round(7)}" }.join(', ')})",

@@ -208,7 +208,15 @@ class Gtfs::Discord::Gateway
     @refresher.call(outcome[:segment_id]) if outcome[:segment_id]
   rescue StandardError => e
     @logger.error("[GTFS discord] interaction #{interaction['id']} failed: #{e.class}: #{e.message}")
-    followup(interaction, Gtfs::Discord::Texts.t('try_again')) if answered
+    followup(interaction, safe_text('try_again')) if answered
+  end
+
+  # The text in the configured language, or in the default one when the
+  # setting cannot be read (the error being handled may be the database's).
+  def safe_text(key)
+    Gtfs::Discord::Texts.t(key)
+  rescue StandardError
+    Gtfs::Discord::Texts.t(key, Gtfs::Discord::Texts::DEFAULT)
   end
 
   def followup(interaction, text)

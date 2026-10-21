@@ -8,6 +8,11 @@ module Corridors::Geometry
 
   # lon/lat <-> local metres around (lon0, lat0)
   class Frame
+    # centred on the median of [lon, lat] points (e.g. the starts of trips)
+    def self.around(points)
+      new(Corridors::Geometry.median(points.map(&:first)) || 0.0, Corridors::Geometry.median(points.map(&:last)) || 0.0)
+    end
+
     def initialize(lon0, lat0)
       @lon0 = lon0
       @lat0 = lat0

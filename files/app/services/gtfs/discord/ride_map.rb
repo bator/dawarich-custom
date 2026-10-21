@@ -92,8 +92,14 @@ class Gtfs::Discord::RideMap
       ORDER BY gtfs_trips.route_gtfs_id IS DISTINCT FROM ?, gtfs_trips.shape_gtfs_id IS NULL
       LIMIT 1
     SQL
-    trip = select_value(sql, @segment.feed_id, version, @segment.boarding_stop_gtfs_id,
-                        @segment.alighting_stop_gtfs_id, @segment.route_gtfs_id)
+    # the same answer for every ride between these stops until the next feed
+    # version, and the map of a ride is drawn again on every status change
+    key = ['gtfs/ride_map/current_trip', @segment.feed_id, version, @segment.boarding_stop_gtfs_id,
+           @segment.alighting_stop_gtfs_id, @segment.route_gtfs_id]
+    trip = Rails.cache.fetch(key, expires_in: 1.day) do
+      select_value(sql, @segment.feed_id, version, @segment.boarding_stop_gtfs_id,
+                   @segment.alighting_stop_gtfs_id, @segment.route_gtfs_id)
+    end
     [version, trip] if trip
   end
 

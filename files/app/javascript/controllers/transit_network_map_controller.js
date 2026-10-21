@@ -6,6 +6,20 @@ import { getMapStyle } from "maps_maplibre/utils/style_manager"
 // on the Dawarich basemap, the same vector style /map/v2 uses. The page puts
 // the GeoJSON (Gtfs::NetworkMap) in a <script type="application/json"> target.
 // Scroll zoom needs Ctrl/Cmd (cooperative gestures), so the page still scrolls.
+
+// Whether the browser gives WebGL2 contexts: probed once per page load (every
+// Turbo visit to the page would create one more context otherwise; browsers
+// keep only a few), and the probe's context is released at once.
+let webgl2
+function hasWebGL2() {
+  if (webgl2 === undefined) {
+    const gl = document.createElement("canvas").getContext("webgl2")
+    webgl2 = !!gl
+    gl?.getExtension("WEBGL_lose_context")?.loseContext()
+  }
+  return webgl2
+}
+
 export default class extends Controller {
   static targets = ["map", "data"]
   static values = { bounds: Array, unsupported: String }
@@ -13,7 +27,7 @@ export default class extends Controller {
   async connect() {
     // MapLibre needs WebGL2; without it, it only logs an error and leaves an
     // empty box, so say so instead (the routes are listed beside the map)
-    if (!document.createElement("canvas").getContext("webgl2")) {
+    if (!hasWebGL2()) {
       const note = document.createElement("p")
       note.className = "h-full flex items-center justify-center p-6 text-center text-sm opacity-70"
       note.textContent = this.unsupportedValue

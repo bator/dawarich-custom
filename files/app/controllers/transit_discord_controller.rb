@@ -125,7 +125,7 @@ class TransitDiscordController < ApplicationController
     errors << t('transit_discord.errors.max_per_run', range: MAX_PER_RUN.minmax.join('–')) unless MAX_PER_RUN.cover?(per_run)
     uncertain = Float(p[:uncertain_below].to_s, exception: false)&.round(2)
     errors << t('transit_discord.errors.uncertain') unless UNCERTAIN_CHOICES.include?(uncertain)
-    locale = p[:locale].to_s
+    locale = p[:locale].presence || Gtfs::Discord::Config.locale # a form from before the field keeps the language
     errors << t('transit_discord.errors.locale') unless Gtfs::Discord::Texts::LOCALES.key?(locale)
 
     posted = if p[:posted_users] == 'all'

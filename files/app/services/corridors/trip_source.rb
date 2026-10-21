@@ -1,11 +1,19 @@
 # frozen_string_literal: true
 
-# The trips a user's frequent routes are built from, or one track to snap:
+# The trips a user's frequent routes are built from, or the tracks to snap:
 # the raw points of the track (not its stored, possibly snapped geometry),
 # real fixes only (Corridors::Config.synthetic? drops generated points), with
-# bad fixes and the standing-still ends removed, in local metres.
+# bad fixes and the standing-still ends removed: lon/lat, and local metres in
+# a frame centred on the median start of the loaded trips (not on one point
+# of the user, e.g. the last one, which may be abroad). A route or a track
+# gets a frame of its own for the exact work (Trip#in_frame).
 class Corridors::TripSource
-  Trip = Struct.new(:track_id, :mode, :started_at, :ended_at, :xy, keyword_init: true)
+  Trip = Struct.new(:track_id, :mode, :started_at, :ended_at, :lonlat, :xy, keyword_init: true) do
+    # the same trip in local metres around another centre
+    def in_frame(frame) = dup.tap { |t| t.xy = lonlat.map { |lon, lat| frame.xy(lon, lat) } }
+
+    def reversed = dup.tap { |t| t.lonlat = lonlat.reverse; t.xy = xy.reverse }
+  end
 
   ACCURACY_MAX_M = 50
   MAX_SPEED = { 'walking' => 4.0, 'running' => 7.0, 'cycling' => 15.0 }.freeze # m/s, faster jumps are dropped
@@ -15,11 +23,8 @@ class Corridors::TripSource
   MIN_POINTS = 10
   MIN_LENGTH_M = 300.0
 
-  attr_reader :frame
-
-  def initialize(user, frame: nil)
+  def initialize(user)
     @user = user
-    @frame = frame || default_frame
   end
 
   # The user's tracks of the configured modes and period.
@@ -28,7 +33,9 @@ class Corridors::TripSource
     load(ids)
   end
 
-  def trip(track) = load([track.id]).first
+  # {track_id => Trip} of these tracks, in one query (a track without enough
+  # real fixes is missing).
+  def trips_for(track_ids) = load(track_ids).index_by(&:track_id)
 
   private
 
@@ -42,20 +49,18 @@ class Corridors::TripSource
       WHERE track_id IN (#{ids.map(&:to_i).join(',')}) AND lonlat IS NOT NULL
       ORDER BY track_id, timestamp
     SQL
-    rows.group_by(&:first).filter_map do |track_id, points|
+    loaded = rows.group_by(&:first).filter_map do |track_id, points|
       mode, started_at, ended_at = tracks[track_id]
       real = points.reject { |p| Corridors::Config.synthetic?(p[5]) }
       next if real.size < MIN_POINTS || real.size < points.size * MIN_REAL_SHARE
 
-      fixes = clean(real, mode)
-      fixes = trim_still_ends(fixes)
+      fixes = trim_still_ends(clean(real, mode))
       next if fixes.size < MIN_POINTS
 
-      xy = fixes.map { |f| @frame.xy(f[0], f[1]) }
-      next if Corridors::Geometry.length(xy) < MIN_LENGTH_M
-
-      Trip.new(track_id:, mode:, started_at:, ended_at:, xy:)
+      Trip.new(track_id:, mode:, started_at:, ended_at:, lonlat: fixes.map { |lon, lat, _| [lon, lat] })
     end
+    frame = Corridors::Geometry::Frame.around(loaded.map { |t| t.lonlat.first })
+    loaded.map { |t| t.in_frame(frame) }.select { |t| Corridors::Geometry.length(t.xy) >= MIN_LENGTH_M }
   end
 
   # [[lon, lat, timestamp], ...] without inaccurate fixes, duplicates and impossible jumps
@@ -95,12 +100,5 @@ class Corridors::TripSource
   def metres(a, b)
     kx = Math.cos(a[1] * Math::PI / 180) * 111_320
     Math.hypot((b[0] - a[0]) * kx, (b[1] - a[1]) * 110_540)
-  end
-
-  # Around the user's last point (a frequent route is near home).
-  def default_frame
-    lon, lat = Point.where(user_id: @user.id).where.not(lonlat: nil).order(timestamp: :desc)
-                    .pick(Arel.sql('ST_X(lonlat::geometry)'), Arel.sql('ST_Y(lonlat::geometry)'))
-    Corridors::Geometry::Frame.new(lon.to_f, lat.to_f)
   end
 end

@@ -58,8 +58,9 @@ docker compose -f docker-compose.yml -f docker-compose.transit.yml up -d --build
 The first build takes a few minutes (gems, `npm ci`, asset compilation). The web container runs
 the migrations on start, as upstream does. On an empty database Rails loads upstream's
 `db/schema.rb` first, which marks our older migrations as done without creating our tables;
-`lib/tasks/gtfs_schema.rake` notices that right after `db:migrate` and runs them (the log says
-`[gtfs] fresh database: ... running them now`). On an existing database it does nothing.
+`lib/tasks/gtfs_schema.rake` unmarks them right after the schema load, so the same run creates
+them in order (the log says `[gtfs] schema load: N custom migration(s) left to run`). On an
+existing database it does nothing.
 
 A shorter command: `export COMPOSE_FILE=docker-compose.yml:docker-compose.transit.yml`, then plain
 `docker compose ...` works. The examples below use that.
@@ -105,7 +106,7 @@ comments. The important ones:
 |---|---|---|
 | `GTFS_ENABLED` | `false` | master switch; without it the jobs and the daily sync do nothing |
 | `GTFS_QUEUE_CONCURRENCY` | `1` | Sidekiq threads for imports and matching |
-| `RAILS_MAX_THREADS` | `10` | DB pool; keep it ≥ `BACKGROUND_PROCESSING_CONCURRENCY` |
+| `RAILS_MAX_THREADS` | unset (pool 10, Puma 5 threads) | DB pool and Puma threads; set it only when `BACKGROUND_PROCESSING_CONCURRENCY` exceeds 10 |
 | `GTFS_MATCH_CRON`, `GTFS_SYNC_CRON` | `0 3 * * *`, `30 3 * * *` (Europe/Budapest) | daily match and feed sync |
 | `GTFS_MAV_URL`, `GTFS_MAV_USERNAME`, `GTFS_MAV_PASSWORD` | – | Hungarian rail (MÁV-START / GYSEV): no public URL, access on request |
 | `GTFS_MAP_TILE_CONTACT` | app URL | contact for the OpenStreetMap tile policy (Discord map images) |

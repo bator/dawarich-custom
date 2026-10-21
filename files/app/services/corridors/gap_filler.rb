@@ -34,16 +34,17 @@ class Corridors::GapFiller
   # left as they were, filled ones routed
   Result = Struct.new(:line, :gaps, :filled, keyword_init: true)
 
-  def initialize(user, frame, client: nil, step: Corridors::Builder::BIN)
+  def initialize(user, client: nil, step: Corridors::Builder::BIN)
     @user = user
-    @frame = frame
     @client = client
     @step = step
   end
 
   # gaps: [[first, last], ...] indices of `line` with few real fixes, inner
-  # ones only (the ends of a route are always supported)
-  def call(mode, line, gaps)
+  # ones only (the ends of a route are always supported); frame: the one the
+  # line's local metres are in (each route has its own)
+  def call(mode, line, gaps, frame:)
+    @frame = frame
     out = []
     marks = []
     cursor = 0
