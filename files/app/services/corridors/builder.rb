@@ -34,6 +34,7 @@ class Corridors::Builder
   BIN = 10.0
   TRIP_SMOOTH_M = 20.0 # each side of a fix, before resampling (GPS zigzag)
   GUIDE_SMOOTH_M = 50.0
+  HEADING_M = 30.0 # the guide's ends run on in the direction of their last HEADING_M
   REFINE = 2
   SHIFT_BINS = 2 # moves averaged over this many bins on each side
   MIN_COVERAGE = 0.6
@@ -79,16 +80,16 @@ class Corridors::Builder
   # => [[Trip oriented like the first one, ...], ...] with at least min_trips each
   def clusters(trips, mode)
     threshold = CLUSTER_M.fetch(mode, 50.0)
-    shapes = trips.map { |t| G.fractions(t.xy) }
-    ends = trips.map { |t| [t.xy.first, t.xy.last] }
+    shapes = trips.map { |t| G.shape(t.lonlat) }
+    ends = trips.map { |t| [t.lonlat.first, t.lonlat.last] }
     links = Array.new(trips.size) { {} } # j => reversed?
     trips.each_index do |i|
       (i + 1...trips.size).each do |j|
-        reversed = if G.dist(ends[i][0], ends[j][0]) < ENDPOINT_M && G.dist(ends[i][1], ends[j][1]) < ENDPOINT_M then false
-                   elsif G.dist(ends[i][0], ends[j][1]) < ENDPOINT_M && G.dist(ends[i][1], ends[j][0]) < ENDPOINT_M then true
+        reversed = if G.metres(ends[i][0], ends[j][0]) < ENDPOINT_M && G.metres(ends[i][1], ends[j][1]) < ENDPOINT_M then false
+                   elsif G.metres(ends[i][0], ends[j][1]) < ENDPOINT_M && G.metres(ends[i][1], ends[j][0]) < ENDPOINT_M then true
                    end
         next if reversed.nil?
-        next unless G.mean_distance(shapes[i], reversed ? shapes[j].reverse : shapes[j]) < threshold
+        next unless G.mean_metres(shapes[i], reversed ? shapes[j].reverse : shapes[j]) < threshold
 
         links[i][j] = reversed
         links[j][i] = reversed
@@ -108,9 +109,9 @@ class Corridors::Builder
   end
 
   def unique(trips)
-    shapes = trips.map { |t| G.fractions(t.xy) }
+    shapes = trips.map { |t| G.shape(t.lonlat) }
     kept = []
-    trips.each_index { |i| kept << i if kept.none? { |k| G.mean_distance(shapes[i], shapes[k]) < DUPLICATE_M } }
+    trips.each_index { |i| kept << i if kept.none? { |k| G.mean_metres(shapes[i], shapes[k]) < DUPLICATE_M } }
     kept.map { |i| trips[i] }
   end
 
@@ -119,6 +120,8 @@ class Corridors::Builder
     line = median(guide(smoothed), smoothed)
     s = G.lengths(line)
     kept = keep(smoothed.map { |pts| offsets(line, s, pts) })
+    return nil if kept.count(true) < Corridors::Config.min_trips
+
     unless kept.all?
       used = smoothed.select.with_index { |_, i| kept[i] }
       line = median(guide(used), used)
@@ -127,12 +130,33 @@ class Corridors::Builder
   end
 
   # A first course of the route that no single trip decides: the median of
-  # the trips' points at equal shares of their lengths, smoothed.
+  # the trips' points at equal shares of their lengths, smoothed, and run on
+  # straight for ENDPOINT_M at both ends: it starts where the median trip
+  # starts, while the line may have to start before that (where half of the
+  # trips have started); the median moves the extension onto the trips that
+  # go there, and #finish cuts it.
   def guide(trips)
     k = [(G.median(trips.map { |t| G.length(t) }) / STEP).round, 2].max
     shares = trips.map { |t| G.fractions(t, k) }
     points = Array.new(k) { |j| [G.median(shares.map { |f| f[j][0] }), G.median(shares.map { |f| f[j][1] })] }
-    G.resample(G.smooth_track(points, GUIDE_SMOOTH_M), BIN)
+    line = G.resample(G.smooth_track(points, GUIDE_SMOOTH_M), BIN)
+    extended(extended(line, ENDPOINT_M).reverse, ENDPOINT_M).reverse
+  end
+
+  # The line run on straight before its start (in the direction of its first
+  # HEADING_M) by `metres`.
+  def extended(line, metres)
+    s = G.lengths(line)
+    return line if line.size < 2 || s.last <= 0
+
+    a = line.first
+    b = G.slice(line, s, 0.0, [HEADING_M, s.last].min).last
+    d = G.dist(a, b)
+    return line if d <= 0
+
+    ux = (a[0] - b[0]) / d
+    uy = (a[1] - b[1]) / d
+    (metres / BIN).round.downto(1).map { |n| [a[0] + (ux * n * BIN), a[1] + (uy * n * BIN)] } + line
   end
 
   # Moves the line to the median of the trips' sideways offsets (where enough
@@ -194,15 +218,17 @@ class Corridors::Builder
   end
 
   # The line runs from where END_SUPPORT of the kept trips have started to
-  # where as many still go (along the line, so it moves smoothly with them).
+  # where as many still go (along the line, so it moves smoothly with them;
+  # the same count of trips at both ends, also for an even number of them).
   def finish(mode, frame, line, trips, kept)
     used = trips.each_index.select { |i| kept[i] }
     return nil if used.size < Corridors::Config.min_trips
 
     s = G.lengths(line)
     projected = used.map { |i| G.project(line, s, trips[i].xy) }
-    from = G.percentile(projected.map { |pairs| pairs.map(&:first).min }, END_SUPPORT)
-    to = G.percentile(projected.map { |pairs| pairs.map(&:first).max }, 1 - END_SUPPORT)
+    reached = (used.size * END_SUPPORT).ceil
+    from = projected.map { |pairs| pairs.map(&:first).min }.sort[reached - 1]
+    to = projected.map { |pairs| pairs.map(&:first).max }.sort.reverse[reached - 1]
     return nil if to - from < 3 * BIN
 
     line = G.resample(G.slice(line, s, from, to), BIN)

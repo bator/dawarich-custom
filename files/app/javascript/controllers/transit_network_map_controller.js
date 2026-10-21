@@ -7,12 +7,13 @@ import { getMapStyle } from "maps_maplibre/utils/style_manager"
 // the GeoJSON (Gtfs::NetworkMap) in a <script type="application/json"> target.
 // Scroll zoom needs Ctrl/Cmd (cooperative gestures), so the page still scrolls.
 
-// Whether the browser gives WebGL2 contexts: probed once per page load (every
-// Turbo visit to the page would create one more context otherwise; browsers
-// keep only a few), and the probe's context is released at once.
-let webgl2
+// Whether the browser gives WebGL2 contexts: once it did, it is not probed
+// again in this page load (every Turbo visit would create one more context;
+// browsers keep only a few), and the probe's context is released at once. A
+// failed probe is tried again on the next visit (a GPU process may restart).
+let webgl2 = false
 function hasWebGL2() {
-  if (webgl2 === undefined) {
+  if (!webgl2) {
     const gl = document.createElement("canvas").getContext("webgl2")
     webgl2 = !!gl
     gl?.getExtension("WEBGL_lose_context")?.loseContext()

@@ -3,16 +3,18 @@
 # The trips a user's frequent routes are built from, or the tracks to snap:
 # the raw points of the track (not its stored, possibly snapped geometry),
 # real fixes only (Corridors::Config.synthetic? drops generated points), with
-# bad fixes and the standing-still ends removed: lon/lat, and local metres in
-# a frame centred on the median start of the loaded trips (not on one point
-# of the user, e.g. the last one, which may be abroad). A route or a track
-# gets a frame of its own for the exact work (Trip#in_frame).
+# bad fixes and the standing-still ends removed, as lon/lat. Nothing here
+# hangs on a shared frame: a route or a track gets local metres of its own for
+# the exact work (Trip#in_frame), and lengths are measured around each trip.
 class Corridors::TripSource
+  # xy: local metres, set by #in_frame
   Trip = Struct.new(:track_id, :mode, :started_at, :ended_at, :lonlat, :xy, keyword_init: true) do
-    # the same trip in local metres around another centre
+    # the same trip in local metres around a centre
     def in_frame(frame) = dup.tap { |t| t.xy = lonlat.map { |lon, lat| frame.xy(lon, lat) } }
 
-    def reversed = dup.tap { |t| t.lonlat = lonlat.reverse; t.xy = xy.reverse }
+    def reversed = dup.tap { |t| t.lonlat = lonlat.reverse; t.xy = xy&.reverse }
+
+    def length_m = Corridors::Geometry.length(in_frame(Corridors::Geometry::Frame.new(*lonlat.first)).xy)
   end
 
   ACCURACY_MAX_M = 50
@@ -59,8 +61,7 @@ class Corridors::TripSource
 
       Trip.new(track_id:, mode:, started_at:, ended_at:, lonlat: fixes.map { |lon, lat, _| [lon, lat] })
     end
-    frame = Corridors::Geometry::Frame.around(loaded.map { |t| t.lonlat.first })
-    loaded.map { |t| t.in_frame(frame) }.select { |t| Corridors::Geometry.length(t.xy) >= MIN_LENGTH_M }
+    loaded.select { |t| t.length_m >= MIN_LENGTH_M }
   end
 
   # [[lon, lat, timestamp], ...] without inaccurate fixes, duplicates and impossible jumps

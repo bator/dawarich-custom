@@ -23,28 +23,21 @@ if [ "$(id -u)" = "0" ] && [ -n "${PUID}${PGID}" ]; then
   exec gosu "$TARGET_UID:$TARGET_GID" "$0" "$@"
 fi
 
-# DATABASE_URL split like the upstream entrypoints do: psql does not take
-# Rails' postgis:// scheme, nor its query parameters (pool=...).
+# With DATABASE_URL, psql gets it as a URI (libpq decodes %-escapes and
+# takes any host form), with the postgresql scheme instead of Rails' postgis
+# and without the query, whose Rails options (pool=...) libpq would refuse.
 if [ -n "$DATABASE_URL" ]; then
-  _db_url_stripped="${DATABASE_URL#*://}"
-  _db_credentials="${_db_url_stripped%%@*}"
-  _db_host_path="${_db_url_stripped#*@}"
-  DATABASE_USERNAME="${_db_credentials%%:*}"
-  DATABASE_PASSWORD="${_db_credentials#*:}"
-  _db_host_port="${_db_host_path%%/*}"
-  DATABASE_NAME="${_db_host_path#*/}"
-  DATABASE_NAME="${DATABASE_NAME%%\?*}"
-  DATABASE_HOST="${_db_host_port%%:*}"
-  if [ "$_db_host_port" != "$DATABASE_HOST" ]; then
-    DATABASE_PORT="${_db_host_port#*:}"
-  else
-    DATABASE_PORT="5432"
-  fi
+  _db_uri="postgresql://${DATABASE_URL#*://}"
+  _db_uri="${_db_uri%%\?*}"
 fi
 
 db_ready() {
-  PGPASSWORD="$DATABASE_PASSWORD" psql -h "$DATABASE_HOST" -p "${DATABASE_PORT:-5432}" \
-    -U "$DATABASE_USERNAME" -d "$DATABASE_NAME" -c '\q' >/dev/null 2>&1
+  if [ -n "$DATABASE_URL" ]; then
+    psql "$_db_uri" -c '\q' >/dev/null 2>&1
+  else
+    PGPASSWORD="$DATABASE_PASSWORD" psql -h "$DATABASE_HOST" -p "${DATABASE_PORT:-5432}" \
+      -U "$DATABASE_USERNAME" -d "$DATABASE_NAME" -c '\q' >/dev/null 2>&1
+  fi
 }
 
 echo "⏳ Waiting for the database..."

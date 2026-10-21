@@ -28,6 +28,24 @@ module Corridors::Geometry
 
   def dist(a, b) = Math.hypot(a[0] - b[0], a[1] - b[1])
 
+  # Metres between two [lon, lat] points, in local metres around them (no
+  # shared frame: exact enough for the few hundred metres it decides on,
+  # wherever the points are).
+  def metres(a, b)
+    k = R * Math::PI / 180
+    Math.hypot((b[0] - a[0]) * k * Math.cos((a[1] + b[1]) * Math::PI / 360), (b[1] - a[1]) * k)
+  end
+
+  # mean of metres at equal shares of two [lon, lat] shapes (#shape)
+  def mean_metres(fa, fb) = fa.zip(fb).sum { |a, b| metres(a, b) } / fa.size
+
+  # `k` [lon, lat] points at equal shares of the length of a [lon, lat] line,
+  # measured in metres around its start (for comparing trips' shapes).
+  def shape(lonlat, k = 50)
+    frame = Frame.new(*lonlat.first)
+    fractions(lonlat.map { |lon, lat| frame.xy(lon, lat) }, k).map { |x, y| frame.lonlat(x, y) }
+  end
+
   def lengths(line)
     s = [0.0]
     line.each_cons(2) { |a, b| s << (s.last + dist(a, b)) }
@@ -161,16 +179,21 @@ module Corridors::Geometry
 
   # Weighted average of the points within `radius` metres along the line
   # (weights fall to zero at the radius): GPS zigzag out, the course kept.
+  # Near an end the window shrinks to what lies on both sides, so the ends
+  # stay where they are (a one-sided window would pull them inwards).
   def smooth_track(line, radius)
     s = lengths(line)
-    lo = 0
-    hi = 0
     line.each_index.map do |i|
-      lo += 1 while s[i] - s[lo] >= radius
-      hi += 1 while hi + 1 < line.size && s[hi + 1] - s[i] < radius
+      r = [radius, s[i] - s.first, s.last - s[i]].min
+      next line[i] if r <= 0
+
+      lo = i
+      lo -= 1 while lo.positive? && s[i] - s[lo - 1] < r
+      hi = i
+      hi += 1 while hi + 1 < line.size && s[hi + 1] - s[i] < r
       x = y = sum = 0.0
       (lo..hi).each do |j|
-        w = (1 - (((s[j] - s[i]) / radius)**2))**2
+        w = (1 - (((s[j] - s[i]) / r)**2))**2
         x += w * line[j][0]
         y += w * line[j][1]
         sum += w

@@ -187,7 +187,7 @@
     "db/migrate/20261020153000_rename_gtfs_discord_settings_values_to_data.rb",
     "db/migrate/20261021090000_create_track_corridors.rb",
     "db/migrate/20261021100000_add_filled_to_track_corridors.rb",
-    "db/migrate/20261021110000_add_snapped_digest_to_track_corridor_snaps.rb",
+    "db/migrate/20261021110000_add_snapped_digest_and_reverted_at_to_track_corridor_snaps.rb",
     "lib/tasks/corridors.rake",
     "lib/tasks/gtfs.rake",
     "lib/tasks/gtfs_discord.rake",

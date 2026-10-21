@@ -22,8 +22,8 @@ module GtfsSchemaRepair
 
   # ActiveRecord::Tasks::DatabaseTasks.load_schema, then forget_skipped
   module LoadSchema
-    def load_schema(db_config, *args)
-      super.tap do
+    def load_schema(db_config, ...)
+      super(db_config, ...).tap do
         next unless db_config.name == 'primary'
 
         skipped = migration_connection_pool.with_connection { |connection| GtfsSchemaRepair.forget_skipped(connection) }
