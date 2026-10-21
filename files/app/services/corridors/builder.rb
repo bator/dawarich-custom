@@ -6,19 +6,25 @@
 #      direction) and whose shapes are close (mean distance at equal shares of
 #      the length < CLUSTER_M) are one route; pointwise identical trips (copied
 #      points) count once
-#   2. median: start from the longest of the central trips, resampled every
-#      BIN m; project every trip onto it, take per bin the median of the trips'
-#      lateral offsets, smooth along the line, move the line; repeat
-#   3. trips far off the others (a detour) are left out; bins at the ends that
-#      fewer than END_SUPPORT of the trips reach are cut; loops the line made
-#      (stations, poor signal) are cut out; inner bins with few real fixes are
-#      gaps (a tunnel, lost signal)
+#   2. median: every trip is smoothed along its length (TRIP_SMOOTH_M, GPS
+#      zigzag would make lengths and samples depend on chance); the guide is the
+#      median of the trips' points at equal shares of their lengths, smoothed;
+#      every trip is projected onto it, the line moves to the median of their
+#      sideways offsets (interpolated at each point of the line), REFINE times
+#   3. trips far off the line (a detour) are left out and the median is built
+#      again without them; the ends are where END_SUPPORT of the trips have
+#      started and still go; loops the line made (stations, poor signal) are
+#      cut out; inner bins with few real fixes are gaps (a tunnel, lost signal)
 #   4. the line is smoothed (SMOOTH_M); a route wider than MAX_SPREAD_P90 or
 #      still zigzagging (MAX_TURN_PER_KM, e.g. inside a station hall with poor
 #      signal) is dropped, and of two routes that mostly overlap
 #      (OVERLAP_SHARE within OVERLAP_M) the one with fewer trips
 #   5. the gaps of walking and running routes are routed through
 #      (Corridors::GapFiller), else they stay the median
+# No step hangs on one chosen trip or on where its samples fall, and the
+# decisions left (trips left out, the checks of 4.) are made on measures that
+# move smoothly with the fixes: the same trips give the same routes, whatever
+# the frame of the local metres.
 class Corridors::Builder
   G = Corridors::Geometry
   ENDPOINT_M = 200.0
@@ -26,16 +32,21 @@ class Corridors::Builder
   DUPLICATE_M = 0.5
   STEP = 5.0
   BIN = 10.0
-  ITERATIONS = 5
-  SMOOTH_BINS = 5
+  TRIP_SMOOTH_M = 20.0 # each side of a fix, before resampling (GPS zigzag)
+  GUIDE_SMOOTH_M = 50.0
+  REFINE = 2
+  SHIFT_BINS = 2 # moves averaged over this many bins on each side
   MIN_COVERAGE = 0.6
+  NEAR_M = 10.0
+  FAR_M = 30.0
+  MAX_OFF_SHARE = 0.3
   END_SUPPORT = 0.5
   GAP_SUPPORT = 0.2
   GAP_MIN_M = 100.0
   MAX_SPREAD_P90 = 15.0
   SMOOTH_M = 30.0 # each side of a point
   MAX_TURN_PER_KM = 1000.0 # degrees of heading change per km of the smoothed line
-  OVERLAP_M = 15.0
+  OVERLAP_M = 25.0
   OVERLAP_SHARE = 0.7
 
   # line in local metres of `frame` (centred on the route's trips, so distances
@@ -104,67 +115,106 @@ class Corridors::Builder
   end
 
   def route(mode, trips, frame)
-    resampled = trips.map { |t| G.resample(t.xy, STEP) }
-    line = G.resample(reference(resampled), BIN)
-    kept = Array.new(trips.size, true)
-    ITERATIONS.times do
-      s = G.lengths(line)
-      per_trip = resampled.map { |pts| bin_offsets(line, s, pts) }
-      kept = keep(per_trip, line.size)
-      shift = line.each_index.map do |b|
-        offsets = per_trip.each_index.filter_map { |i| per_trip[i][b] if kept[i] }
-        offsets.size >= [3, 0.3 * kept.count(true)].max ? G.median(offsets) : 0.0
-      end
-      shift = G.moving_median(shift, SMOOTH_BINS)
-      normals = G.normals(line)
-      line = G.resample(line.each_with_index.map { |p, b| [p[0] + (normals[b][0] * shift[b]), p[1] + (normals[b][1] * shift[b])] }, BIN)
+    smoothed = trips.map { |t| G.resample(G.smooth_track(t.xy, TRIP_SMOOTH_M), STEP) }
+    line = median(guide(smoothed), smoothed)
+    s = G.lengths(line)
+    kept = keep(smoothed.map { |pts| offsets(line, s, pts) })
+    unless kept.all?
+      used = smoothed.select.with_index { |_, i| kept[i] }
+      line = median(guide(used), used)
     end
     finish(mode, frame, line, trips, kept)
   end
 
-  # Longest of the trips that are closer than the median to the others: the
-  # start must cover the route, a short trip would cut its ends off.
-  def reference(resampled)
-    shapes = resampled.map { |pts| G.fractions(pts) }
-    scores = shapes.map { |a| G.median(shapes.map { |b| G.mean_distance(a, b) }) }
-    limit = G.median(scores)
-    resampled.each_index.select { |i| scores[i] <= limit }.max_by { |i| G.length(resampled[i]) }.then { |i| resampled[i] }
+  # A first course of the route that no single trip decides: the median of
+  # the trips' points at equal shares of their lengths, smoothed.
+  def guide(trips)
+    k = [(G.median(trips.map { |t| G.length(t) }) / STEP).round, 2].max
+    shares = trips.map { |t| G.fractions(t, k) }
+    points = Array.new(k) { |j| [G.median(shares.map { |f| f[j][0] }), G.median(shares.map { |f| f[j][1] })] }
+    G.resample(G.smooth_track(points, GUIDE_SMOOTH_M), BIN)
   end
 
-  # {bin => median signed offset} of one trip
-  def bin_offsets(line, s, points)
-    G.project(line, s, points).group_by { |station, _| (station / BIN).round.clamp(0, line.size - 1) }
-     .transform_values { |pairs| G.median(pairs.map(&:last)) }
+  # Moves the line to the median of the trips' sideways offsets (where enough
+  # of them pass), averaged along the line; REFINE times.
+  def median(line, smoothed)
+    REFINE.times do
+      s = G.lengths(line)
+      per_trip = smoothed.map { |pts| offsets(line, s, pts) }
+      shift = line.each_index.map do |b|
+        values = per_trip.filter_map { |h| h[b] }
+        values.size >= [3, 0.3 * smoothed.size].max ? G.median(values) : 0.0
+      end
+      shift = G.moving_average(shift, SHIFT_BINS)
+      normals = G.normals(line)
+      line = G.resample(line.each_with_index.map { |p, b| [p[0] + (normals[b][0] * shift[b]), p[1] + (normals[b][1] * shift[b])] }, BIN)
+    end
+    line
   end
 
-  # Trips far off the others (a detour, a wrong cluster member) and trips that
-  # cover too little of the line are left out of the median.
-  def keep(per_trip, bins)
-    scores = per_trip.map { |h| h.empty? ? Float::INFINITY : G.median(h.values.map(&:abs)) }
-    finite = scores.reject(&:infinite?)
-    med = G.median(finite) || 0.0
-    mad = G.median(finite.map { |v| (v - med).abs }) || 0.0
-    limit = [med + (4 * 1.4826 * mad), 2 * med, 15.0].max
-    per_trip.each_index.map { |i| scores[i] <= limit && per_trip[i].size >= MIN_COVERAGE * bins }
+  # {point of the line => signed offset} of one trip at the points it passes,
+  # interpolated between its own points (not rounded to the nearest point:
+  # that would make the median jump); points beyond the ends of the line have
+  # no sideways offset and are left out
+  def offsets(line, s, points)
+    out = {}
+    inside(line, s, points).each_cons(2) do |(s0, o0), (s1, o1)|
+      next unless s1 > s0
+
+      b = G.bsearch_index(s, s0)
+      while b < s.size && s[b] <= s1
+        out[b] ||= o0 + ((o1 - o0) * (s[b] - s0) / (s1 - s0))
+        b += 1
+      end
+    end
+    out
   end
 
+  # [station, signed offset] of the points that lie along the line, not beyond its ends
+  def inside(line, s, points) = G.project(line, s, points).select { |station, _| station.positive? && station < s.last - 1e-6 }
+
+  # Trips that run off the line for much of their way (a detour, a wrong
+  # cluster member: more than MAX_OFF_SHARE and more than the others do) and
+  # trips that cover too little of the core (the part most trips pass; not of
+  # the line, which may run on with a long start) are left out of the median.
+  # Off is measured smoothly (NEAR_M on it, FAR_M off it, linear in between):
+  # a hard limit, or the median distance of a trip that is half on and half
+  # off, would flip with the slightest change of the line.
+  def keep(per_trip)
+    reach = Hash.new(0)
+    per_trip.each { |h| h.each_key { |b| reach[b] += 1 } }
+    core = reach.select { |_, n| n >= END_SUPPORT * per_trip.size }.keys
+    scores = per_trip.map do |h|
+      h.empty? ? 1.0 : h.values.sum { |v| ((v.abs - NEAR_M) / (FAR_M - NEAR_M)).clamp(0.0, 1.0) } / h.size
+    end
+    med = G.median(scores)
+    mad = G.median(scores.map { |v| (v - med).abs })
+    limit = [med + (4 * 1.4826 * mad), MAX_OFF_SHARE].max
+    per_trip.each_index.map { |i| scores[i] <= limit && (per_trip[i].keys & core).size >= MIN_COVERAGE * core.size }
+  end
+
+  # The line runs from where END_SUPPORT of the kept trips have started to
+  # where as many still go (along the line, so it moves smoothly with them).
   def finish(mode, frame, line, trips, kept)
     used = trips.each_index.select { |i| kept[i] }
     return nil if used.size < Corridors::Config.min_trips
 
     s = G.lengths(line)
+    projected = used.map { |i| G.project(line, s, trips[i].xy) }
+    from = G.percentile(projected.map { |pairs| pairs.map(&:first).min }, END_SUPPORT)
+    to = G.percentile(projected.map { |pairs| pairs.map(&:first).max }, 1 - END_SUPPORT)
+    return nil if to - from < 3 * BIN
+
+    line = G.resample(G.slice(line, s, from, to), BIN)
+    s = G.lengths(line)
     support = Array.new(line.size, 0)
     spreads = used.map do |i|
-      projected = G.project(line, s, trips[i].xy)
-      projected.map { |station, _| (station / BIN).round.clamp(0, line.size - 1) }.uniq.each { |b| support[b] += 1 }
-      G.median(projected.map { |_, offset| offset.abs })
+      along = inside(line, s, trips[i].xy)
+      along.map { |station, _| (station / BIN).round.clamp(0, line.size - 1) }.uniq.each { |b| support[b] += 1 }
+      G.median(along.map { |_, offset| offset.abs })
     end
     share = support.map { |n| n.to_f / used.size }
-    first = share.index { |v| v >= END_SUPPORT }
-    last = share.rindex { |v| v >= END_SUPPORT }
-    return nil if first.nil? || last - first < 2
-
-    line, share = without_loops(line[first..last], share[first..last])
+    line, share = without_loops(line, share)
     line = smooth(line)
     return nil if line.size < 3 || G.percentile(spreads, 0.9).to_f > MAX_SPREAD_P90
     return nil if turn_per_km(line) > MAX_TURN_PER_KM
@@ -238,9 +288,11 @@ class Corridors::Builder
   end
 
   # Of routes that mostly run on top of each other, the one with more trips
-  # (compared in the frame of the one kept: each route has its own).
+  # (compared in the frame of the one kept: each route has its own). OVERLAP_M
+  # is wide enough for the two directions of one way (other pavement, other
+  # platform), which the clustering may part.
   def distinct(routes)
-    routes.sort_by { |r| -r.trips }.each_with_object([]) do |r, kept|
+    routes.sort_by { |r| [-r.trips, -G.length(r.line), r.track_ids.min] }.each_with_object([]) do |r, kept|
       kept << r unless kept.any? { |k| overlap(in_frame(r, k.frame), k.line) >= OVERLAP_SHARE }
     end
   end
@@ -252,7 +304,8 @@ class Corridors::Builder
     G.project(other, s, line, back: Float::INFINITY, forward: Float::INFINITY).count { |_, offset| offset.abs <= OVERLAP_M }.fdiv(line.size)
   end
 
-  # [[first, last], ...] bins where under GAP_SUPPORT of the trips have a real fix
+  # [[first, last], ...] bins where under GAP_SUPPORT of the trips have a real
+  # fix, inner ones only (a stretch at an end is not between fixes)
   def gaps(share)
     runs = []
     start = nil
@@ -261,7 +314,7 @@ class Corridors::Builder
       next unless start && (v >= GAP_SUPPORT || i == share.size - 1)
 
       stop = v < GAP_SUPPORT ? i : i - 1
-      runs << [start, stop] if (stop - start + 1) * BIN >= GAP_MIN_M
+      runs << [start, stop] if start.positive? && stop < share.size - 1 && (stop - start + 1) * BIN >= GAP_MIN_M
       start = nil
     end
     runs

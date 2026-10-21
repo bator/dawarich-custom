@@ -22,13 +22,23 @@ CORRIDORS_FILL_GAPS=true      # default: route the gaps of walking routes (see b
 2. **Group.** Trips whose ends are within 200 m of each other (in either direction) and whose shapes
    are close (mean distance at equal shares of the length under 40 m walking, 50 m cycling) form
    one route; identical copies count once. A route needs 5 trips (`CORRIDORS_MIN_TRIPS`).
-3. **Median.** Starting from the longest of the central trips, every trip is projected onto the
-   line; every 10 m the median of their sideways offsets moves the line, five times. Trips far off
-   the others (a detour) are left out. The ends are cut where fewer than half of the trips reach,
-   loops the line made are cut out, and the line is smoothed over 30 m on each side.
+3. **Median.** Each trip is first smoothed along its length (20 m on each side), so GPS zigzag
+   does not make it longer than the way. The first course of the route is the median of all
+   trips' points at equal shares of their lengths, smoothed; every trip is projected onto it, and
+   the median of their sideways offsets (interpolated at every 10 m of the line) moves it, twice.
+   Trips that run off the line for much of their way (a detour: on average more than 30% of it,
+   counting 10 m off as on the line and 30 m off as fully off, and more than the other trips) are
+   left out, and the median is built again from the rest. The line runs from where half of the
+   trips have started to where half of them still go; loops the line made are cut out, and the
+   line is smoothed over 30 m on each side.
 4. **Quality.** A route whose trips spread more than 15 m (90th percentile) or whose line still
    zigzags (over 1000° of turning per km, e.g. inside a station hall) is dropped, and of two routes
-   that mostly overlap the one with fewer trips.
+   that mostly overlap (70% of one within 25 m of the other, e.g. the two directions of a way on
+   two pavements) the one with fewer trips.
+
+The same trips give the same routes: no step depends on one chosen trip, on where the GPS samples
+fall, or on the frame of the local metres. Checked on real data with the frame centre moved by
+±0.01° and the metre scale by ±0.1%: the same routes from the same trips, within 1.5 m.
 
 Each route is computed in metres around its own trips, stored in `track_corridors`, replaced as a
 whole every week. A dry run (`DRY_RUN=1`) sends nothing to the Atlas: gaps stay unrouted.

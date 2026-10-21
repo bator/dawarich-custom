@@ -152,10 +152,30 @@ module Corridors::Geometry
     sorted[((sorted.size - 1) * share).round]
   end
 
-  def moving_median(values, window)
-    half = window / 2
+  def moving_average(values, half)
     values.each_index.map do |i|
-      median(values[[i - half, 0].max..[i + half, values.size - 1].min]) || 0.0
+      part = values[[i - half, 0].max..[i + half, values.size - 1].min]
+      part.sum.fdiv(part.size)
+    end
+  end
+
+  # Weighted average of the points within `radius` metres along the line
+  # (weights fall to zero at the radius): GPS zigzag out, the course kept.
+  def smooth_track(line, radius)
+    s = lengths(line)
+    lo = 0
+    hi = 0
+    line.each_index.map do |i|
+      lo += 1 while s[i] - s[lo] >= radius
+      hi += 1 while hi + 1 < line.size && s[hi + 1] - s[i] < radius
+      x = y = sum = 0.0
+      (lo..hi).each do |j|
+        w = (1 - (((s[j] - s[i]) / radius)**2))**2
+        x += w * line[j][0]
+        y += w * line[j][1]
+        sum += w
+      end
+      [x / sum, y / sum]
     end
   end
 end
