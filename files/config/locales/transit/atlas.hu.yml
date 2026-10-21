@@ -1,0 +1,42 @@
+hu:
+  atlas_directions:
+    title: Útvonaltervezés
+    mode: Közlekedési mód
+    modes:
+      car: Autó
+      bike: Bicikli
+      walk: Gyalog
+      transit: Tömegközlekedés
+    legs:
+      walk: Gyalog
+      bus: Busz
+      tram: Villamos
+      subway: Metró
+      metro: Metró
+      rail: Vonat
+      regional_rail: Vonat
+      regional_fast_rail: Vonat
+      long_distance: Vonat
+      high_speed_rail: Vonat
+      night_rail: Éjszakai vonat
+      coach: Távolsági busz
+      ferry: Hajó
+      trolleybus: Troli
+    from: Honnan
+    to: Hová
+    pick_button: Kijelölés a térképen
+    pick: Kattints a térképre a pont megadásához.
+    swap: Csere
+    time: Indulás
+    arrive_by: Érkezés eddig
+    go: Útvonal
+    clear: Törlés
+    need_points: Előbb add meg mindkét végpontot.
+    loading: Útvonal keresése…
+    no_route: Nincs útvonal a két pont között.
+    unavailable: Az Atlas nem válaszolt. Próbáld újra később.
+    transfers: Átszállás
+    walking: gyalog
+    hour: ó
+    minute: p
+    source: "Atlas: Valhalla (utak), MOTIS (menetrendek), Photon (helyek)."

@@ -29,7 +29,7 @@
      resources :users, only: %i[index show create destroy edit update] do
        member do
          post 'regenerate_api_key'
-@@ -424,6 +439,19 @@
+@@ -424,6 +439,23 @@
  
        resources :flights, only: %i[index]
  
@@ -41,6 +41,10 @@
 +          collection { get :map }
 +        end
 +        resources :corridors, only: %i[index]
++        # the map's directions panel through Atlas (docs/atlas.md)
++        resource :directions, only: %i[show] do
++          get :search
++        end
 +        resource :rematch, only: %i[create]
 +        resources :feeds, only: %i[index]
 +        resources :stats, only: %i[index]

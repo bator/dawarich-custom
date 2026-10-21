@@ -30,7 +30,8 @@ It matches recorded location history against Hungarian public-transport timetabl
 
 Also: **Settings** (opt-in, feeds, minimum confidence, rematch the whole history), transit layers on `/map/v2`,
 **Frequent routes** (the middle line of walks and rides made many times, a map layer, and snapping new tracks onto it;
-[docs/corridors.md](docs/corridors.md)), and `track_pick`, a daily Discord pick of which user's track to copy onto the target account.
+[docs/corridors.md](docs/corridors.md)), **Directions** on `/map/v2` by car, bike, on foot and by public transport through a
+self-hosted [Dawarich Atlas](docs/atlas.md), and `track_pick`, a daily Discord pick of which user's track to copy onto the target account.
 
 ## Install
 

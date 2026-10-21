@@ -57,6 +57,8 @@
         </div>
       </div>
 
+      <%= render 'map/maplibre/atlas_directions' if Atlas::Config.enabled? %>
+
       <!-- Layers Tab -->
       <div class="tab-content<%= ' active' unless timeline_panel_open %>" data-tab-content="layers" data-map-panel-target="tabContent">
         <div class="layer-tiles">

@@ -1,0 +1,42 @@
+en:
+  atlas_directions:
+    title: Directions
+    mode: Travel mode
+    modes:
+      car: Car
+      bike: Bike
+      walk: On foot
+      transit: Public transport
+    legs:
+      walk: Walk
+      bus: Bus
+      tram: Tram
+      subway: Metro
+      metro: Metro
+      rail: Train
+      regional_rail: Train
+      regional_fast_rail: Train
+      long_distance: Train
+      high_speed_rail: Train
+      night_rail: Night train
+      coach: Coach
+      ferry: Ferry
+      trolleybus: Trolleybus
+    from: From
+    to: To
+    pick_button: Pick on the map
+    pick: Click the map to set the point.
+    swap: Swap
+    time: Departure
+    arrive_by: Arrive by this time
+    go: Get directions
+    clear: Clear
+    need_points: Set both ends first.
+    loading: Looking for routes…
+    no_route: No route between these points.
+    unavailable: Atlas did not answer. Try again later.
+    transfers: Transfers
+    walking: walking
+    hour: h
+    minute: min
+    source: "Atlas: Valhalla (roads), MOTIS (timetables), Photon (places)."

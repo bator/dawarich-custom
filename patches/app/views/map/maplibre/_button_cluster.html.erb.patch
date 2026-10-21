@@ -1,0 +1,23 @@
+--- a/app/views/map/maplibre/_button_cluster.html.erb
++++ b/app/views/map/maplibre/_button_cluster.html.erb
+@@ -35,6 +35,20 @@
+     <%= icon 'search' %>
+   </button>
+ 
++  <%# Directions through Atlas (docs/atlas.md), only while Atlas is configured %>
++  <% if Atlas::Config.enabled? %>
++    <button type="button"
++            class="map-button-cluster__btn"
++            data-action="click->map-panel#openTab"
++            aria-expanded="false"
++            data-tab="directions"
++            data-testid="map-button-directions"
++            aria-label="<%= t('atlas_directions.title') %>"
++            title="<%= t('atlas_directions.title') %>">
++      <%= icon 'route' %>
++    </button>
++  <% end %>
++
+   <% if family_feature_available? && current_user.in_family? %>
+     <button type="button"
+             class="map-button-cluster__btn"

@@ -447,6 +447,10 @@ Rails.application.routes.draw do
           collection { get :map }
         end
         resources :corridors, only: %i[index]
+        # the map's directions panel through Atlas (docs/atlas.md)
+        resource :directions, only: %i[show] do
+          get :search
+        end
         resource :rematch, only: %i[create]
         resources :feeds, only: %i[index]
         resources :stats, only: %i[index]
