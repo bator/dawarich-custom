@@ -38,6 +38,7 @@
     "app/jobs/gtfs/rematch_after_import_job.rb",
     "app/jobs/gtfs/sync_all_feeds_job.rb",
     "app/jobs/gtfs/sync_feed_job.rb",
+    "app/jobs/gtfs/walk_today_job.rb",
     "app/models/gtfs.rb",
     "app/models/gtfs/discord_setting.rb",
     "app/models/gtfs/feed.rb",

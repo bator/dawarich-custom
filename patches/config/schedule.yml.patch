@@ -1,6 +1,6 @@
 --- a/config/schedule.yml
 +++ b/config/schedule.yml
-@@ -124,3 +124,24 @@
+@@ -124,3 +124,30 @@
    cron: "*/5 * * * *"
    class: "Stats::ToponymsRefreshJob"
    queue: stats
@@ -9,6 +9,12 @@
 +  # before the feed sync below: decision K4 keeps only active + one backup timetable (docs/gtfs.md)
 +  cron: "<%= ENV.fetch('GTFS_MATCH_CRON', '0 3 * * * Europe/Budapest') %>" # no-op unless GTFS_ENABLED=true
 +  class: "Gtfs::MatchRecentJob"
++  queue: gtfs
++
++gtfs_walk_today_job:
++  # today's walks snapped during the day, walks only: rides stay for the night (docs/atlas.md)
++  cron: "<%= ENV.fetch('GTFS_WALK_TODAY_CRON', '17 6-23 * * * Europe/Budapest') %>" # no-op unless GTFS_WALK_SNAP_ENABLED=true
++  class: "Gtfs::WalkTodayJob"
 +  queue: gtfs
 +
 +gtfs_sync_all_feeds_job:

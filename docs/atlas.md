@@ -112,6 +112,17 @@ shows one line, the snapped one. Everywhere else the raw line stays and joins th
   - Cutting every tile on the fly with the spatial test instead took 5 s a tile over 93 days, hence
     the stored `covered`.
 
+## Walks the same day
+
+The night's match (`Gtfs::MatchRecentJob`, 03:00) snaps the walks of the days before, so a walk
+used to stay raw on the map until the next morning. `Gtfs::WalkTodayJob` snaps today's walks so far
+every hour from 06 to 23 (`GTFS_WALK_TODAY_CRON`, default `17 6-23 * * * Europe/Budapest`):
+
+- walks only: rides stay for the night, so no ride is matched while it is still going on, and
+  Discord gets no ride message during the day;
+- under the user's match lock; a user whose matching is running is skipped until the next hour;
+- the night's run replaces today's legs with the whole day.
+
 ## Limits
 
 - Atlas has no language parameter for directions, so the panel shows totals and the transit legs,
