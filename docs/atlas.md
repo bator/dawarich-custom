@@ -83,9 +83,9 @@ ones.
 - **Walks** are cut for all of their time, from the leg's first to its last fix: the layer draws all
   of it as one dashed line (Bator, 2026-10-22: the stretches between the snapped parts dashed, not
   as the raw track line).
-  - Snapped parts (`valhalla`): a dashed dark slate line with a white casing.
-  - Between them, in the same colour, thinner and with shorter dashes: recorded parts (`raw`) along
-    their fixes, and straight `joint`s. A standing-still cloud (`stationary`) stays a grey dot.
+  - One dashed dark slate line with a white casing: the snapped parts (`valhalla`), the recorded
+    parts (`raw`) along their fixes and the straight `joint`s between them, all alike (Bator chose
+    it from four styles). A standing-still cloud (`stationary`) stays a grey dot.
   - Earlier rule (`20261022120000`–`20261022130000`, removed by `20261022160000`): cut only between
     two points the snap matched (`transit_walk_legs.covered`), the raw track line stayed under
     recorded parts, standing-still clouds and GPS gaps.
