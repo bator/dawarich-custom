@@ -74,31 +74,43 @@ at most 5 s for Atlas and a route 10 s, retries included.
 
 Walks snapped through Atlas (`Gtfs::Walk`, layer *Walking legs*) and rides matched to a timetable
 (layer *Transit*) are drawn over the Tracks layer, which stays below them. While those layers are
-on, the Tracks tiles also leave out the raw GPS line they cover, so a stretch shows one line: the
-snapped one.
+on, the Tracks tiles also leave out the raw GPS line where those layers draw over it. A stretch then
+shows one line, the snapped one. Everywhere else the raw line stays and joins the drawn ones.
 
 - The map asks for it with `hide=walks,rides` on `/api/v1/tiles/tracks/{z}/{x}/{y}.mvt`
   (`TracksMvtLayer#setHide`, `LayerManager#updateTrackCutouts`).
-- `Gtfs::TrackCutouts` merges the covered time into one `int8multirange` (`range_agg`).
-  - Walks: the legs the layer shows with source `valhalla` or `mixed`.
-  - Rides: the rides the layer shows.
-  - Both use the layers' own visibility (threshold, feed selection, privacy zones).
-  - What a layer does not draw is not cut. A walk the snap could not match (`raw`) keeps its track
-    line.
-- From zoom 8 (`Tracks::VectorTileQuery::HIDE_MIN_ZOOM`), a track under a covered stretch goes the
-  clipped-track way: it is rebuilt from its points (`Tracks::PointGeometryQuery`) without the
-  segments whose two ends lie in one covered window. The rest stays as separate lines; a track
-  without points keeps its line.
-- Rides are cut only when the transit layer shows every mode; with a mode filter the other rides
-  would leave a gap.
-- Only for a dated request without `import_id` and without speed colouring, which is what
-  `/map/v2` asks for.
-- The tile ETag includes the kinds and the cut's epoch: the user's latest walk-leg / ride change
-  and their counts, settings, privacy zones. The cut query runs with `jit = off`: JIT compiling
-  took 167 of 200 ms, the work itself about 30 ms.
-- Measured on one day (2026-10-16, a 07:24–17:07 track with 11 walks and 3 rides):
-  - the track went from 88.9 km to 5.1 km of raw line;
-  - tiles took 20–75 ms (without the cut, 10–60 ms).
+- **Walks** are cut only where the leg's drawn line really runs under the raw segment, not over the
+  whole leg's time. The layer draws nothing across a GPS gap (two fixes more than
+  `GTFS_WALK_RAW_MAX_SEGMENT_M`, 60 m, apart), and there the raw line must stay to connect the walk.
+  - `transit_walk_legs.covered` (`int8multirange`) holds the times `[t1, t2)` of the leg's
+    consecutive points whose segment lies under `drawn`, merged.
+  - A segment lies under `drawn` in one of two cases:
+    - it is no longer than the gap limit, and its ends and middle are within 50 m (the snap's p95
+      limit);
+    - or the drawn line runs along all of it: ends, quarters and middle within 25 m.
+  - It is filled when a leg is written (`Gtfs::Walk::LegWriter`, `TransitWalkLeg.covered_sql`). The
+    migration `20261022120000` filled it for the existing legs: 1846 legs, 15 s.
+- **Rides:** the timetable line covers all of the ride, so the ride's times decide.
+- What the layers draw for the map's range, and nothing else: the same queries and visibility
+  (threshold, feed selection, privacy zones), the same range rule, the same cap of the newest 500.
+  - A walk the snap could not match (`raw`) keeps its track line.
+  - Rides are cut only when the transit layer shows every mode.
+- `Gtfs::TrackCutouts` merges it all into one `int8multirange` (`range_agg`).
+- From zoom 8 (`Tracks::VectorTileQuery::HIDE_MIN_ZOOM`), a track under a cut stretch goes the
+  clipped-track way. It is rebuilt from its points (`Tracks::PointGeometryQuery`) without the
+  segments inside the ranges; the rest stays as separate lines. A track without points keeps its
+  line.
+- Only for a dated request of at most 93 days (`MAX_DAYS`), without `import_id` and without speed
+  colouring, which is what `/map/v2` asks for. Longer ranges are drawn uncut.
+- The tile ETag includes the kinds and the cut's epoch: the user's latest walk-leg / ride change and
+  their counts, settings, privacy zones. The cut query runs with `jit = off`: JIT compiling took 167
+  of 200 ms, the work itself about 30 ms.
+- Measured with user 2:
+  - On 2026-10-16, a 07:24–17:07 track with 11 walks and 3 rides keeps 5.6 of 88.9 km as raw line.
+    That includes 8 GPS gaps (1 km) that now join the walks; all 20.8 km under drawn lines are cut.
+  - Slowest cut tile: a day 105 ms, a week 85 ms, a month 309 ms, 93 days 1.0 s.
+  - Cutting every tile on the fly with the spatial test instead took 5 s a tile over 93 days, hence
+    the stored `covered`.
 
 ## Limits
 

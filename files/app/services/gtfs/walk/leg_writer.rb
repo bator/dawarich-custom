@@ -31,6 +31,7 @@ class Gtfs::Walk::LegWriter
       if rows.any?
         ids = TransitWalkLeg.insert_all!(rows, returning: :id).rows.flatten
         TransitWalkLeg.refresh_drawn!(ids) # stored geometry for the zone check (review K-new-1)
+        TransitWalkLeg.refresh_covered!(ids) # what the map's Tracks tiles leave out (docs/atlas.md)
       end
       result['created'] = rows.size
       result['kept'] = kept.size

@@ -9,6 +9,10 @@
 class TransitWalkLeg < ApplicationRecord
   belongs_to :user
 
+  # `covered` (int8multirange, see COVERED_SQL) has no Active Record type;
+  # it is only written and read in SQL
+  self.ignored_columns += %w[covered]
+
   SOURCES = %w[valhalla mixed raw].freeze
   validates :source, inclusion: { in: SOURCES }
 
@@ -33,6 +37,7 @@ class TransitWalkLeg < ApplicationRecord
   end
 
   after_save :refresh_drawn!, if: :saved_change_to_parts?
+  after_save :refresh_covered!, if: :saved_change_to_parts? # reads the drawn line just refreshed
 
   # SQL: the drawn geometry of a leg from its parts column, as stored in
   # `drawn` (review K-new-1): every part with coordinates as one line of a
@@ -82,6 +87,48 @@ class TransitWalkLeg < ApplicationRecord
   # every save that changes parts).
   def self.refresh_drawn!(ids)
     where(id: ids).update_all(DRAWN_ASSIGNMENT)
+  end
+
+  # The map's Tracks tiles leave out the raw GPS line where this leg's drawn
+  # line runs under it (Gtfs::TrackCutouts, docs/atlas.md "Only the snapped
+  # line"). `covered` holds those times: every pair of the leg's consecutive
+  # points [t1, t2) whose segment lies under `drawn`, merged. A pair is under
+  # it when it is no longer than the layer's own gap limit
+  # (RAW_MAX_SEGMENT_M) and its ends and middle lie within NEAR_M of the
+  # drawn line (the snap's p95 limit), or when the drawn line runs along all
+  # of it (ends, quarters, middle within ALONG_M; a snapped run across a GPS
+  # gap). A GPS gap the layer does not draw stays out, so the raw line joins
+  # the walk there. Measured on a week of user 2's walks (3781 segments):
+  # every gap kept, every segment under the drawn line covered.
+  COVERED_NEAR_M = Gtfs::Walk::Config::MAX_P95_M
+  COVERED_ALONG_M = 25
+
+  def self.covered_sql
+    line = 'ST_MakeLine(s.previous_position, s.position)'
+    near = ->(point, metres) { "ST_DWithin(transit_walk_legs.drawn, (#{point})::geography, #{metres.to_f})" }
+    at = ->(fraction) { "ST_LineInterpolatePoint(#{line}, #{fraction})" }
+    <<~SQL.squish
+      (SELECT range_agg(int8range(s.previous_timestamp::bigint, s.timestamp::bigint, '[)'))
+       FROM (SELECT p.timestamp, p.lonlat::geometry AS position,
+               LAG(p.lonlat::geometry) OVER w AS previous_position, LAG(p.timestamp) OVER w AS previous_timestamp
+             FROM points p WHERE p.id = ANY(transit_walk_legs.point_ids) AND p.lonlat IS NOT NULL
+             WINDOW w AS (ORDER BY p.timestamp, p.id)) AS s
+       WHERE s.previous_position IS NOT NULL AND s.timestamp > s.previous_timestamp
+         AND ((ST_Length((#{line})::geography) <= #{Gtfs::Walk::Config::RAW_MAX_SEGMENT_M.to_f}
+               AND #{near.('s.previous_position', COVERED_NEAR_M)} AND #{near.('s.position', COVERED_NEAR_M)}
+               AND #{near.(at.(0.5), COVERED_NEAR_M)})
+           OR (#{near.('s.previous_position', COVERED_ALONG_M)} AND #{near.('s.position', COVERED_ALONG_M)}
+               AND #{[0.25, 0.5, 0.75].map { |f| near.(at.(f), COVERED_ALONG_M) }.join(' AND ')})))
+    SQL
+  end
+
+  # Fills `covered` for the given legs (after refresh_drawn!, which it reads)
+  def self.refresh_covered!(ids)
+    where(id: ids).update_all("covered = CASE WHEN drawn IS NULL THEN NULL ELSE #{covered_sql} END")
+  end
+
+  def refresh_covered!
+    self.class.refresh_covered!(id)
   end
 
   def refresh_drawn!

@@ -32,10 +32,11 @@ class Tracks::VectorTileQuery
   # nothing at coarse zoom is correct, matching the points quantization.
   SIMPLIFY_SKIP_ZOOM = 14
   # dawarich-custom (docs/atlas.md, "Only the snapped line"): from this zoom on
-  # a track under a snapped walk or a ride the map draws (hide_ranges_sql,
-  # Gtfs::TrackCutouts) is rebuilt from its points without those stretches,
-  # through the clipped-track path below. Lower, a walk is a few pixels and a
-  # ride's timetable line lies on its GPS line.
+  # a track under a snapped walk or a ride the map draws (hide_ranges_sql: an
+  # int8multirange of the covered seconds, Gtfs::TrackCutouts) is rebuilt
+  # from its points without the segments [t1, t2) inside it, through the
+  # clipped-track path below. Lower, a walk is a few pixels and a ride's
+  # timetable line lies on its GPS line.
   HIDE_MIN_ZOOM = 8
 
   # rubocop:disable Naming/MethodParameterName
@@ -176,6 +177,10 @@ class Tracks::VectorTileQuery
 
   def covered_ranges = '(SELECT ranges FROM covered)'
 
+  def hidden_segment_sql
+    "#{covered_ranges} @> int8range(previous_timestamp::bigint, timestamp::bigint, '[)')"
+  end
+
   def range_clipped_predicate
     return 'false' unless @clip_points_scope
     return 'true' if @clip_import_id || !(@clip_start_at && @clip_end_at)
@@ -191,7 +196,7 @@ class Tracks::VectorTileQuery
     @point_geometry_query ||= Tracks::PointGeometryQuery.new(
       points_scope: @clip_points_scope, import_id: @clip_import_id,
       start_at: @clip_start_at, end_at: @clip_end_at,
-      hidden_ranges_sql: (covered_ranges if hiding?)
+      hidden_sql: (hidden_segment_sql if hiding?)
     )
   end
 
