@@ -78,9 +78,9 @@ class Gtfs::TrackCutouts
 
   def walks? = @kinds.include?('walks')
 
-  def walk_query = Gtfs::WalkLegQuery.new(@user, range_params, zones:)
+  def walk_query = Gtfs::WalkLegQuery.new(@user, range_params, zones)
 
-  def ride_query = Gtfs::SegmentQuery.new(@user, range_params, zones:)
+  def ride_query = Gtfs::SegmentQuery.new(@user, range_params, zones)
 
   def range_params = { start_at: @start_at, end_at: @end_at }
 

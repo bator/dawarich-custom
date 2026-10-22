@@ -13,8 +13,10 @@ class Gtfs::SegmentQuery
 
   attr_reader :user
 
-  # zones: the user's privacy zones when the caller has them already
-  def initialize(user, params = {}, zones: nil)
+  # zones: the user's privacy zones when the caller has them already. A
+  # positional argument, not a keyword: callers pass params as a bare hash
+  # (`new(user, start_at: ...)`), which a keyword parameter would take over.
+  def initialize(user, params = {}, zones = nil)
     @user = user
     @params = params.to_h.with_indifferent_access
     @zones = zones || Users::PrivacyZones.new(user).call
