@@ -13,10 +13,11 @@ class Gtfs::SegmentQuery
 
   attr_reader :user
 
-  def initialize(user, params = {})
+  # zones: the user's privacy zones when the caller has them already
+  def initialize(user, params = {}, zones: nil)
     @user = user
     @params = params.to_h.with_indifferent_access
-    @zones = Users::PrivacyZones.new(user).call
+    @zones = zones || Users::PrivacyZones.new(user).call
   end
 
   def scope

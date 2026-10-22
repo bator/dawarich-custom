@@ -1,0 +1,43 @@
+--- a/app/queries/tracks/point_geometry_query.rb
++++ b/app/queries/tracks/point_geometry_query.rb
+@@ -3,12 +3,17 @@
+ # Rebuild a Track path from its Points so callers can clip geometry by time,
+ # import, or both. Windowing precedes the import filter to avoid inventing a
+ # shortcut across an interleaved Point from another import.
++#
++# dawarich-custom: hidden_ranges_sql (an int8multirange of Unix seconds,
++# Gtfs::TrackCutouts) leaves out every segment whose two ends lie in one of its
++# ranges; what is left stays as separate lines.
+ class Tracks::PointGeometryQuery
+-  def initialize(points_scope:, import_id: nil, start_at: nil, end_at: nil)
++  def initialize(points_scope:, import_id: nil, start_at: nil, end_at: nil, hidden_ranges_sql: nil)
+     @points_scope = points_scope
+     @import_id = normalized_import_id(import_id)
+     @start_timestamp = start_at&.to_i
+     @end_timestamp = end_at&.to_i
++    @hidden_ranges_sql = hidden_ranges_sql
+   end
+ 
+   def path_sql(track_id_sql:)
+@@ -24,7 +29,7 @@
+         WHERE points.track_id = #{track_id_sql}
+         WINDOW sequence AS (ORDER BY points.timestamp, points.id)
+       ) AS ordered_points
+-      WHERE previous_position IS NOT NULL #{import_predicate}
++      WHERE previous_position IS NOT NULL #{import_predicate} #{hidden_predicate}
+     SQL
+   end
+ 
+@@ -57,6 +62,12 @@
+     "AND import_id = #{@import_id} AND previous_import_id = #{@import_id}"
+   end
+ 
++  def hidden_predicate
++    return '' unless @hidden_ranges_sql
++
++    "AND NOT COALESCE((#{@hidden_ranges_sql}) @> int8range(previous_timestamp::bigint, timestamp::bigint, '[]'), false)"
++  end
++
+   def normalized_import_id(import_id)
+     return if import_id.nil?
+ 

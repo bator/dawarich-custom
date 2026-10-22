@@ -515,6 +515,7 @@ export class LayerManager {
             },
           ),
         onEmptyTracks: () => Toast.info(translate("messages.tracks_pending")),
+        hide: this._trackCutouts(),
         ...this.pointTileRange,
       })
       this.layers.tracksMvtLayer.add(
@@ -524,6 +525,23 @@ export class LayerManager {
     } else {
       this.layers.tracksMvtLayer.update(this.pointTileRange)
     }
+  }
+
+  // What the Tracks tiles leave out (docs/atlas.md, "Only the snapped line"):
+  // the snapped walks and the rides, while their layers draw them. A ride
+  // filter by mode would leave the other rides undrawn, so rides are cut only
+  // when all of them are shown.
+  _trackCutouts() {
+    const hide = []
+    if (SettingsManager.getSetting("walkLegsEnabled")) hide.push("walks")
+    if (SettingsManager.getSetting("transitEnabled") && (SettingsManager.getSetting("transitMode") || "all") === "all") {
+      hide.push("rides")
+    }
+    return hide
+  }
+
+  updateTrackCutouts() {
+    this.layers.tracksMvtLayer?.setHide(this._trackCutouts())
   }
 
   // Bottom map layer of the frequent routes, walks and rides (added in that

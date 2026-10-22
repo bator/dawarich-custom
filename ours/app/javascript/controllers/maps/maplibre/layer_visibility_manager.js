@@ -386,6 +386,7 @@ export class LayerVisibilityManager {
   async toggleTransit(event) {
     const enabled = event.target.checked
     SettingsManager.updateSetting("transitEnabled", enabled)
+    this.layerManager.updateTrackCutouts()
     const transitLayer = this.layerManager.getLayer("transit")
     if (!transitLayer) return
 
@@ -411,6 +412,7 @@ export class LayerVisibilityManager {
     const mode = event.target.value || "all"
     SettingsManager.updateSetting("transitMode", mode)
     this.layerManager.getLayer("transit")?.setMode(mode)
+    this.layerManager.updateTrackCutouts()
   }
 
   /**
@@ -419,6 +421,7 @@ export class LayerVisibilityManager {
   async toggleWalkLegs(event) {
     const enabled = event.target.checked
     SettingsManager.updateSetting("walkLegsEnabled", enabled)
+    this.layerManager.updateTrackCutouts()
     const layer = this.layerManager.getLayer("walkLegs")
     if (!layer) return
 

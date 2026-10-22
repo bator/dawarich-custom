@@ -1,0 +1,35 @@
+--- a/app/javascript/maps_maplibre/layers/tracks_mvt_layer.js
++++ b/app/javascript/maps_maplibre/layers/tracks_mvt_layer.js
+@@ -32,6 +32,9 @@
+     this.trackColor = options.trackColor || "#6366F1"
+     this.onTileError = options.onTileError || null
+     this.onEmptyTracks = options.onEmptyTracks || null
++    // dawarich-custom: "walks" / "rides" the tiles cut out, as their layers
++    // draw them (Gtfs::TrackCutouts, docs/atlas.md)
++    this.hide = options.hide || []
+     this._tileUrl = null
+     this._tileErrorHandler = null
+     this._tileErrorReported = false
+@@ -194,6 +197,14 @@
+     this.setVisibility(wasVisible)
+   }
+ 
++  // dawarich-custom: the walks / rides layers were switched; the new tiles
++  // replace the layer where it is
++  setHide(hide = []) {
++    if (hide.join(",") === this.hide.join(",")) return
++    this.hide = hide
++    this.update({ startAt: this.startAt, endAt: this.endAt })
++  }
++
+   update(options = {}) {
+     const nextStartAt = options.startAt || null
+     const nextEndAt = options.endAt || null
+@@ -220,6 +231,7 @@
+     if (startAt) params.set("start_at", startAt)
+     if (endAt) params.set("end_at", endAt)
+     if (this.importId) params.set("import_id", this.importId)
++    if (this.hide.length) params.set("hide", this.hide.join(","))
+     // Never the raw api key: the Bearer header authenticates (transformRequest)
+     if (this.apiKey) params.set("u", trackCachePartitioner(this.apiKey))
+ 

@@ -1,0 +1,83 @@
+--- a/app/queries/tracks/vector_tile_query.rb
++++ b/app/queries/tracks/vector_tile_query.rb
+@@ -31,11 +31,18 @@
+   # z8 tile for identical visual output. A sub-pixel track collapsing to
+   # nothing at coarse zoom is correct, matching the points quantization.
+   SIMPLIFY_SKIP_ZOOM = 14
++  # dawarich-custom (docs/atlas.md, "Only the snapped line"): from this zoom on
++  # a track under a snapped walk or a ride the map draws (hide_ranges_sql,
++  # Gtfs::TrackCutouts) is rebuilt from its points without those stretches,
++  # through the clipped-track path below. Lower, a walk is a few pixels and a
++  # ride's timetable line lies on its GPS line.
++  HIDE_MIN_ZOOM = 8
+ 
+   # rubocop:disable Naming/MethodParameterName
+   def initialize(scope:, z:, x:, y:, clip_points_scope: nil, clip_import_id: nil,
+-                 clip_start_at: nil, clip_end_at: nil)
++                 clip_start_at: nil, clip_end_at: nil, hide_ranges_sql: nil)
+     @scope = scope
++    @hide_ranges_sql = hide_ranges_sql
+     @clip_points_scope = clip_points_scope
+     @clip_import_id = clip_import_id
+     @clip_start_at = clip_start_at&.to_i
+@@ -137,7 +144,7 @@
+ 
+   def candidates_cte
+     <<~SQL
+-      candidates AS MATERIALIZED (
++      #{covered_cte}candidates AS MATERIALIZED (
+         SELECT tracks.*, #{clipped_track_predicate} AS clipped
+         FROM (#{tile_scope.to_sql}) AS tracks
+         WHERE ST_Intersects(tracks.original_path, ST_Transform(#{margined_envelope}, 4326))
+@@ -145,7 +152,31 @@
+     SQL
+   end
+ 
++  # dawarich-custom: a track under a cut stretch is clipped too (rebuilt from
++  # its points without that stretch); a track without points keeps its line,
++  # and no covered range at all (NULL) cuts nothing
+   def clipped_track_predicate
++    return range_clipped_predicate unless hiding?
++
++    <<~SQL.squish
++      (#{range_clipped_predicate}) OR (COALESCE(#{covered_ranges} && int8range(EXTRACT(EPOCH FROM tracks.start_at)::bigint,
++        EXTRACT(EPOCH FROM tracks.end_at)::bigint, '[]'), false)
++        AND EXISTS (SELECT 1 FROM points WHERE points.track_id = tracks.id))
++    SQL
++  end
++
++  def hiding?
++    @hide_ranges_sql.present? && @clip_points_scope && @clip_start_at && @clip_end_at && !@clip_import_id &&
++      z >= HIDE_MIN_ZOOM
++  end
++
++  def covered_cte
++    hiding? ? "covered AS MATERIALIZED (SELECT (#{@hide_ranges_sql}) AS ranges), " : ''
++  end
++
++  def covered_ranges = '(SELECT ranges FROM covered)'
++
++  def range_clipped_predicate
+     return 'false' unless @clip_points_scope
+     return 'true' if @clip_import_id || !(@clip_start_at && @clip_end_at)
+ 
+@@ -159,7 +190,8 @@
+   def point_geometry_query
+     @point_geometry_query ||= Tracks::PointGeometryQuery.new(
+       points_scope: @clip_points_scope, import_id: @clip_import_id,
+-      start_at: @clip_start_at, end_at: @clip_end_at
++      start_at: @clip_start_at, end_at: @clip_end_at,
++      hidden_ranges_sql: (covered_ranges if hiding?)
+     )
+   end
+ 
+@@ -251,6 +283,9 @@
+     conn.transaction do
+       conn.exec_query("SET LOCAL statement_timeout = #{VectorTileTimeout.query_timeout_ms}",
+                       'TracksVectorTileQuery Timeout')
++      # dawarich-custom: the cut query's cost estimate triggers JIT, whose
++      # compile took 167 of its 200 ms (the work itself ~30 ms)
++      conn.exec_query('SET LOCAL jit = off', 'TracksVectorTileQuery JIT') if hiding?
+       yield conn
+     end
+   end

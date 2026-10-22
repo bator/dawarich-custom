@@ -70,6 +70,36 @@ and times). Each route has a `geojson` FeatureCollection, one LineString per leg
 Logged errors name the Atlas path without its query (no addresses or coordinates). A search waits
 at most 5 s for Atlas and a route 10 s, retries included.
 
+## Only the snapped line
+
+Walks snapped through Atlas (`Gtfs::Walk`, layer *Walking legs*) and rides matched to a timetable
+(layer *Transit*) are drawn over the Tracks layer, which stays below them. While those layers are
+on, the Tracks tiles also leave out the raw GPS line they cover, so a stretch shows one line: the
+snapped one.
+
+- The map asks for it with `hide=walks,rides` on `/api/v1/tiles/tracks/{z}/{x}/{y}.mvt`
+  (`TracksMvtLayer#setHide`, `LayerManager#updateTrackCutouts`).
+- `Gtfs::TrackCutouts` merges the covered time into one `int8multirange` (`range_agg`).
+  - Walks: the legs the layer shows with source `valhalla` or `mixed`.
+  - Rides: the rides the layer shows.
+  - Both use the layers' own visibility (threshold, feed selection, privacy zones).
+  - What a layer does not draw is not cut. A walk the snap could not match (`raw`) keeps its track
+    line.
+- From zoom 8 (`Tracks::VectorTileQuery::HIDE_MIN_ZOOM`), a track under a covered stretch goes the
+  clipped-track way: it is rebuilt from its points (`Tracks::PointGeometryQuery`) without the
+  segments whose two ends lie in one covered window. The rest stays as separate lines; a track
+  without points keeps its line.
+- Rides are cut only when the transit layer shows every mode; with a mode filter the other rides
+  would leave a gap.
+- Only for a dated request without `import_id` and without speed colouring, which is what
+  `/map/v2` asks for.
+- The tile ETag includes the kinds and the cut's epoch: the user's latest walk-leg / ride change
+  and their counts, settings, privacy zones. The cut query runs with `jit = off`: JIT compiling
+  took 167 of 200 ms, the work itself about 30 ms.
+- Measured on one day (2026-10-16, a 07:24–17:07 track with 11 walks and 3 rides):
+  - the track went from 88.9 km to 5.1 km of raw line;
+  - tiles took 20–75 ms (without the cut, 10–60 ms).
+
 ## Limits
 
 - Atlas has no language parameter for directions, so the panel shows totals and the transit legs,
