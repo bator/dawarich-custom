@@ -64,12 +64,15 @@ export class WalkLegsLayer extends BaseLayer {
 
   getLayerConfigs() {
     const part = (source) => ["==", ["get", "part_source"], source]
+    // a joint links two parts that do not touch (Api::TransitWalkLegSerializer#joints),
+    // drawn as the walk itself so the way reads as one line
+    const snappedOrJoint = ["in", ["get", "part_source"], ["literal", ["valhalla", "joint"]]]
     return [
       {
         id: "walk-legs-casing",
         type: "line",
         source: this.sourceId,
-        filter: part("valhalla"),
+        filter: snappedOrJoint,
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
           "line-color": "#FFFFFF",
@@ -81,7 +84,7 @@ export class WalkLegsLayer extends BaseLayer {
         id: "walk-legs",
         type: "line",
         source: this.sourceId,
-        filter: part("valhalla"),
+        filter: snappedOrJoint,
         layout: { "line-join": "round" },
         paint: {
           "line-color": WALK_COLOR,

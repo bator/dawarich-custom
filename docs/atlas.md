@@ -96,6 +96,13 @@ shows one line, the snapped one. Everywhere else the raw line stays and joins th
   - It is filled when a leg is written (`Gtfs::Walk::LegWriter`, `TransitWalkLeg.covered_sql`).
   - Migrations: `20261022120000` added it, `20261022130000` recomputed it with this rule (all legs,
     about 20 s).
+- **Joints:** the walking legs layer drew a walk as parts that do not touch. A snapped part ends at its
+  matched position and the next part, or the raw track line, starts at the recorded fix: 20–40 m
+  apart on 2026-10-22. A GPS gap is not a part at all. `Api::TransitWalkLegSerializer#joints` adds a
+  straight `joint` from each part's end to the next part's start (a standing-still cloud by its first
+  and last fix). It also adds one from the leg's first fix to a snapped first part, and from a
+  snapped last part to the leg's last fix. The layer draws joints like the snapped walk, so the way
+  reads as one line.
 - **Rides:** the timetable line covers all of the ride, so the ride's times decide.
 - What the layers draw for the map's range, and nothing else: the same queries and visibility
   (threshold, feed selection, privacy zones), the same range rule, the same cap of the newest 500.
