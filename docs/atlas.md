@@ -79,17 +79,23 @@ shows one line, the snapped one. Everywhere else the raw line stays and joins th
 
 - The map asks for it with `hide=walks,rides` on `/api/v1/tiles/tracks/{z}/{x}/{y}.mvt`
   (`TracksMvtLayer#setHide`, `LayerManager#updateTrackCutouts`).
-- **Walks** are cut only where the leg's drawn line really runs under the raw segment, not over the
-  whole leg's time. The layer draws nothing across a GPS gap (two fixes more than
-  `GTFS_WALK_RAW_MAX_SEGMENT_M`, 60 m, apart), and there the raw line must stay to connect the walk.
-  - `transit_walk_legs.covered` (`int8multirange`) holds the times `[t1, t2)` of the leg's
-    consecutive points whose segment lies under `drawn`, merged.
-  - A segment lies under `drawn` in one of two cases:
-    - it is no longer than the gap limit, and its ends and middle are within 50 m (the snap's p95
-      limit);
-    - or the drawn line runs along all of it: ends, quarters and middle within 25 m.
-  - It is filled when a leg is written (`Gtfs::Walk::LegWriter`, `TransitWalkLeg.covered_sql`). The
-    migration `20261022120000` filled it for the existing legs: 1846 legs, 15 s.
+- **Walks** are cut only where the snap matched the walk: between two consecutive points of the leg
+  that both lie on a snapped (`valhalla`) part.
+  - The layer draws a recorded part (`raw`) as a faint dotted line, a standing-still cloud
+    (`stationary`) as dots, and nothing across a GPS gap. There the raw track line stays to show
+    the way. 2026-10-22: one walk had 749 m standing still against 429 m snapped; cutting under
+    every drawn part left only dots.
+  - `transit_walk_legs.covered` (`int8multirange`) holds the times `[t1, t2)` of those pairs,
+    merged.
+  - A point counts as not matched when its coordinates are in a `raw` or `stationary` part (within
+    2e-6°).
+  - A pair is still no gap only in one of two cases:
+    - it is at most `GTFS_WALK_RAW_MAX_SEGMENT_M` (60 m) long, with both ends within 50 m of the
+      snapped line;
+    - or the snapped line runs along all of it (ends, quarters, middle within 25 m).
+  - It is filled when a leg is written (`Gtfs::Walk::LegWriter`, `TransitWalkLeg.covered_sql`).
+  - Migrations: `20261022120000` added it, `20261022130000` recomputed it with this rule (all legs,
+    about 20 s).
 - **Rides:** the timetable line covers all of the ride, so the ride's times decide.
 - What the layers draw for the map's range, and nothing else: the same queries and visibility
   (threshold, feed selection, privacy zones), the same range rule, the same cap of the newest 500.
