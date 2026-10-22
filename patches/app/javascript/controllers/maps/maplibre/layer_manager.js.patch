@@ -81,3 +81,47 @@
    _addVisitsLayer(visitsGeoJSON) {
      if (!this.layers.visitsLayer) {
        this.layers.visitsLayer = new VisitsLayer(this.map, {
+@@ -442,7 +495,9 @@
+   }
+ 
+   // Tile-backed canonical Tracks layer; added below points so circles stay on
+-  // top of track lines.
++  // top of track lines, and below the frequent routes, walks and rides: the
++  // raw track must not hide the snapped walk or the timetable line on it.
++  // update() and refresh() keep the layer where it is.
+   _addTracksMvtLayer() {
+     if (!this.layers.tracksMvtLayer) {
+       this.layers.tracksMvtLayer = new TracksMvtLayer(this.map, {
+@@ -462,12 +517,31 @@
+         onEmptyTracks: () => Toast.info(translate("messages.tracks_pending")),
+         ...this.pointTileRange,
+       })
+-      this.layers.tracksMvtLayer.add(this.pointTileRange)
++      this.layers.tracksMvtLayer.add(
++        this.pointTileRange,
++        this._lowestTransitOverlayLayerId(),
++      )
+     } else {
+       this.layers.tracksMvtLayer.update(this.pointTileRange)
+     }
+   }
+ 
++  // Bottom map layer of the frequent routes, walks and rides (added in that
++  // order), or null when none is on the map
++  _lowestTransitOverlayLayerId() {
++    for (const layer of [
++      this.layers.corridorsLayer,
++      this.layers.walkLegsLayer,
++      this.layers.transitLayer,
++    ]) {
++      const id = layer
++        ?.getLayerIds()
++        .find((layerId) => this.map.getLayer(layerId))
++      if (id) return id
++    }
++    return null
++  }
++
+   _addPointsMvtLayer() {
+     if (!this.layers.pointsMvtLayer) {
+       this.layers.pointsMvtLayer = new PointsMvtLayer(this.map, {
