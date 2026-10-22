@@ -528,7 +528,7 @@ export class LayerManager {
   }
 
   // What the Tracks tiles leave out (docs/atlas.md, "Only the snapped line"):
-  // the snapped walks and the rides, while their layers draw them. A ride
+  // the walks and the rides, while their layers draw them. A ride
   // filter by mode would leave the other rides undrawn, so rides are cut only
   // when all of them are shown.
   _trackCutouts() {

@@ -98,11 +98,7 @@ namespace :gtfs do
     end
 
     refreshed = 0
-    stale.in_batches(of: 500) do |batch|
-      ids = batch.ids
-      refreshed += TransitWalkLeg.refresh_drawn!(ids)
-      TransitWalkLeg.refresh_covered!(ids) # read from drawn (docs/atlas.md, "Only the snapped line")
-    end
+    stale.in_batches(of: 500) { |batch| refreshed += TransitWalkLeg.refresh_drawn!(batch.ids) }
     puts "refreshed: #{refreshed}, still stale: #{TransitWalkLeg.stale_drawn.count}"
   end
 end

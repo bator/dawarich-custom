@@ -152,6 +152,7 @@ hu:
       part_valhalla: "ez a rész: illesztve"
       part_raw: "ez a rész: nyers GPS"
       part_stationary: "egy helyben"
+      part_joint: "két rész között: egyenes"
       accuracy: "a pontok 95%-a ennyin belül:"
       failed_to_load: "Nem sikerült betölteni a gyalogos szakaszokat"
     corridors:

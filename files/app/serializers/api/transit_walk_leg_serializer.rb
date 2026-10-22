@@ -5,8 +5,8 @@
 # #call: the leg's properties (flat, so MapLibre can style on them).
 # #features: one GeoJSON feature per drawn part, in time order: snapped
 # (`valhalla`) and recorded (`raw`) parts as LineStrings, a stationary cloud
-# as one Point (its centre), and `joint` LineStrings that join them (see
-# #joints).
+# as one Point (its centre), and `joint` LineStrings that join them and the
+# leg's first and last fix (see #joints).
 class Api::TransitWalkLegSerializer
   DIGITS = Gtfs::WalkLegQuery::COORD_DIGITS
 
@@ -52,16 +52,25 @@ class Api::TransitWalkLegSerializer
   # The parts do not touch: a snapped part ends at its matched position, the
   # next part (or the raw track line around the leg) starts at the recorded
   # fix, 20-40 m away (2026-10-22), and a GPS gap between two parts is not a
-  # part at all. Bator: where there is no snapped way, the raw GPS connects.
-  # So a straight joint goes from the end of each part to the start of the
-  # next one (a stationary cloud by its first and last fix, not its centre),
-  # and from the leg's first fix to a snapped first part and from a snapped
-  # last part to its last fix.
+  # part at all. Bator: where there is no snapped way, the raw GPS connects,
+  # dashed. So a straight joint goes from the end of each part to the start
+  # of the next one (a stationary cloud through its centre, the dot the layer
+  # draws), and from the leg's first fix to its first part and from its last
+  # part to its last fix, where the raw track line around the leg ends
+  # (Gtfs::TrackCutouts cuts it under all of the leg). With the recorded
+  # parts the layer draws them as one dashed line.
   def joints(props)
     stops = []
-    stops << [@ends.first, @ends.first] if @ends&.first && parts.first&.dig('source') == 'valhalla'
-    parts.each { |part| stops << [part['coords'].first, part['coords'].last] }
-    stops << [@ends.last, @ends.last] if @ends&.last && parts.last&.dig('source') == 'valhalla'
+    stops << [@ends.first, @ends.first] if @ends&.first
+    parts.each do |part|
+      coords = part['coords']
+      stops << if part['source'] == 'stationary'
+                 [centre(coords.map { |lon, lat| [lon.to_f, lat.to_f] })] * 2
+               else
+                 [coords.first, coords.last]
+               end
+    end
+    stops << [@ends.last, @ends.last] if @ends&.last
     stops.each_cons(2).each_with_index.filter_map do |(before, after), index|
       from = rounded(before.last)
       to = rounded(after.first)

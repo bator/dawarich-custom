@@ -32,7 +32,7 @@ class Tracks::VectorTileQuery
   # nothing at coarse zoom is correct, matching the points quantization.
   SIMPLIFY_SKIP_ZOOM = 14
   # dawarich-custom (docs/atlas.md, "Only the snapped line"): from this zoom on
-  # a track under a snapped walk or a ride the map draws (hide_ranges_sql: an
+  # a track under a walk or a ride the map draws (hide_ranges_sql: an
   # int8multirange of the covered seconds, Gtfs::TrackCutouts) is rebuilt
   # from its points without the segments [t1, t2) inside it, through the
   # clipped-track path below. Lower, a walk is a few pixels and a ride's

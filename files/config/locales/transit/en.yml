@@ -152,6 +152,7 @@ en:
       part_valhalla: "this part: snapped"
       part_raw: "this part: recorded GPS"
       part_stationary: "standing still"
+      part_joint: "between two parts: straight line"
       accuracy: "95% of the fixes within"
       failed_to_load: "Failed to load walking legs"
     corridors:

@@ -6,10 +6,11 @@ import { BaseLayer } from "./base_layer"
 const EMPTY = { type: "FeatureCollection", features: [] }
 
 // Walking is drawn in dark slate: GTFS route colours are saturated (and the
-// H6 HÉV is brown), so a walk never reads as a ride. Recorded (raw) parts
-// are light grey and thinner.
+// H6 HÉV is brown), so a walk never reads as a ride. What lies between the
+// snapped parts is the same colour, thinner and with shorter dashes; a
+// standing-still dot is light grey.
 export const WALK_COLOR = "#334155"
-export const WALK_RAW_COLOR = "#9CA3AF"
+export const WALK_STATIONARY_COLOR = "#9CA3AF"
 
 // English fallbacks for locales that do not translate the texts yet.
 const FALLBACK = {
@@ -22,6 +23,7 @@ const FALLBACK = {
   part_valhalla: "this part: snapped",
   part_raw: "this part: recorded GPS",
   part_stationary: "standing still",
+  part_joint: "between two parts: straight line",
   accuracy: "95% of the fixes within",
   failed_to_load: "Failed to load walking legs",
 }
@@ -42,9 +44,13 @@ function clock(unix) {
 /**
  * Walking legs next to the public transport rides (Gtfs::Walk, API
  * /api/v1/transit/walk_legs/map): one feature per drawn part. Snapped parts
- * are a dashed dark slate line, recorded GPS parts a thinner grey dotted line,
- * a stationary cloud a small dot. Gaps in the recording are not in the data,
- * so they are never drawn as straight lines. Off by default.
+ * are a dashed dark slate line. Between them, from the leg's first fix and
+ * to its last one, the walk goes on as a thinner dashed slate line: recorded
+ * GPS parts along their fixes, joints straight (across a GPS gap, to a
+ * snapped part's matched position, through a standing-still cloud's dot).
+ * The Tracks tiles leave the raw line out under all of the walk
+ * (Gtfs::TrackCutouts), so a walk reads as one dashed line from start to
+ * end. Off by default.
  */
 export class WalkLegsLayer extends BaseLayer {
   constructor(map, options = {}) {
@@ -64,15 +70,40 @@ export class WalkLegsLayer extends BaseLayer {
 
   getLayerConfigs() {
     const part = (source) => ["==", ["get", "part_source"], source]
-    // a joint links two parts that do not touch (Api::TransitWalkLegSerializer#joints),
-    // drawn as the walk itself so the way reads as one line
-    const snappedOrJoint = ["in", ["get", "part_source"], ["literal", ["valhalla", "joint"]]]
+    // recorded parts and the joints (Api::TransitWalkLegSerializer#joints):
+    // what lies between the snapped parts, under them
+    const between = ["in", ["get", "part_source"], ["literal", ["raw", "joint"]]]
     return [
+      {
+        id: "walk-legs-between-casing",
+        type: "line",
+        source: this.sourceId,
+        filter: between,
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": "#FFFFFF",
+          "line-width": 4,
+          "line-opacity": 0.6,
+        },
+      },
+      {
+        id: "walk-legs-between",
+        type: "line",
+        source: this.sourceId,
+        filter: between,
+        layout: { "line-join": "round" },
+        paint: {
+          "line-color": WALK_COLOR,
+          "line-width": 2,
+          "line-opacity": 0.85,
+          "line-dasharray": [1.5, 1.5],
+        },
+      },
       {
         id: "walk-legs-casing",
         type: "line",
         source: this.sourceId,
-        filter: snappedOrJoint,
+        filter: part("valhalla"),
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
           "line-color": "#FFFFFF",
@@ -84,25 +115,12 @@ export class WalkLegsLayer extends BaseLayer {
         id: "walk-legs",
         type: "line",
         source: this.sourceId,
-        filter: snappedOrJoint,
+        filter: part("valhalla"),
         layout: { "line-join": "round" },
         paint: {
           "line-color": WALK_COLOR,
           "line-width": 3,
           "line-dasharray": [2, 1.2],
-        },
-      },
-      {
-        id: "walk-legs-raw",
-        type: "line",
-        source: this.sourceId,
-        filter: part("raw"),
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: {
-          "line-color": WALK_RAW_COLOR,
-          "line-width": 2,
-          "line-opacity": 0.85,
-          "line-dasharray": [0.5, 2],
         },
       },
       {
@@ -112,7 +130,7 @@ export class WalkLegsLayer extends BaseLayer {
         filter: part("stationary"),
         paint: {
           "circle-radius": 3,
-          "circle-color": WALK_RAW_COLOR,
+          "circle-color": WALK_STATIONARY_COLOR,
           "circle-stroke-color": "#FFFFFF",
           "circle-stroke-width": 1,
         },
@@ -121,7 +139,7 @@ export class WalkLegsLayer extends BaseLayer {
   }
 
   _interactiveIds() {
-    return ["walk-legs", "walk-legs-raw", "walk-legs-stationary"]
+    return ["walk-legs", "walk-legs-between", "walk-legs-stationary"]
   }
 
   add(data) {

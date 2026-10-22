@@ -200,6 +200,7 @@
     "db/migrate/20261021110000_add_snapped_digest_and_reverted_at_to_track_corridor_snaps.rb",
     "db/migrate/20261022120000_add_covered_to_transit_walk_legs.rb",
     "db/migrate/20261022130000_recompute_covered_of_transit_walk_legs.rb",
+    "db/migrate/20261022160000_remove_covered_from_transit_walk_legs.rb",
     "lib/tasks/corridors.rake",
     "lib/tasks/gtfs.rake",
     "lib/tasks/gtfs_discord.rake",
