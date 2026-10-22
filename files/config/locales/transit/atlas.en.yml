@@ -35,6 +35,7 @@ en:
     loading: Looking for routes…
     no_route: No route between these points.
     unavailable: Atlas did not answer. Try again later.
+    rejected: Atlas rejected the request.
     transfers: Transfers
     walking: walking
     hour: h

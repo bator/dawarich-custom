@@ -60,8 +60,15 @@ GET /api/v1/transit/directions/search?q=TEXT[&lat=..&lon=..]
 ```
 
 `routes` holds one road route, or the transit itineraries (legs with mode, line, headsign, stops
-and times). Each route has a `geojson` FeatureCollection, one LineString per leg. Errors: 422
-`no_route` or invalid parameters, 503 `atlas_unavailable` / `atlas_disabled`.
+and times). Each route has a `geojson` FeatureCollection, one LineString per leg. Errors:
+- 422 `no_route`: Valhalla or MOTIS answered 4xx (Atlas' 502 `UPSTREAM_ERROR`);
+- 422 for invalid parameters;
+- 422 `atlas_rejected`: Atlas refused the request (400/422; logged);
+- 503 `atlas_unavailable`: no answer, timeout, or an upstream 5xx (logged);
+- 503 `atlas_disabled`.
+
+Logged errors name the Atlas path without its query (no addresses or coordinates). A search waits
+at most 5 s for Atlas and a route 10 s, retries included.
 
 ## Limits
 

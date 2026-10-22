@@ -35,6 +35,7 @@ hu:
     loading: Útvonal keresése…
     no_route: Nincs útvonal a két pont között.
     unavailable: Az Atlas nem válaszolt. Próbáld újra később.
+    rejected: Az Atlas elutasította a kérést.
     transfers: Átszállás
     walking: gyalog
     hour: ó

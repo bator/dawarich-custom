@@ -15,10 +15,13 @@ class Api::V1::Transit::DirectionsController < Api::V1::Transit::BaseController
   rescue ArgumentError => e
     unprocessable(e)
   rescue Gtfs::Walk::BaseClient::Unavailable => e
-    # Atlas passes a routing failure of Valhalla on as 502 UPSTREAM_ERROR
-    e.message.include?('UPSTREAM_ERROR') ? no_route : atlas_unavailable(e)
-  rescue Gtfs::Walk::BaseClient::Error
-    no_route
+    # Atlas passes any non-2xx answer of Valhalla or MOTIS on as 502
+    # UPSTREAM_ERROR "upstream returned <status>: ...": a 4xx there is "no
+    # route" (Valhalla 400, error 442), a 5xx or no status a failure
+    e.message.match?(/UPSTREAM_ERROR upstream returned 4\d\d\b/) ? no_route : atlas_unavailable(e)
+  rescue Gtfs::Walk::BaseClient::Error => e
+    # Atlas refused our parameters (400 MISSING_PARAM, 422 VALIDATION_ERROR)
+    atlas_rejected(e)
   end
 
   # GET /api/v1/transit/directions/search?q=...[&lat=..&lon=..]
@@ -51,8 +54,19 @@ class Api::V1::Transit::DirectionsController < Api::V1::Transit::BaseController
   end
 
   def atlas_unavailable(error)
-    Rails.logger.warn("[atlas] #{error.class}: #{error.message}")
+    log_atlas_error(error)
     render json: { error: 'atlas_unavailable', message: 'Atlas did not answer. Try again later.' }, status: :service_unavailable
+  end
+
+  def atlas_rejected(error)
+    log_atlas_error(error)
+    render json: { error: 'atlas_rejected', message: 'Atlas rejected the request.' }, status: :unprocessable_content
+  end
+
+  # The message names the request path; its query (the searched address, the
+  # route's ends) stays out of the log.
+  def log_atlas_error(error)
+    Rails.logger.warn("[atlas] #{error.class}: #{error.message.gsub(/\?[^\s:]+/, '?[query]')}")
   end
 
   # "lat,lon" => [lat, lon]

@@ -24,12 +24,18 @@ export default class extends Controller {
     this.mode = "car"
     this.points = { from: null, to: null }
     this.routes = []
+    this.routesMode = null // the mode the shown routes were asked for
+    this.routeRequest = 0 // a newer number makes an answer still on its way stale
+    this.searchTimers = {}
+    this.searchAborts = {}
+    this.timeEdited = false
     this.timeTarget.value = this.localNow()
     this.renderModes()
     this.onTabChanged = (event) => {
       if (event.detail?.tab !== "directions") return
       const title = document.querySelector("[data-map-panel-target='title']")
       if (title) title.textContent = this.titleValue
+      this.refreshTime()
     }
     document.addEventListener("map-panel:tab-changed", this.onTabChanged)
     this.onStyleLoad = () => this.draw()
@@ -37,19 +43,28 @@ export default class extends Controller {
 
   disconnect() {
     document.removeEventListener("map-panel:tab-changed", this.onTabChanged)
-    this.map?.off("style.load", this.onStyleLoad)
-    clearTimeout(this.searchTimer)
+    this.cancelRoute()
+    this.attachMap(null)
+    Object.values(this.searchTimers).forEach(clearTimeout)
+    Object.values(this.searchAborts).forEach((abort) => abort.abort())
   }
 
-  // the map of /map/v2, once it exists
+  // The map of /map/v2, once it exists. The panel is Turbo-permanent while the
+  // maps--maplibre controller builds a new map after a visit: follow it.
   get mapInstance() {
-    if (this.map) return this.map
     const container = document.getElementById("maps-maplibre-container")
     const controller = container && this.application.getControllerForElementAndIdentifier(container, "maps--maplibre")
-    if (!controller?.map) return null
-    this.map = controller.map
-    this.map.on("style.load", this.onStyleLoad)
+    const map = controller?.map || null
+    if (map !== this.map) this.attachMap(map)
     return this.map
+  }
+
+  attachMap(map) {
+    this.cancelPick()
+    this.stopWaitingForStyle()
+    this.map?.off("style.load", this.onStyleLoad)
+    this.map = map
+    this.map?.on("style.load", this.onStyleLoad)
   }
 
   get apiKey() {
@@ -58,6 +73,7 @@ export default class extends Controller {
 
   setMode(event) {
     this.mode = event.currentTarget.dataset.mode
+    if (this.mode === "transit") this.refreshTime()
     this.renderModes()
     if (this.points.from && this.points.to) this.route()
   }
@@ -69,22 +85,27 @@ export default class extends Controller {
 
   // --- places -------------------------------------------------------------
 
+  // Typing replaces this end: its marker and the routes to it go. Each field
+  // has its own timer, and a newer search aborts the field's previous one.
   search(event) {
     const field = event.target.dataset.field
     this.points[field] = null
-    clearTimeout(this.searchTimer)
+    this.dropRoutes()
+    clearTimeout(this.searchTimers[field])
+    this.searchAborts[field]?.abort()
     const query = event.target.value.trim()
     if (query.length < 2) return this.listResults(field, [])
 
-    this.searchTimer = setTimeout(async () => {
+    this.searchTimers[field] = setTimeout(async () => {
+      const abort = (this.searchAborts[field] = new AbortController())
       const center = this.mapInstance?.getCenter()
       const params = new URLSearchParams({ q: query })
       if (center) { params.set("lat", center.lat.toFixed(5)); params.set("lon", center.lng.toFixed(5)) }
       try {
-        const data = await this.get(this.searchUrlValue, params)
+        const data = await this.get(this.searchUrlValue, params, abort.signal)
         if (event.target.value.trim() === query) this.listResults(field, data.results || [])
       } catch (error) {
-        this.setStatus(error.message, true)
+        if (error.name !== "AbortError") this.setStatus(error.message, true)
       }
     }, 250)
   }
@@ -102,20 +123,30 @@ export default class extends Controller {
     list.classList.toggle("hidden", results.length === 0)
   }
 
-  // the next click on the map sets this end
+  // the next click on the map sets this end (one pick at a time: a second
+  // pin button replaces the first one's)
   pick(event) {
     const field = event.currentTarget.dataset.field
     const map = this.mapInstance
     if (!map) return
 
+    this.cancelPick()
     map.getCanvas().style.cursor = "crosshair"
     this.setStatus(this.labelsValue.pick)
-    map.once("click", (e) => {
-      map.getCanvas().style.cursor = ""
+    this.pickHandler = (e) => {
+      this.cancelPick()
       this.setStatus("")
       const { lat, lng } = e.lngLat
       this.setPoint(field, { lat, lon: lng, label: `${lat.toFixed(5)}, ${lng.toFixed(5)}` })
-    })
+    }
+    map.once("click", this.pickHandler)
+  }
+
+  cancelPick() {
+    if (!this.pickHandler) return
+    this.map?.off("click", this.pickHandler)
+    if (this.map) this.map.getCanvas().style.cursor = ""
+    this.pickHandler = null
   }
 
   setPoint(field, point) {
@@ -130,43 +161,76 @@ export default class extends Controller {
     this.points = { from: this.points.to, to: this.points.from }
     this.fromTarget.value = this.points.from?.label || ""
     this.toTarget.value = this.points.to?.label || ""
+    this.dropRoutes()
     if (this.points.from && this.points.to) this.route()
   }
 
   clear() {
+    this.cancelPick()
     this.points = { from: null, to: null }
-    this.routes = []
     this.fromTarget.value = ""
     this.toTarget.value = ""
+    this.dropRoutes()
+  }
+
+  // the ends changed: the routes shown (or on their way) are no longer theirs
+  dropRoutes() {
+    this.cancelRoute()
+    this.routes = []
     this.resultsTarget.replaceChildren()
     this.setStatus("")
     this.draw()
   }
 
+  timeChanged() {
+    this.timeEdited = true
+  }
+
+  // the departure follows the clock until the user sets one
+  refreshTime() {
+    if (!this.timeEdited) this.timeTarget.value = this.localNow()
+  }
+
   // --- routes -------------------------------------------------------------
 
+  // Only the newest request's answer is shown: a new route, new ends or
+  // Clear abort the one on its way.
   async route() {
     const { from, to } = this.points
     if (!from || !to) return this.setStatus(this.labelsValue.need_points, true)
 
-    const params = new URLSearchParams({ from: `${from.lat},${from.lon}`, to: `${to.lat},${to.lon}`, mode: this.mode })
-    if (this.mode === "transit" && this.timeTarget.value) {
-      params.set("time", new Date(this.timeTarget.value).toISOString())
-      if (this.arriveByTarget.checked) params.set("arrive_by", "true")
+    this.cancelRoute()
+    const request = this.routeRequest
+    const mode = this.mode
+    const params = new URLSearchParams({ from: `${from.lat},${from.lon}`, to: `${to.lat},${to.lon}`, mode })
+    if (mode === "transit") {
+      this.refreshTime()
+      if (this.timeTarget.value) params.set("time", new Date(this.timeTarget.value).toISOString())
+      if (this.timeTarget.value && this.arriveByTarget.checked) params.set("arrive_by", "true")
     }
     this.setStatus(this.labelsValue.loading)
     this.resultsTarget.replaceChildren()
+    this.routeAbort = new AbortController()
     try {
-      const data = await this.get(this.routeUrlValue, params)
+      const data = await this.get(this.routeUrlValue, params, this.routeAbort.signal)
+      if (request !== this.routeRequest) return
       this.routes = data.routes || []
+      this.routesMode = mode
       this.setStatus(this.routes.length ? "" : this.labelsValue.no_route, !this.routes.length)
       this.renderRoutes()
       this.select(0)
     } catch (error) {
+      if (request !== this.routeRequest) return
       this.routes = []
       this.setStatus(error.message, true)
       this.draw()
     }
+  }
+
+  cancelRoute() {
+    this.routeRequest += 1
+    this.routeAbort?.abort()
+    this.routeAbort = null
   }
 
   renderRoutes() {
@@ -184,7 +248,7 @@ export default class extends Controller {
 
       const sub = document.createElement("div")
       sub.className = "text-xs opacity-70 mt-1"
-      sub.textContent = this.mode === "transit"
+      sub.textContent = this.routesMode === "transit"
         ? `${this.labelsValue.transfers}: ${route.transfers} · ${this.labelsValue.walking} ${this.distance(route.walk_m)}`
         : this.distance(route.distance_m)
       card.append(sub)
@@ -227,7 +291,8 @@ export default class extends Controller {
 
   draw() {
     const map = this.mapInstance
-    if (!map || !map.isStyleLoaded()) return
+    if (!map) return
+    if (!map.isStyleLoaded()) return this.drawWhenStyleLoaded(map)
 
     const route = this.routes[this.selected ?? 0]
     const lines = route?.geojson || { type: "FeatureCollection", features: [] }
@@ -255,6 +320,30 @@ export default class extends Controller {
     }
   }
 
+  // Right after a basemap change, and while sources load, the style is not
+  // loaded yet: draw once it is. "render" as well as "idle", as
+  // map_data_manager waits: an animated layer keeps the map rendering, and
+  // "idle" never fires while it runs.
+  drawWhenStyleLoaded(map) {
+    if (this.styleWait) return
+    const onReady = () => {
+      if (!map.isStyleLoaded()) return
+      this.stopWaitingForStyle()
+      if (map === this.map) this.draw()
+    }
+    this.styleWait = { map, onReady }
+    map.on("idle", onReady)
+    map.on("render", onReady)
+  }
+
+  stopWaitingForStyle() {
+    if (!this.styleWait) return
+    const { map, onReady } = this.styleWait
+    map.off("idle", onReady)
+    map.off("render", onReady)
+    this.styleWait = null
+  }
+
   fit() {
     const map = this.mapInstance
     const route = this.routes[this.selected ?? 0]
@@ -273,11 +362,11 @@ export default class extends Controller {
 
   // --- helpers ------------------------------------------------------------
 
-  async get(url, params) {
-    const response = await fetch(`${url}?${params}`, { headers: { Authorization: `Bearer ${this.apiKey}`, Accept: "application/json" } })
+  async get(url, params, signal) {
+    const response = await fetch(`${url}?${params}`, { signal, headers: { Authorization: `Bearer ${this.apiKey}`, Accept: "application/json" } })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) {
-      const key = { no_route: "no_route", atlas_unavailable: "unavailable", atlas_disabled: "unavailable" }[data.error]
+      const key = { no_route: "no_route", atlas_unavailable: "unavailable", atlas_disabled: "unavailable", atlas_rejected: "rejected" }[data.error]
       throw new Error(key ? this.labelsValue[key] : data.message || response.statusText)
     }
     return data

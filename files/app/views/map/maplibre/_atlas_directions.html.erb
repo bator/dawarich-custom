@@ -9,7 +9,8 @@
        data-atlas-directions-title-value="<%= t("#{scope}.title") %>"
        data-atlas-directions-labels-value="<%= {
          pick: t("#{scope}.pick"), need_points: t("#{scope}.need_points"), loading: t("#{scope}.loading"),
-         no_route: t("#{scope}.no_route"), unavailable: t("#{scope}.unavailable"), transfers: t("#{scope}.transfers"),
+         no_route: t("#{scope}.no_route"), unavailable: t("#{scope}.unavailable"), rejected: t("#{scope}.rejected"),
+         transfers: t("#{scope}.transfers"),
          walking: t("#{scope}.walking"), hour: t("#{scope}.hour"), minute: t("#{scope}.minute"),
          modes: t("#{scope}.legs").to_h
        }.to_json %>">
@@ -47,7 +48,7 @@
 
     <div class="hidden mb-2 space-y-1" data-atlas-directions-target="transitOptions">
       <input type="datetime-local" class="input input-bordered input-sm w-full" data-atlas-directions-target="time"
-             aria-label="<%= t("#{scope}.time") %>">
+             data-action="input->atlas-directions#timeChanged" aria-label="<%= t("#{scope}.time") %>">
       <label class="label cursor-pointer justify-start gap-2 py-1">
         <input type="checkbox" class="checkbox checkbox-sm" data-atlas-directions-target="arriveBy">
         <span class="label-text text-sm"><%= t("#{scope}.arrive_by") %></span>
