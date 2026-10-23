@@ -1,0 +1,42 @@
+# Hand-written test cases for the GTFS matcher (Gtfs::MatchCases, rake
+# gtfs:match_cases). The rides a user reviewed (confirmed / rejected) are
+# cases too; these are the ones the reviews do not say, e.g. a ride whose
+# right answer was never posted.
+#
+# user_id: the Dawarich user; date: the local day matched;
+# expect: rides the matcher must find, by line, boarding and alighting stop
+#   name (as in the timetable), from / to HH:MM Europe/Budapest, within
+#   tolerance_min;
+# forbid: rides it must not find (same fields, any time that day unless from/to).
+# A day whose points a track_pick pick hid is replayed as it was before the
+# pick (Gtfs::MatchCases#replay), so the case tests the GPS, not the pick.
+cases:
+  - id: gps-dropout-velence-kelenfold
+    note: >-
+      16 Pro, 2026-10-22: no fix 07:57-08:17 (36.5 km) on the train. The ride
+      ended at Velence (ride 133, rejected); with the gap bridge (ce73fe8) it
+      runs to Kelenföld.
+    user_id: 2
+    date: 2026-10-22
+    expect:
+      - line: '9057'
+        board: Székesfehérvár
+        alight: Budapest-Kelenföld
+        from: '07:41'
+        to: '08:24'
+        tolerance_min: 5
+    forbid:
+      - line: '9057'
+        board: Székesfehérvár
+        alight: Velence
+  - id: z30-evening-s22
+    note: S22, 2026-10-22, the confirmed Z30 home (ride 131).
+    user_id: 7
+    date: 2026-10-22
+    expect:
+      - line: Z30
+        board: Budapest-Kelenföld
+        alight: Székesfehérvár
+        from: '16:11'
+        to: '17:09'
+        tolerance_min: 8

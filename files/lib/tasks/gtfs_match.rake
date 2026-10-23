@@ -105,4 +105,24 @@ namespace :gtfs do
       puts "user #{user.id}: #{changes.size} segment(s)#{' (dry run, WRITE=1 to change)' unless ENV['WRITE'] == '1'}"
     end
   end
+  desc 'Test cases for the matcher on the live data, dry (Gtfs::MatchCases): the reviewed rides of the last ' \
+       'DAYS (default 90) and config/gtfs_match_cases.yml. USER_ID= limits it; FILE_ONLY=1 skips the reviews; ' \
+       'VERBOSE=1 lists the passes too. Exits 1 when a case fails.'
+  task match_cases: :environment do
+    results = Gtfs::MatchCases.new(days: (ENV['DAYS'] || 90).to_i, user_id: ENV['USER_ID'].presence,
+                                   reviews: ENV['FILE_ONLY'] != '1').call
+    clock = ->(t) { t ? Time.zone.at(t).in_time_zone('Europe/Budapest').strftime('%H:%M') : '?' }
+    label = ->(d) { d ? "#{d[:line]} #{d[:board]} -> #{d[:alight]} #{clock.call(d[:from])}-#{clock.call(d[:to])}" : '-' }
+    results.sort_by { |r| [r.pass ? 1 : 0, r.date, r.user_id] }.each do |r|
+      next if r.pass && ENV['VERBOSE'] != '1'
+
+      puts format('%-4s %-9s %s u%-2d %-38s %-8s want: %s | got: %s%s', r.pass ? 'ok' : 'FAIL', r.kind, r.date, r.user_id,
+                  r.case_id, r.grade, label.call(r.expected), label.call(r.found),
+                  r.found&.dig(:confidence) ? " (#{r.found[:confidence]})" : '')
+    end
+    by = results.group_by(&:kind).transform_values { |rs| "#{rs.count(&:pass)}/#{rs.size}" }
+    grades = results.group_by(&:grade).transform_values(&:size)
+    puts "passed #{results.count(&:pass)}/#{results.size} #{by} grades #{grades}"
+    exit 1 unless results.all?(&:pass)
+  end
 end
