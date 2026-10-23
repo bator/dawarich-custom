@@ -36,7 +36,10 @@ class Gtfs::SegmentReview
     changed = segment.with_lock do
       action == 'choose' ? choose!(segment, trip_gtfs_id, feed_id) : set_status!(segment, STATUS_FOR.fetch(action))
     end
-    sync_discord(segment) if changed
+    if changed
+      sync_discord(segment)
+      Gtfs::TrackModesJob.perform_later(segment.user_id) # the track's mode follows the review
+    end
     segment
   end
 

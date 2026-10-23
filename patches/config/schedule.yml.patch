@@ -1,6 +1,6 @@
 --- a/config/schedule.yml
 +++ b/config/schedule.yml
-@@ -124,3 +124,30 @@
+@@ -124,3 +124,36 @@
    cron: "*/5 * * * *"
    class: "Stats::ToponymsRefreshJob"
    queue: stats
@@ -9,6 +9,12 @@
 +  # before the feed sync below: decision K4 keeps only active + one backup timetable (docs/gtfs.md)
 +  cron: "<%= ENV.fetch('GTFS_MATCH_CRON', '0 3 * * * Europe/Budapest') %>" # no-op unless GTFS_ENABLED=true
 +  class: "Gtfs::MatchRecentJob"
++  queue: gtfs
++
++gtfs_track_modes_job:
++  # transport mode of the track segments under confirmed rides, last 7 days (Gtfs::TrackModes)
++  cron: "<%= ENV.fetch('GTFS_TRACK_MODES_CRON', '*/20 * * * *') %>"
++  class: "Gtfs::TrackModesJob"
 +  queue: gtfs
 +
 +gtfs_walk_today_job:

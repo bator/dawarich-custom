@@ -87,4 +87,22 @@ namespace :gtfs do
     walk_stale = walk.safely('stale leg cleanup') { walk.delete_stale!(TransitWalkLeg.where(user_id: user.id)) }
     puts "removed #{walk_zones} walking leg(s) in privacy zones, #{walk_stale} stale walking leg(s)"
   end
+  desc 'Transport mode of the track segments under confirmed rides (Gtfs::TrackModes): ' \
+       'USER_ID= (default: every opted-in user), DAYS= (default 7). Dry run by default, WRITE=1 to change.'
+  task track_modes: :environment do
+    days = (ENV['DAYS'] || Gtfs::TrackModesJob::DAYS).to_i
+    users = Gtfs::UserSettings.opted_in_users
+    users = users.where(id: ENV['USER_ID']) if ENV['USER_ID'].present?
+    users.find_each do |user|
+      today = Gtfs::MatchDay.today_for(user)
+      from, = Gtfs::MatchDay.day_range(user, today - days)
+      _, to = Gtfs::MatchDay.day_range(user, today)
+      changes = Gtfs::TrackModes.new(user, from:, to:).call(dry_run: ENV['WRITE'] != '1')
+      changes.each do |c|
+        puts "user #{user.id} track #{c.track_id} segment #{c.segment_id}: #{c.from} -> #{c.to || 'detected'}" \
+             "#{" (ride #{c.ride_id})" if c.ride_id}"
+      end
+      puts "user #{user.id}: #{changes.size} segment(s)#{' (dry run, WRITE=1 to change)' unless ENV['WRITE'] == '1'}"
+    end
+  end
 end
