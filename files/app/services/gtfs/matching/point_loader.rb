@@ -5,6 +5,7 @@
 # memory.
 #
 # - anomaly-flagged points (Dawarich's own filter) are skipped
+# - points of Gtfs::Config::EXCLUDE_TRACKERS (synthetic car drives) are skipped
 # - accuracy worse than MAX_ACCURACY_M is dropped (when the field is set)
 # - duplicates (same timestamp) keep the most accurate fix
 # - single-point spikes faster than MAX_JUMP_SPEED_KMH are dropped
@@ -44,8 +45,8 @@ class Gtfs::Matching::PointLoader
   private
 
   def load_rows
-    rows = Point.where(user_id: @user.id, timestamp: @from_ts...@to_ts).not_anomaly
-                .where.not(lonlat: nil).order(:timestamp, :id)
+    scope = Point.where(user_id: @user.id, timestamp: @from_ts...@to_ts).not_anomaly.where.not(lonlat: nil)
+    rows = exclude_trackers(scope).order(:timestamp, :id)
                 .pluck(:id, :timestamp, Arel.sql('ST_X(lonlat::geometry)'), Arel.sql('ST_Y(lonlat::geometry)'),
                        :accuracy, :velocity)
     rows.map do |id, ts, lon, lat, accuracy, velocity|
@@ -53,6 +54,15 @@ class Gtfs::Matching::PointLoader
       speed = reported.match?(/\A-?\d+(\.\d+)?\z/) && reported.to_f >= 0 ? reported.to_f : nil
       MatchPoint.new(id:, ts:, lon:, lat:, accuracy:, speed:)
     end
+  end
+
+  def exclude_trackers(scope)
+    patterns = Gtfs::Config::EXCLUDE_TRACKERS
+    return scope if patterns.empty?
+
+    likes = patterns.map { |p| ActiveRecord::Base.sanitize_sql_like(p).gsub('*', '%') }
+    scope.where.not(likes.map { 'points.tracker_id LIKE ?' }.join(' OR '), *likes)
+         .or(scope.where(tracker_id: nil))
   end
 
   def dedupe(points)

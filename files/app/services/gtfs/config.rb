@@ -15,6 +15,12 @@ module Gtfs::Config
   # 9.1 input cleaning
   MAX_ACCURACY_M          = int('GTFS_MATCH_MAX_ACCURACY_M', 100)
   MAX_JUMP_SPEED_KMH      = float('GTFS_MATCH_MAX_JUMP_SPEED_KMH', 400)
+  # Points of these trackers are not matched: car drives drawn afterwards from
+  # a route (gpx-drive-*, osrm-drive-fill), never a ride. 22 of the 30 rides
+  # Bator rejected were buses matched on them (rake gtfs:match_cases,
+  # 2026-10-23). Comma-separated, * matches anything; empty: none.
+  EXCLUDE_TRACKERS        = ENV.fetch('GTFS_MATCH_EXCLUDE_TRACKERS', 'gpx-drive*,osrm-drive-fill')
+                               .split(',').map(&:strip).reject(&:empty?).freeze
 
   # 9.2 movement windows
   MIN_SEGMENT_DURATION    = int('GTFS_MATCH_MIN_SEGMENT_DURATION', 120)   # seconds

@@ -116,13 +116,16 @@ namespace :gtfs do
     results.sort_by { |r| [r.pass ? 1 : 0, r.date, r.user_id] }.each do |r|
       next if r.pass && ENV['VERBOSE'] != '1'
 
-      puts format('%-4s %-9s %s u%-2d %-38s %-8s want: %s | got: %s%s', r.pass ? 'ok' : 'FAIL', r.kind, r.date, r.user_id,
+      status = if r.skipped then 'skip' elsif r.pass then 'ok' else 'FAIL' end
+      puts format('%-4s %-9s %s u%-2d %-38s %-8s want: %s | got: %s%s', status, r.kind, r.date, r.user_id,
                   r.case_id, r.grade, label.call(r.expected), label.call(r.found),
                   r.found&.dig(:confidence) ? " (#{r.found[:confidence]})" : '')
     end
-    by = results.group_by(&:kind).transform_values { |rs| "#{rs.count(&:pass)}/#{rs.size}" }
+    by = results.reject(&:skipped).group_by(&:kind).transform_values { |rs| "#{rs.count(&:pass)}/#{rs.size}" }
     grades = results.group_by(&:grade).transform_values(&:size)
-    puts "passed #{results.count(&:pass)}/#{results.size} #{by} grades #{grades}"
+    run = results.reject(&:skipped)
+    puts "passed #{run.count(&:pass)}/#{run.size} (skipped #{results.count(&:skipped)}: no timetable that day) " \
+         "#{by} grades #{grades}"
     exit 1 unless results.all?(&:pass)
   end
 end

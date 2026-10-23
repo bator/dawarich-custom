@@ -11,6 +11,10 @@
 # - A rejected ride must not come back the same (same line and stops over
 #   its time): `back` is a failure, `gone` / `changed` pass.
 # - The hand-written cases of config/gtfs_match_cases.yml (expect / forbid).
+# - A reviewed ride whose feed has no timetable for that day any more
+#   (`no_timetable`: only the active and one backup version are kept, and
+#   BKK / Volánbusz versions start on their download day) is skipped: the
+#   matcher cannot find it, and Gtfs::SegmentWriter keeps such rides.
 #
 # A day whose points a track_pick pick hid (TrackPick::Hider, the hidden ids
 # in its state log) is replayed as before the pick: in a transaction that is
@@ -23,7 +27,8 @@ class Gtfs::MatchCases
   # the case file's wall-clock times (a user's own setting may be UTC: user 7)
   CASE_ZONE = 'Europe/Budapest'
 
-  Result = Struct.new(:case_id, :kind, :user_id, :date, :expected, :grade, :found, :pass, keyword_init: true)
+  Result = Struct.new(:case_id, :kind, :user_id, :date, :expected, :grade, :found, :pass, :skipped,
+                      keyword_init: true)
 
   def initialize(days: 90, user_id: nil, reviews: true, logger: Rails.logger)
     @days = days
@@ -40,7 +45,11 @@ class Gtfs::MatchCases
       next unless user
 
       matches = match_day(user, date)
-      cases.each { |c| results.concat(check(c, user, date, matches)) }
+      feeds = Gtfs::Matching::FeedSet.for_user(user)
+      cases.each do |c|
+        skipped = skip(c, feeds, date)
+        skipped ? results << skipped : results.concat(check(c, user, date, matches))
+      end
     end
     results
   end
@@ -114,6 +123,18 @@ class Gtfs::MatchCases
       confidence: match.confidence.round(2) }
   end
 
+  # a reviewed ride whose feed has no timetable that day any more
+  def skip(kase, feeds, date)
+    ride = kase[:ride]
+    return unless ride
+
+    feed = (@feeds ||= {})[ride.feed_id] ||= Gtfs::Feed.find_by(id: ride.feed_id)
+    return if feed && feeds.version_for(feed, date)
+
+    Result.new(case_id: kase[:id], kind: kase[:kind], user_id: kase[:user_id], date: kase[:date],
+               expected: ride_desc(ride), grade: 'no_timetable', found: nil, pass: true, skipped: true)
+  end
+
   def check(kase, user, date, matches)
     case kase[:kind]
     when 'confirmed' then [check_confirmed(kase, matches)]
@@ -170,7 +191,7 @@ class Gtfs::MatchCases
 
   def result(kase, expected, grade, found, pass, suffix: nil)
     Result.new(case_id: [kase[:id], suffix].compact.join('/'), kind: kase[:kind], user_id: kase[:user_id],
-               date: kase[:date], expected:, grade:, found:, pass:)
+               date: kase[:date], expected:, grade:, found:, pass:, skipped: false)
   end
 
   def ride_desc(ride)
