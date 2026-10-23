@@ -7,8 +7,7 @@
 # can put them back. Note: Points::AnomalyBackfillUserJob clears every anomaly flag of a
 # user before it re-judges, which would bring these points back too.
 #
-# After the transaction (#rebuild): tile epoch bump, recalculation of the tracks the hidden
-# points left, a track build for the day's untracked points (copied / timetable points),
+# After the transaction (#rebuild): tile epoch bump, the day's tracks built again (#rebuild_tracks),
 # stats of the month, achievements.
 class TrackPick::Hider
   GTFS_TRACKER = 'track-pick-gtfs'
@@ -39,13 +38,9 @@ class TrackPick::Hider
     log(hidden) if hidden.any?
     from, to = TrackPick::Config.day_range(@date)
     Points::TileEpoch.bump_range(@target.id, from, to)
-    jobs = hidden.filter_map { |_, track_id, _| track_id }.uniq.map { |id| Tracks::RecalculateJob.new(id) }
     month = Time.zone.at(from).in_time_zone(TrackPick::Config.zone)
-    jobs << Stats::CalculatingJob.new(@target.id, month.year, month.month)
-    ActiveJob.perform_all_later(jobs)
-    # copied and timetable points have no track yet
-    Tracks::ParallelGeneratorJob.perform_later(@target.id, start_at: from, end_at: to, mode: :bulk,
-                                                           untracked_only: true)
+    Stats::CalculatingJob.perform_later(@target.id, month.year, month.month)
+    rebuild_tracks(from, to)
     Achievements::CheckJob.defer(@target.id, oldest_timestamp: from)
   rescue StandardError => e
     Rails.logger.error("[track_pick] rebuild after pick failed: #{e.class}: #{e.message}")
@@ -60,8 +55,7 @@ class TrackPick::Hider
     File.rename(log_path, "#{log_path}.undone-#{Time.now.strftime('%Y%m%d-%H%M%S')}")
     from, to = TrackPick::Config.day_range(@date)
     Points::TileEpoch.bump_range(@target.id, from, to)
-    Tracks::ParallelGeneratorJob.perform_later(@target.id, start_at: from, end_at: to, mode: :bulk,
-                                                           untracked_only: true)
+    rebuild_tracks(from, to)
     n
   rescue Errno::ENOENT
     0
@@ -72,6 +66,17 @@ class TrackPick::Hider
   end
 
   private
+
+  # Every track of the day built again (Dawarich bulk mode: the day's tracks are deleted and
+  # rebuilt from its points). Recalculating the old tracks kept a phone track across the hidden
+  # ride, one straight line over it, and the copied / timetable points stayed without a track:
+  # 2026-10-22, a 54.7 km line Székesfehérvár - Kelenföld on the map (Bator). start_at /
+  # end_at must be times: the generator calls in_time_zone on them, and with epoch integers
+  # the job failed silently (ParallelGeneratorJob rescues and only reports).
+  def rebuild_tracks(from, to)
+    Tracks::ParallelGeneratorJob.perform_later(@target.id, start_at: Time.zone.at(from), end_at: Time.zone.at(to),
+                                                           mode: :bulk)
+  end
 
   def log(hidden)
     FileUtils.mkdir_p(TrackPick::Config::STATE_DIR)
