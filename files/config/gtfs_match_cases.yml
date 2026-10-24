@@ -40,3 +40,21 @@ cases:
         from: '16:11'
         to: '17:09'
         tolerance_min: 8
+  - id: g44-standing-at-dinnyes
+    note: >-
+      16 Pro, 2026-10-23: the G44 home split into two movement windows 21 s
+      apart at Dinnyés; the last 11 km were lost and the ride ended at
+      Dinnyés (ride 145). It ends at Székesfehérvár (extend_into_next).
+    user_id: 2
+    date: 2026-10-23
+    expect:
+      - line: G44
+        board: Budapest-Kelenföld
+        alight: Székesfehérvár
+        from: '22:27'
+        to: '23:20'
+        tolerance_min: 6
+    forbid:
+      - line: G44
+        board: Budapest-Kelenföld
+        alight: Dinnyés

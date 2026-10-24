@@ -13,6 +13,7 @@
 #   a GPS gap next to a movement window is also scored together with it
 #   a GPS gap between two movement windows is scored with both (a bridge)
 #   join consecutive rides on the same trip and score them again as one
+#   extend a ride into a movement window right after it on the same trip
 #
 # Windows are attributed to the range by their start time; points up to
 # DAY_BUFFER_SECS outside the range are loaded so that rides crossing midnight
@@ -26,6 +27,8 @@ class Gtfs::SegmentMatcher
 
   OVERLAP_SECS = 30
   GAP_NEIGHBOUR_SECS = 60 # a gap window and a movement window this close share their edge point
+  EXTEND_GAP_SECS = 180 # a movement window starting this soon after a ride may be its rest
+  EXTEND_MAX_STEPS = 3
 
   attr_reader :feed_set
 
@@ -52,6 +55,7 @@ class Gtfs::SegmentMatcher
 
     matches = match_windows(windows, stats)
     matches = merge_same_trip(drop_overlaps(matches), points, windows, stats)
+    matches = extend_into_next(matches, points, windows, stats)
     stats['matches'] = matches.size
     stats['ms'] = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
     Result.new(matches:, stats:)
@@ -352,6 +356,46 @@ class Gtfs::SegmentMatcher
     return false if b.started_at - a.ended_at > scheduled + Gtfs::Config::MERGE_GAP_SLACK_SECS
 
     windows.none? { |w| w.start_ts > first.window.end_ts && w.end_ts < second.window.start_ts }
+  end
+
+  # A train standing at a station or a run of rough fixes can split a ride
+  # into two movement windows, and the second, too short to match on its
+  # own, was lost: the ride ended at the split (ride 145, 2026-10-23: G44
+  # Kelenföld -> Dinnyés, 21 s before the last 11 km to Székesfehérvár;
+  # Bator). A movement window that starts at most EXTEND_GAP_SECS after a
+  # ride and that no other ride covers is scored together with it; the
+  # longer ride is kept when it is accepted on the same trip.
+  def extend_into_next(matches, points, windows, stats)
+    matches.map do |match|
+      EXTEND_MAX_STEPS.times do
+        longer = extend_once(match, matches, points, windows, stats)
+        break unless longer
+
+        match = longer
+      end
+      match
+    end
+  end
+
+  def extend_once(match, matches, points, windows, stats)
+    return unless match.window
+
+    last = match.window.end_ts
+    nxt = windows.find { |w| !w.gap? && w.start_ts >= last && w.start_ts - last <= EXTEND_GAP_SECS }
+    return unless nxt
+    return if matches.any? { |m| !m.equal?(match) && m.started_at < nxt.end_ts && m.ended_at > nxt.start_ts }
+
+    window = Gtfs::Matching::WindowDetector::Window.new(
+      points: points.select { |p| p.ts.between?(match.window.start_ts, nxt.end_ts) }, kind: :moving, pauses: [],
+      board_from_gap: match.window.board_from_gap, truncated: match.window.truncated_start || nxt.truncated_end,
+      truncated_start: match.window.truncated_start, truncated_end: nxt.truncated_end,
+      sparse: [match.window, nxt].any?(&:sparse)
+    )
+    best, alternatives = evaluate(window, stats)
+    return unless best && same_trip?(best, match.score) && best.confidence >= drop_below(best)
+
+    stats['extended_rides'] += 1
+    build_match(window, best, alternatives)
   end
 
   def same_trip?(score, other)
