@@ -97,6 +97,12 @@ ones.
   - from the leg's first fix to its first part, and from its last part to its last fix, where the
     raw track line around the leg ends.
 - **Rides:** the timetable line covers all of the ride, so the ride's times decide.
+  - Since 2026-10-24 the transit layer draws that timetable line (`Gtfs::SegmentQuery#geometries` via
+    `Gtfs::Discord::RideMap`: the trip's shape, else the line through the stops), as the Discord image
+    does. Before, it drew the ride's GPS points: a straight line across every stretch without a
+    usable fix (G44 of 10-23: 4.4 km straight into Székesfehérvár, up to 611 m off the railway; now
+    within 25 m of the S22's 4 m fixes). A ride whose timetable line would only be a straight line
+    between its two stops keeps the GPS line. Cached per ride and its last change.
 - What the layers draw for the map's range, and nothing else: the same queries and visibility
   (threshold, feed selection, privacy zones), the same range rule, the same cap of the newest 500.
   - A walk without a drawn line keeps its track line.
