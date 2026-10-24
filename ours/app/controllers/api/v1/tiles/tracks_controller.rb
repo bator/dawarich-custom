@@ -8,7 +8,7 @@ class Api::V1::Tiles::TracksController < ApiController
   TILE_SCHEMA_VERSION = 6
   # dawarich-custom: ?hide=walks,rides cuts the raw line under the walks /
   # rides the map draws (Gtfs::TrackCutouts, docs/atlas.md)
-  CUTOUTS_VERSION = 4
+  CUTOUTS_VERSION = 5
 
   private
 
@@ -22,13 +22,14 @@ class Api::V1::Tiles::TracksController < ApiController
      *(cutouts&.epoch)]
   end
 
-  # Only for a dated (up to Gtfs::TrackCutouts::MAX_DAYS), unfiltered,
-  # single-colour request (what /map/v2 asks)
+  # Only for a dated (up to Gtfs::TrackCutouts::MAX_DAYS) request without an
+  # import filter (what /map/v2 asks), single-colour or speed-coloured
+  # (Tracks::SpeedVectorTileQuery, since 2026-10-24)
   def cutouts
     return @cutouts if defined?(@cutouts)
 
     kinds = Gtfs::TrackCutouts.parse(params[:hide])
-    @cutouts = if kinds.any? && cacheable_range? && params[:import_id].blank? && !speed_coloring? &&
+    @cutouts = if kinds.any? && cacheable_range? && params[:import_id].blank? &&
                   Gtfs::TrackCutouts.range_ok?(cacheable_start_at, cacheable_end_at)
                  Gtfs::TrackCutouts.new(current_api_user, kinds, start_at: cacheable_start_at,
                                                                  end_at: cacheable_end_at)

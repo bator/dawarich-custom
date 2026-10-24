@@ -131,6 +131,19 @@ gtfs_match_recent_job:
   class: "Gtfs::MatchRecentJob"
   queue: gtfs
 
+accuracy_gate_job:
+  # points worse than the user's gps_accuracy_threshold hidden (AccuracyGate), last 48 h
+  cron: "<%= ENV.fetch('ACCURACY_GATE_CRON', '41 * * * *') %>"
+  class: "AccuracyGateJob"
+  queue: default
+
+accuracy_gate_nightly_job:
+  # the same over all history (re-hides what an anomaly backfill showed again)
+  cron: "<%= ENV.fetch('ACCURACY_GATE_NIGHTLY_CRON', '50 4 * * * Europe/Budapest') %>"
+  class: "AccuracyGateJob"
+  args: [true]
+  queue: default
+
 gtfs_track_modes_job:
   # transport mode of the track segments under confirmed rides, last 7 days (Gtfs::TrackModes)
   cron: "<%= ENV.fetch('GTFS_TRACK_MODES_CRON', '*/20 * * * *') %>"

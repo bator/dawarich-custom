@@ -1,0 +1,21 @@
+--- a/app/queries/tracks/speed_vector_tile_query.rb
++++ b/app/queries/tracks/speed_vector_tile_query.rb
+@@ -113,9 +113,18 @@
+       ) AS ordered_points
+       WHERE previous_position IS NOT NULL
+         #{"AND import_id = #{@clip_import_id.to_i} AND previous_import_id = #{@clip_import_id.to_i}" if @clip_import_id}
++        #{hidden_speed_segments_predicate}
+     SQL
+   end
+ 
++  # dawarich-custom (docs/atlas.md, "Only the snapped line"): the segments the
++  # walks and rides the map draws lie on are left out here too, as in the
++  # plain tiles (Tracks::VectorTileQuery#hidden_segment_sql); a track under a
++  # cut stretch is a clipped one, drawn from these segments only.
++  def hidden_speed_segments_predicate
++    hiding? ? "AND NOT COALESCE(#{hidden_segment_sql}, false)" : ''
++  end
++
+   def point_scope_sql
+     @points_scope.except(:select, :order, :includes, :preload, :eager_load)
+                  .where.not(lonlat: nil)

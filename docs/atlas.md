@@ -106,8 +106,28 @@ ones.
   clipped-track way. It is rebuilt from its points (`Tracks::PointGeometryQuery`) without the
   segments inside the ranges; the rest stays as separate lines. A track without points keeps its
   line.
-- Only for a dated request of at most 93 days (`MAX_DAYS`), without `import_id` and without speed
-  colouring, which is what `/map/v2` asks for. Longer ranges are drawn uncut.
+- Only for a dated request of at most 93 days (`MAX_DAYS`) without `import_id`, which is what
+  `/map/v2` asks for. Longer ranges are drawn uncut.
+  - Since 2026-10-24 speed-coloured tiles are cut too (`Tracks::SpeedVectorTileQuery` leaves out the
+    hidden segments). Before, with speed colouring on, the raw line stayed under the rides, and rough
+    fixes showed as red zigzags (Bator).
+
+## Points worse than the accuracy threshold
+
+A user's `gps_accuracy_threshold` setting (metres; Dawarich 1.17.0 keeps it but no longer reads it)
+hides the points with a worse reported accuracy (`AccuracyGate`). They are flagged the way Dawarich
+flags GPS noise (`anomaly = TRUE`, `track_id = NULL`), and nothing is deleted.
+
+- Every hidden id is logged in `/opt/dawarich/accuracy-gate/state/<user_id>/<local day>.jsonl`.
+- The days with hidden points get their tracks built again (bulk mode, as after a track_pick pick).
+- `AccuracyGateJob` runs hourly over the last 48 h (`ACCURACY_GATE_CRON`, minute 41) and nightly over
+  all history (`ACCURACY_GATE_NIGHTLY_CRON`, 04:50). The nightly run also re-hides what an anomaly
+  backfill (`Points::AnomalyBackfillUserJob`, which clears every flag first) showed again.
+- `bin/rails accuracy_gate:run` is a dry run; `WRITE=1` hides, `USER_ID=` and `DAYS=` narrow it.
+- `bin/rails "accuracy_gate:undo[USER_ID,FROM,TO]"` shows the points of those local days again and
+  rebuilds their tracks.
+- User 2 (threshold 100 m), 2026-10-24: 1882 points on 136 days, 328 of them in the last 48 h. On
+  the G44 of 10-23, the 1 km spikes at Velence and Martonvásár are gone.
 - The tile ETag includes the kinds and the cut's epoch: the user's latest walk-leg / ride change and
   their counts, settings, privacy zones. The cut query runs with `jit = off`: JIT compiling took 167
   of 200 ms, the work itself about 30 ms.
