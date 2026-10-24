@@ -76,8 +76,8 @@
      )
    end
  
-@@ -251,6 +288,9 @@
-     conn.transaction do
+@@ -252,6 +289,9 @@
+       conn.exec_query('SET LOCAL jit = off', 'TracksVectorTileQuery JIT')
        conn.exec_query("SET LOCAL statement_timeout = #{VectorTileTimeout.query_timeout_ms}",
                        'TracksVectorTileQuery Timeout')
 +      # dawarich-custom: the cut query's cost estimate triggers JIT, whose

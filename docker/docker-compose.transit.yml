@@ -12,16 +12,16 @@ x-transit-env: &transit-env
 
 services:
   dawarich_app:
-    image: dawarich-custom:${DAWARICH_VERSION:-1.16.0}
+    image: dawarich-custom:${DAWARICH_VERSION:-1.17.0}
     build:
       context: ${DAWARICH_CUSTOM_DIR:-./dawarich-custom}
       dockerfile: docker/Dockerfile
       args:
-        DAWARICH_VERSION: ${DAWARICH_VERSION:-1.16.0}
+        DAWARICH_VERSION: ${DAWARICH_VERSION:-1.17.0}
     <<: *transit-env
 
   dawarich_sidekiq:
-    image: dawarich-custom:${DAWARICH_VERSION:-1.16.0}
+    image: dawarich-custom:${DAWARICH_VERSION:-1.17.0}
     pull_policy: never # built by dawarich_app
     <<: *transit-env
 
@@ -29,7 +29,7 @@ services:
   # Configure it on /transit/discord (admins) first, then:
   #   docker compose -f docker-compose.yml -f docker-compose.transit.yml --profile discord up -d
   dawarich_discord_bot:
-    image: dawarich-custom:${DAWARICH_VERSION:-1.16.0}
+    image: dawarich-custom:${DAWARICH_VERSION:-1.17.0}
     pull_policy: never
     container_name: dawarich_discord_bot
     profiles: [discord]

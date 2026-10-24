@@ -1,5 +1,5 @@
 {
-  "base_version": "1.16.0",
+  "base_version": "1.17.0",
   "custom_files": [
     "app/controllers/api/v1/transit/base_controller.rb",
     "app/controllers/api/v1/transit/corridors_controller.rb",

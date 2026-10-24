@@ -81,6 +81,8 @@ export class LayerManager {
     this._addTracksMvtLayer()
     this._addAnomaliesLayer()
     this._addPointsMvtLayer()
+    // Photos load before tile layers, so raise their clusters above them.
+    this.layers.photosLayer?.raiseAbove("points-mvt")
     this._addRecentPointLayer()
     this._addReplayMarkerLayer()
     this._addFogLayer(EMPTY_GEOJSON)
@@ -503,6 +505,9 @@ export class LayerManager {
       this.layers.tracksMvtLayer = new TracksMvtLayer(this.map, {
         tracksEnabled: this.settings.tracksEnabled === true,
         trackColor: SettingsManager.getSetting("trackColor"),
+        speedColoring:
+          SettingsManager.getSetting("speedColoredRoutes") === true,
+        speedColorScale: SettingsManager.getSetting("speedColorScale"),
         apiKey: this.apiKey,
         importId: this.controller?.importIdValue || null,
         onTileError: () =>

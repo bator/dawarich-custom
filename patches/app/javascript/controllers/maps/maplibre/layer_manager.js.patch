@@ -29,7 +29,7 @@
      this._addVisitsLayer(visitsGeoJSON)
      this._addPlacesLayer(placesGeoJSON)
  
-@@ -384,6 +392,51 @@
+@@ -386,6 +394,51 @@
      }
    }
  
@@ -81,7 +81,7 @@
    _addVisitsLayer(visitsGeoJSON) {
      if (!this.layers.visitsLayer) {
        this.layers.visitsLayer = new VisitsLayer(this.map, {
-@@ -442,7 +495,9 @@
+@@ -444,7 +497,9 @@
    }
  
    // Tile-backed canonical Tracks layer; added below points so circles stay on
@@ -92,7 +92,7 @@
    _addTracksMvtLayer() {
      if (!this.layers.tracksMvtLayer) {
        this.layers.tracksMvtLayer = new TracksMvtLayer(this.map, {
-@@ -460,14 +515,51 @@
+@@ -465,14 +520,51 @@
              },
            ),
          onEmptyTracks: () => Toast.info(translate("messages.tracks_pending")),
