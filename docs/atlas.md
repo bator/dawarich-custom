@@ -86,7 +86,7 @@ ones.
   - One dashed dark slate line with a white casing: the snapped parts (`valhalla`), the recorded
     parts (`raw`) along their fixes and the straight `joint`s between them, all alike (Bator chose
     it from four styles). A standing-still cloud (`stationary`) stays a grey dot.
-  - Earlier rule (`20261022120000`–`20261022130000`, removed by `20261022160000`): cut only between
+  - Earlier rule (`20261022120000`–`20261022130000`, removed by `20261022160100`): cut only between
     two points the snap matched (`transit_walk_legs.covered`), the raw track line stayed under
     recorded parts, standing-still clouds and GPS gaps.
 - **Joints:** the parts of a walk do not touch. A snapped part ends at its matched position, the
