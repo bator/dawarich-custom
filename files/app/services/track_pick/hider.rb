@@ -74,6 +74,7 @@ class TrackPick::Hider
   # end_at must be times: the generator calls in_time_zone on them, and with epoch integers
   # the job failed silently (ParallelGeneratorJob rescues and only reports).
   def rebuild_tracks(from, to)
+    TrackModeCorrections.new(@target).capture! # hand-set modes are written back after (Gtfs::TrackModesJob)
     Tracks::ParallelGeneratorJob.perform_later(@target.id, start_at: Time.zone.at(from), end_at: Time.zone.at(to),
                                                            mode: :bulk)
   end

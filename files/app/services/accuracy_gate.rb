@@ -101,6 +101,7 @@ class AccuracyGate
 
     from = zone.local(days.first.year, days.first.month, days.first.day)
     to = zone.local(days.last.year, days.last.month, days.last.day) + 1.day
+    TrackModeCorrections.new(@user).capture! # hand-set modes are written back after (Gtfs::TrackModesJob)
     Tracks::ParallelGeneratorJob.perform_later(@user.id, start_at: from, end_at: to, mode: :bulk)
   end
 end
