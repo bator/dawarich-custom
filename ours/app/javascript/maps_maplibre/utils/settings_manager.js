@@ -69,7 +69,6 @@ const LAYER_NAME_MAP = {
   Hexagons: "hexagonsEnabled",
   Visits: "visitsEnabled",
   Photos: "photosEnabled",
-  Areas: "areasEnabled",
   Tracks: "tracksEnabled",
   Flights: "flightsEnabled",
   Transit: "transitEnabled",
@@ -79,6 +78,7 @@ const LAYER_NAME_MAP = {
   "Scratch map": "scratchEnabled",
   "Family Members": "familyEnabled",
   Places: "placesEnabled",
+  "Place boundaries": "placeBoundariesEnabled",
   Anomalies: "anomaliesEnabled",
 }
 
@@ -106,6 +106,7 @@ const BACKEND_SETTINGS_MAP = {
   liveMapEnabled: "live_map_enabled",
 }
 
+// biome-ignore lint/complexity/noStaticOnlyClass: retain the established public API
 export class SettingsManager {
   static apiKey = null
   static cachedSettings = null
@@ -147,9 +148,14 @@ export class SettingsManager {
     if (enabledLayers.includes("Routes") && !enabledLayers.includes("Tracks")) {
       enabledLayers.push("Tracks")
     }
-    settings.enabledMapLayers = enabledLayers.filter(
-      (name) => name !== "Routes",
-    )
+    if (enabledLayers.includes("Areas")) {
+      enabledLayers.push("Places", "Place boundaries")
+    }
+    settings.enabledMapLayers = [
+      ...new Set(
+        enabledLayers.filter((name) => name !== "Routes" && name !== "Areas"),
+      ),
+    ]
 
     Object.entries(LAYER_NAME_MAP).forEach(([layerName, settingKey]) => {
       settings[settingKey] = settings.enabledMapLayers.includes(layerName)

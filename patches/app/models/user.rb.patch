@@ -1,6 +1,6 @@
 --- a/app/models/user.rb
 +++ b/app/models/user.rb
-@@ -42,6 +42,7 @@
+@@ -44,6 +44,7 @@
    has_many :trip_sources, dependent: :destroy
    has_many :tracks, dependent: :destroy
    has_many :flights, dependent: :destroy

@@ -4,10 +4,10 @@
 # freikin/dawarich on Docker Hub: the image upstream's docker/docker-compose.yml
 # uses, built from upstream's docker/Dockerfile. Build from the repo root:
 #
-#   docker build -f docker/Dockerfile -t dawarich-custom:1.17.0 .
+#   docker build -f docker/Dockerfile -t dawarich-custom:1.18.0 .
 #
 # docs/docker.md describes the whole setup (compose, env, first start).
-ARG DAWARICH_VERSION=1.17.0
+ARG DAWARICH_VERSION=1.18.0
 
 FROM freikin/dawarich:${DAWARICH_VERSION} AS upstream
 

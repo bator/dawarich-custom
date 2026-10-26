@@ -1,6 +1,6 @@
 --- a/app/javascript/controllers/maps/maplibre/data_loader.js
 +++ b/app/javascript/controllers/maps/maplibre/data_loader.js
-@@ -216,13 +216,52 @@
+@@ -195,11 +195,49 @@
            })
        : Promise.resolve({ type: "FeatureCollection", features: [] })
  
@@ -41,28 +41,20 @@
 +      : Promise.resolve({ type: "FeatureCollection", features: [] })
 +
      // Wait for all core data
--    const [visits, areas, places, flights] = await Promise.all([
--      visitsPromise,
--      areasPromise,
--      placesPromise,
--      flightsPromise,
--    ])
-+    const [visits, areas, places, flights, transit, walkLegs] =
-+      await Promise.all([
-+        visitsPromise,
-+        areasPromise,
-+        placesPromise,
-+        flightsPromise,
-+        transitPromise,
-+        walkLegsPromise,
-+      ])
+-    const [visits, places, flights] = await Promise.all([
++    const [visits, places, flights, transit, walkLegs] = await Promise.all([
+       visitsPromise,
+       placesPromise,
+       flightsPromise,
++      transitPromise,
++      walkLegsPromise,
+     ])
  
      const emptyGeoJSON = { type: "FeatureCollection", features: [] }
-     // Point and Track history is always tile-backed on the main map. Explicit
-@@ -237,6 +276,11 @@
-     data.places = places
-     data.placesGeoJSON = this.placesToGeoJSON(data.places)
-     data.flightsGeoJSON = flights || { type: "FeatureCollection", features: [] }
+@@ -216,6 +254,11 @@
+       type: "FeatureCollection",
+       features: [],
+     }
 +    data.transitGeoJSON = transit || { type: "FeatureCollection", features: [] }
 +    data.walkLegsGeoJSON = walkLegs || {
 +      type: "FeatureCollection",

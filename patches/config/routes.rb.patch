@@ -19,7 +19,7 @@
    namespace :settings do
      resources :general, only: [:index]
      patch 'general', to: 'general#update'
-@@ -66,6 +78,9 @@
+@@ -74,6 +86,9 @@
      resources :background_jobs, only: %i[index create]
      patch 'background_jobs', to: 'background_jobs#update'
      resource :visits, only: %i[show update]
@@ -29,7 +29,7 @@
      resources :users, only: %i[index show create destroy edit update] do
        member do
          post 'regenerate_api_key'
-@@ -425,6 +440,23 @@
+@@ -445,6 +460,23 @@
  
        resources :flights, only: %i[index]
  

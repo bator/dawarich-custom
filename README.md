@@ -1,6 +1,6 @@
 # dawarich-custom
 
-Custom code on top of upstream [Dawarich](https://github.com/Freika/dawarich) 1.17.0.
+Custom code on top of upstream [Dawarich](https://github.com/Freika/dawarich) 1.18.0.
 It matches recorded location history against Hungarian public-transport timetables (GTFS), and
 `restore_custom.py` puts it back after every community-script upgrade.
 
@@ -78,7 +78,7 @@ python3 /opt/dawarich-custom/restore_custom.py --dry-run   # plan only
 python3 /opt/dawarich-custom/restore_custom.py             # restore now
 python3 /opt/dawarich-custom/restore_custom.py capture     # live app -> repo after editing on the box
 python3 /opt/dawarich-custom/restore_custom.py rebase      # after a clean restore on a new upstream version
-python3 restore_custom.py export OUT --version 1.17.0      # Docker build: merged files into OUT (DAWARICH_APP=upstream copy)
+python3 restore_custom.py export OUT --version 1.18.0      # Docker build: merged files into OUT (DAWARICH_APP=upstream copy)
 ```
 
 After `capture` or `rebase`: `git diff`, commit, push to OneDev.

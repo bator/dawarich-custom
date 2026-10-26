@@ -41,8 +41,9 @@ class Tracks::VectorTileQuery
 
   # rubocop:disable Naming/MethodParameterName
   def initialize(scope:, z:, x:, y:, clip_points_scope: nil, clip_import_id: nil,
-                 clip_start_at: nil, clip_end_at: nil, hide_ranges_sql: nil)
+                 clip_start_at: nil, clip_end_at: nil, privacy_zone_masker: nil, hide_ranges_sql: nil)
     @scope = scope
+    @privacy_zone_masker = privacy_zone_masker
     @hide_ranges_sql = hide_ranges_sql
     @clip_points_scope = clip_points_scope
     @clip_import_id = clip_import_id
@@ -115,10 +116,7 @@ class Tracks::VectorTileQuery
         SELECT #{property_columns},
           #{mvt_geom_expression} AS geom
         FROM (#{tile_scope.to_sql}) AS tracks
-        WHERE ST_Intersects(
-          tracks.original_path,
-          ST_Transform(#{margined_envelope}, 4326)
-        )
+        WHERE #{tile_intersects('tracks.original_path')}
         LIMIT #{TRACKS_PER_TILE_LIMIT}
       )
     SQL
@@ -137,7 +135,7 @@ class Tracks::VectorTileQuery
         JOIN LATERAL (#{point_geometry_query.path_sql(track_id_sql: 'tracks.id')}) AS clipped_path
           ON clipped_path.path IS NOT NULL
         WHERE tracks.clipped
-          AND ST_Intersects(clipped_path.path, ST_Transform(#{margined_envelope}, 4326))
+          AND #{tile_intersects('clipped_path.path')}
         LIMIT #{TRACKS_PER_TILE_LIMIT}
       )
     SQL
@@ -148,7 +146,7 @@ class Tracks::VectorTileQuery
       #{covered_cte}candidates AS MATERIALIZED (
         SELECT tracks.*, #{clipped_track_predicate} AS clipped
         FROM (#{tile_scope.to_sql}) AS tracks
-        WHERE ST_Intersects(tracks.original_path, ST_Transform(#{margined_envelope}, 4326))
+        WHERE #{tile_intersects('tracks.original_path')}
       )
     SQL
   end
@@ -257,11 +255,19 @@ class Tracks::VectorTileQuery
   end
 
   def mvt_geom_expression(geometry = 'tracks.original_path')
-    "ST_AsMVTGeom(#{simplified_geom(geometry)}, ST_TileEnvelope(#{z}, #{x}, #{y}), #{EXTENT}, #{BUFFER}, true)"
+    "ST_AsMVTGeom(#{simplified_geom(privacy_clip(geometry))}, " \
+      "ST_TileEnvelope(#{z}, #{x}, #{y}), #{EXTENT}, #{BUFFER}, true)"
+  end
+
+  def privacy_clip(geometry)
+    return geometry unless @privacy_zone_masker&.any?
+
+    "(CASE WHEN #{@privacy_zone_masker.touches_sql(geometry)} " \
+      "THEN #{@privacy_zone_masker.clip_sql(geometry)} ELSE #{geometry} END)"
   end
 
   def simplified_geom(geometry)
-    geom = "ST_Transform(#{geometry}, 3857)"
+    geom = "ST_Transform(#{GreatCircleSql.densified(geometry)}, 3857)"
     return geom if z >= SIMPLIFY_SKIP_ZOOM
 
     "ST_Simplify(#{geom}, #{simplify_tolerance})"
@@ -271,6 +277,10 @@ class Tracks::VectorTileQuery
   # variant and value; ST_AsMVTGeom's quantization handles the rest).
   def simplify_tolerance
     WEB_MERCATOR_WORLD / (1 << z) / TILE_PIXELS
+  end
+
+  def tile_intersects(path)
+    GreatCircleSql.intersects(path, "ST_Transform(#{margined_envelope}, 4326)", arc: GreatCircleSql.flight('tracks'))
   end
 
   def margined_envelope

@@ -6,6 +6,7 @@
     <% if Gtfs.enabled? || Gtfs::UserSettings.new(current_user).enabled? %>
       <%= link_to t('settings.navigation.transit', default: t('settings.navigation.transit', locale: :en)), settings_transit_path, role: 'tab', class: "tab tab-lg #{active_tab?(settings_transit_path)}" %>
     <% end %>
+    <%= link_to t('.geofencing'), settings_geofencing_path, role: 'tab', class: "tab tab-lg #{controller_path.in?(%w[settings/geofencing settings/webhooks]) ? 'tab-active' : ''}" %>
     <% if DawarichSettings.two_factor_available? %>
       <%= link_to t('.two_factor_authentication'), settings_two_factor_path, role: 'tab', class: "tab tab-lg #{active_tab?(settings_two_factor_path)}" %>
     <% end %>

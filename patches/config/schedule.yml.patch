@@ -1,10 +1,9 @@
 --- a/config/schedule.yml
 +++ b/config/schedule.yml
-@@ -124,3 +124,49 @@
-   cron: "*/5 * * * *"
+@@ -125,6 +125,52 @@
    class: "Stats::ToponymsRefreshJob"
    queue: stats
-+
+ 
 +gtfs_match_recent_job:
 +  # before the feed sync below: decision K4 keeps only active + one backup timetable (docs/gtfs.md)
 +  cron: "<%= ENV.fetch('GTFS_MATCH_CRON', '0 3 * * * Europe/Budapest') %>" # no-op unless GTFS_ENABLED=true
@@ -50,3 +49,7 @@
 +  cron: "<%= ENV.fetch('CORRIDORS_SNAP_CRON', '45 4 * * * Europe/Budapest') %>" # no-op unless CORRIDORS_SNAP_ENABLED=true
 +  class: "Corridors::SnapJob"
 +  queue: low_priority
++
+ webhook_deliveries_cleanup_job:
+   cron: "30 3 * * *" # every day at 03:30
+   class: "Webhooks::CleanupDeliveriesJob"

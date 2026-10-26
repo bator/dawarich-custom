@@ -170,3 +170,8 @@ corridors_snap_job:
   cron: "<%= ENV.fetch('CORRIDORS_SNAP_CRON', '45 4 * * * Europe/Budapest') %>" # no-op unless CORRIDORS_SNAP_ENABLED=true
   class: "Corridors::SnapJob"
   queue: low_priority
+
+webhook_deliveries_cleanup_job:
+  cron: "30 3 * * *" # every day at 03:30
+  class: "Webhooks::CleanupDeliveriesJob"
+  queue: webhooks

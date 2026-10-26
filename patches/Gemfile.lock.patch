@@ -1,6 +1,6 @@
 --- a/Gemfile.lock
 +++ b/Gemfile.lock
-@@ -733,6 +733,7 @@
+@@ -735,6 +735,7 @@
    bundler-audit
    capybara
    chartkick

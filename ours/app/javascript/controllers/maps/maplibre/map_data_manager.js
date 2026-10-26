@@ -70,7 +70,6 @@ export class MapDataManager {
         {
           visitsGeoJSON: EMPTY_GEOJSON,
           photosGeoJSON: EMPTY_GEOJSON,
-          areasGeoJSON: EMPTY_GEOJSON,
           placesGeoJSON: EMPTY_GEOJSON,
           flightsGeoJSON: EMPTY_GEOJSON,
           transitGeoJSON: EMPTY_GEOJSON,
@@ -137,7 +136,6 @@ export class MapDataManager {
         if (isCurrent() && !this._hasFittedBounds) {
           this._hasFittedBounds = this._fitToFirstAvailable([
             data.visitsGeoJSON,
-            data.areasGeoJSON,
             data.placesGeoJSON,
           ])
         }
@@ -298,7 +296,6 @@ export class MapDataManager {
   _updateLayerBySource(source, geoJSON) {
     const layerMap = {
       visits: "visits",
-      areas: "areas",
       places: "places",
       photos: "photos",
       flights: "flights",
@@ -358,7 +355,6 @@ export class MapDataManager {
       await this.layerManager.addAllLayers(
         data.visitsGeoJSON,
         data.photosGeoJSON,
-        data.areasGeoJSON,
         data.placesGeoJSON,
         data.flightsGeoJSON,
         isCurrent,
@@ -372,6 +368,8 @@ export class MapDataManager {
         handlePointClick: this.eventHandlers.handlePointClick.bind(
           this.eventHandlers,
         ),
+        handleEditablePointClick:
+          this.eventHandlers.handleEditablePointClick.bind(this.eventHandlers),
         handleVisitClick: this.eventHandlers.handleVisitClick.bind(
           this.eventHandlers,
         ),
@@ -379,9 +377,6 @@ export class MapDataManager {
           this.eventHandlers,
         ),
         handlePlaceClick: this.eventHandlers.handlePlaceClick.bind(
-          this.eventHandlers,
-        ),
-        handleAreaClick: this.eventHandlers.handleAreaClick.bind(
           this.eventHandlers,
         ),
         handleAnomalyClick: this.eventHandlers.handleAnomalyClick.bind(
@@ -537,11 +532,10 @@ export class MapDataManager {
    * @private
    */
   _showDataWindowBanner() {
-    const startDate = new Date(this.controller.startDateValue)
-    const twelveMonthsAgo = new Date()
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+    const windowStart = this.controller.dataWindowStartValue
+    if (!windowStart) return
 
-    if (startDate < twelveMonthsAgo) {
+    if (new Date(this.controller.startDateValue) < new Date(windowStart)) {
       UpgradeBanner.show({
         message: translate(
           "messages.your_lite_plan_includes_the_last_12_months_of_data",
