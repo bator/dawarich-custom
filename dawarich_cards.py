@@ -2,7 +2,7 @@
 
 Sötét Dawarich-téma (dawarich-dark tokenek). A két restore menetjegy: verzió → verzió,
 közte az idő, alatta három mező, a tépésvonal alatt a teendő. A cleanup heti-riport:
-főszám, változás tegnaphoz, 14 napos oszlopsor, a mai kiemelve. Csak stdlib + Pillow;
+főszám, változás tegnaphoz, a jóváhagyandó napok (dátum + darab). Csak stdlib + Pillow;
 ha a rajzolás vagy a feltöltés bukik, a hívó sima szöveges embedet küld (send_card).
 """
 from __future__ import annotations
@@ -253,7 +253,8 @@ def overlay_restore_card(r: dict) -> tuple[str, bytes]:
 
 # --- 3. visit cleanup ----------------------------------------------------------
 def cleanup_card(r: dict) -> tuple[str, bytes]:
-    """r: left_suggested, history [('MM.DD', n)] (a mai az utolsó), scan_days, changes {címke: n},
+    """r: left_suggested, pending_days [(YYYY-MM-DD, n)] (a scan-ablak jóváhagyandó napjai),
+    history [("MM.DD", n)] (a mai az utolsó), scan_days, changes {címke: n},
     warn, fail, error."""
     fail = bool(int(r.get("fail") or 0) or r.get("error"))
     warn = int(r.get("warn") or 0)
@@ -270,16 +271,49 @@ def cleanup_card(r: dict) -> tuple[str, bytes]:
     d.text((x, y + 12), "látogatás vár", font=font("SemiBold", 30), fill=INK)
     d.text((x, y + 50), "jóváhagyásra", font=font("SemiBold", 30), fill=INK)
     hist = list(r.get("history") or [])
-    sub, sub_col = f"utolsó {r.get('scan_days', 45)} nap", MUT
+    days = list(r.get("pending_days") or [])
+    fs = font("Regular", 22)
+    sub = f"utolsó {r.get('scan_days', 45)} nap"
+    if days:
+        sub = f"{len(days)} napon · {sub}"
+    d.text((PAD, y + 114), sub, font=fs, fill=MUT)
     if len(hist) >= 2 and n is not None:
         delta = hist[-1][1] - hist[-2][1]
         if delta:
-            sub = f"{abs(delta)}-vel {'kevesebb' if delta < 0 else 'több'}, mint előző nap"
-            sub_col = TONE["ok" if delta < 0 else "warn"][0]
-    d.text((PAD, y + 114), sub, font=font("Regular", 22), fill=sub_col)
+            x = PAD + d.textlength(sub + " · ", font=fs)
+            d.text((PAD + d.textlength(sub, font=fs), y + 114), " · ", font=fs, fill=MUT)
+            d.text((x, y + 114), f"{abs(delta)}-vel {'kevesebb' if delta < 0 else 'több'}, mint előző nap",
+                   font=fs, fill=TONE["ok" if delta < 0 else "warn"][0])
     t.y = y + 170
     h14 = hist[-14:]
-    if len(h14) >= 2:  # oszlopsor: magasság = várakozó javaslat, a mai kiemelve (M elv)
+    if days:  # a jóváhagyandó napok, legújabb elöl: dátum + darab, 4 oszlopban
+        days = sorted(days, reverse=True)
+        cols, gap, ch = 4, 14, 52
+        cw = (W - 2 * PAD - gap * (cols - 1)) / cols
+        shown = days[:cols * 7]
+        more = len(days) - len(shown)
+        if more:
+            shown = shown[:-1]
+            more += 1
+        d.text((PAD, t.y), "Jóváhagyandó napok, legújabb elöl", font=font("Regular", 20), fill=MUT)
+        t.y += 36
+        fd, fc = font("SemiBold", 24), font("Bold", 24)
+        for i, (day, cnt) in enumerate(shown):
+            x0 = PAD + (i % cols) * (cw + gap)
+            y0 = t.y + (i // cols) * (ch + gap)
+            d.rounded_rectangle([x0, y0, x0 + cw, y0 + ch], 14, fill=BASE2)
+            d.text((x0 + 16, y0 + 12), f"{day[5:7]}.{day[8:10]}", font=fd, fill=INK)
+            c = str(cnt)
+            d.text((x0 + cw - 16 - d.textlength(c, font=fc), y0 + 12), c, font=fc, fill=PRIMARY)
+        if more:
+            i = len(shown)
+            x0, y0 = PAD + (i % cols) * (cw + gap), t.y + (i // cols) * (ch + gap)
+            d.text((x0 + 16, y0 + 12), f"+{more} nap", font=fd, fill=MUT)
+            i += 1
+        else:
+            i = len(shown)
+        t.y += ((i - 1) // cols + 1) * (ch + gap) + 16
+    elif len(h14) >= 2:  # oszlopsor: magasság = várakozó javaslat, a mai kiemelve (M elv)
         top, bot = t.y, t.y + 110
         mx = max(v for _, v in h14) or 1
         gap = 8
