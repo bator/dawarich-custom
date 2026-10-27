@@ -497,7 +497,9 @@ def restore(dry_run: bool) -> int:
         if not p.is_file():
             atomic_write(p, data)
 
-    card = {"version": version, "merged_notes": merged_notes(notes),
+    hhmm = lambda: datetime.now().strftime("%H:%M")  # noqa: E731
+    card = {"version": version, "merged_notes": merged_notes(notes), "files": len(writes),
+            "t_start": hhmm(), "t_end": hhmm(),
             "prev_version": state.get("app_version") if state.get("app_version") != version else None}
     if conflicts:
         cdir = VAR / "conflicts" / version
@@ -570,7 +572,7 @@ def restore(dry_run: bool) -> int:
         log(f"failed: {e} ({rolled})", err=True)
         notify("Dawarich custom restore FAILED", lines + [f"Hiba: {e}", rolled], ok=False,
                card={**card, "kind": "failed", "error": f"{str(e).splitlines()[0]} – {rolled}",
-                     "duration_s": time.monotonic() - started})
+                     "duration_s": time.monotonic() - started, "t_end": hhmm()})
         save_state(state)
         return 1
 
@@ -600,7 +602,8 @@ def restore(dry_run: bool) -> int:
             card["rebase_base"] = manifest["base_version"]
     elif steps[-1][0] != "Újraindítás" or steps[-1][2] == "ok":
         steps.append(("Smoke", "sikertelen", "fail"))
-    card.update(kind="failed" if errors else "ok", error="; ".join(errors), duration_s=time.monotonic() - started)
+    card.update(kind="failed" if errors else "ok", error="; ".join(errors), duration_s=time.monotonic() - started,
+                t_end=hhmm())
     notify("Dawarich custom restore" + (" FAILED" if errors else ""), lines + [f"• {e}" for e in errors],
            ok=not errors, card=card)
     for e in errors:

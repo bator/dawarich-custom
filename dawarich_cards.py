@@ -1,7 +1,8 @@
-"""Dawarich Discord-kártyák (PNG): custom restore, overlay restore, visit cleanup.
+"""Dawarich Discord-kártyák (PNG): custom restore, OSRM overlay restore, visit cleanup.
 
-A homelab relay-kártyák vizuális nyelve (Inter, sötét háttér, állapot-pill, lépés-csempék,
-alsó színsáv) + a Menetrend-módszer verzió-gerince és főszáma. Csak stdlib + Pillow;
+Sötét Dawarich-téma (dawarich-dark tokenek). A két restore menetjegy: verzió → verzió,
+közte az idő, alatta három mező, a tépésvonal alatt a teendő. A cleanup heti-riport:
+főszám, változás tegnaphoz, 14 napos oszlopsor, a mai kiemelve. Csak stdlib + Pillow;
 ha a rajzolás vagy a feltöltés bukik, a hívó sima szöveges embedet küld (send_card).
 """
 from __future__ import annotations
@@ -13,37 +14,56 @@ import json
 import urllib.request
 import uuid
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
-BG, TILE, FG, SEC, MUT = (30, 31, 34), (43, 45, 49), (242, 243, 245), (181, 186, 193), (148, 155, 164)
-GREEN, RED, AMBER, BLUE = (59, 165, 93), (237, 66, 69), (250, 166, 26), (88, 101, 242)
-CHIP = (54, 57, 63)
-W, PAD = 800, 32
-STATUS = {"ok": GREEN, "warn": AMBER, "fail": RED}
-EMBED_COLOR = {"ok": 0x3BA55D, "warn": 0xFAA61A, "fail": 0xED4245}
-FONT_DIRS = ("/usr/share/fonts/**/Inter-{w}.*", "/opt/dawarich/app/vendor/poster_renderer/fonts/inter-{n}.ttf")
+# dawarich-dark: base-100 #1C1C1C, base-content #EAEAEA, success #2DD4BF, warning #FBBF24,
+# error #F87171, primary #60A5FA; a halvány szöveg a base-content 70%-a (#A8A8A8, 7.9:1).
+INK, MUT, LINE = (234, 234, 234), (168, 168, 168), (64, 64, 64)
+BASE, BASE2, BAR = (28, 28, 28), (44, 44, 44), (72, 72, 72)
+PRIMARY = (96, 165, 250)
+TONE = {  # állapot -> (szín, halvány háttér)
+    "ok": ((45, 212, 191), (21, 58, 54)),
+    "warn": ((251, 191, 36), (58, 48, 22)),
+    "fail": ((248, 113, 113), (64, 30, 30)),
+}
+EMBED_COLOR = {"ok": 0x2DD4BF, "warn": 0xFBBF24, "fail": 0xF87171}
+W, PAD = 800, 40
+FONT_GLOBS = ("/usr/share/fonts/**/Inter-{w}.*", "/opt/dawarich/app/vendor/poster_renderer/fonts/inter-{n}.ttf")
 
 
 @functools.lru_cache(maxsize=64)
 def font(weight: str, size: int) -> ImageFont.FreeTypeFont:
     num = {"Regular": "400", "Medium": "400", "SemiBold": "700", "Bold": "700"}.get(weight, "400")
-    for pattern in FONT_DIRS:
+    for pattern in FONT_GLOBS:
         for path in sorted(glob.glob(pattern.format(w=weight, n=num), recursive=True)):
             return ImageFont.truetype(path, size)
     return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
 
 
-def mix(c, a, base=BG):
-    return tuple(int(x * a + b * (1 - a)) for x, b in zip(c, base))
-
-
-def fit(d, text, f, maxw):
+def fit(d, text, f, maxw) -> str:
     text = str(text or "")
     if d.textlength(text, font=f) <= maxw:
         return text
     while text and d.textlength(text + "…", font=f) > maxw:
         text = text[:-1]
     return text.rstrip() + "…"
+
+
+def wrap(d, text, f, maxw, max_lines=3) -> list[str]:
+    lines, cur = [], ""
+    for word in str(text or "").split():
+        t = (cur + " " + word).strip()
+        if d.textlength(t, font=f) > maxw and cur:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = t
+    if cur:
+        lines.append(cur)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = fit(d, lines[-1] + " …", f, maxw)
+    return lines
 
 
 def fmt_dur(sec) -> str:
@@ -58,248 +78,227 @@ def thousands(n) -> str:
     return f"{int(n):,}".replace(",", " ")
 
 
-class Card:
-    """Felülről lefelé építkező vászon; a végén a magasságra vágva."""
+def _short(path: str) -> str:
+    return str(path).rsplit("/", 1)[-1]
 
-    def __init__(self, kicker: str, status: str, pill: str):
-        self.img = Image.new("RGB", (W, 1400), BG)
+
+class Ticket:
+    """Sötét kártya átlátszó alapon; `tear()` húzza a tépésvonalat a két kivágással."""
+
+    def __init__(self, kicker: str, chip: str, status: str):
+        self.img = Image.new("RGBA", (W, 1200), (0, 0, 0, 0))
         self.d = ImageDraw.Draw(self.img)
         self.status = status
-        self.y = PAD
+        self.tear_y: int | None = None
         d = self.d
-        d.text((PAD, self.y + 8), kicker.upper(), font=font("SemiBold", 18), fill=MUT)
-        color = STATUS[status]
-        f = font("SemiBold", 22)
-        w = d.textlength(pill, font=f) + 36
-        d.rounded_rectangle([W - PAD - w, self.y, W - PAD, self.y + 38], 19, fill=mix(color, .22), outline=color, width=2)
-        d.text((W - PAD - w + 18, self.y + 6), pill, font=f, fill=color)
-        self.y += 38 + 22
+        d.rounded_rectangle([0, 0, W - 1, 1199], 28, fill=BASE + (255,))
+        d.text((PAD, 34), fit(d, kicker, font("Medium", 22), W - 2 * PAD - 220), font=font("Medium", 22), fill=MUT)
+        self.chip(chip, status)
+        self.y = 92
 
-    # --- blocks ------------------------------------------------------------
-    def version_spine(self, old: str | None, new: str, right: str = ""):
-        """1.18.0 ●━━━━● 1.18.1 – a vonal a változás, a pötty a verzió (Menetrend-módszer V)."""
+    def chip(self, text: str, status: str):
+        d, f = self.d, font("SemiBold", 22)
+        fg, bg = TONE[status]
+        w = d.textlength(text, font=f) + 32
+        d.rounded_rectangle([W - PAD - w, 28, W - PAD, 68], 20, fill=bg)
+        d.text((W - PAD - w + 16, 35), text, font=f, fill=fg)
+
+    def route(self, a: str | None, b: str, under_a: str, under_b: str, mid: str):
+        """a ○━━ mid ━━● b – a vonal színe az állapot (Menetrend-módszer V)."""
         d, y = self.d, self.y
-        color = STATUS[self.status]
-        fb, fm = font("Bold", 40), font("Regular", 24)
-        x = PAD
-        if old and old != new:
-            d.text((x, y + 12), old, font=fm, fill=MUT)
-            x += d.textlength(old, font=fm) + 16
-            cy = y + 27
-            d.ellipse([x, cy - 8, x + 16, cy + 8], outline=MUT, width=3, fill=BG)
-            x0 = x + 16
-            x1 = x0 + 120
-            d.rounded_rectangle([x0, cy - 3, x1, cy + 3], 3, fill=color)
-            d.ellipse([x1, cy - 10, x1 + 20, cy + 10], fill=color)
-            x = x1 + 20 + 16
-        d.text((x, y), new, font=fb, fill=FG)
-        if right:
-            fr = font("Regular", 22)
-            d.text((W - PAD - d.textlength(right, font=fr), y + 14), right, font=fr, fill=SEC)
-        self.y += 56 + 20
+        color = TONE[self.status][0]
+        fb, fs, fm = font("Bold", 56), font("Regular", 22), font("SemiBold", 22)
+        a = a or "–"
+        d.text((PAD, y), a, font=fb, fill=INK if a != "–" else MUT)
+        d.text((PAD, y + 68), under_a, font=fs, fill=MUT)
+        wb = d.textlength(b, font=fb)
+        d.text((W - PAD - wb, y), b, font=fb, fill=INK)
+        d.text((W - PAD - d.textlength(under_b, font=fs), y + 68), under_b, font=fs, fill=MUT)
+        x0, x1, cy = PAD + d.textlength(a, font=fb) + 34, W - PAD - wb - 34, y + 34
+        d.line([(x0 + 10, cy), (x1 - 10, cy)], fill=color, width=5)
+        d.ellipse([x0 - 8, cy - 8, x0 + 8, cy + 8], outline=color, width=4, fill=BASE)
+        d.ellipse([x1 - 9, cy - 9, x1 + 9, cy + 9], fill=color)
+        if mid:
+            mid = fit(d, mid, fm, max(40, x1 - x0 - 60))
+            tw = d.textlength(mid, font=fm)
+            mx = (x0 + x1) / 2
+            d.rounded_rectangle([mx - tw / 2 - 14, cy - 18, mx + tw / 2 + 14, cy + 18], 18, fill=BASE2)
+            d.text((mx - tw / 2, cy - 13), mid, font=fm, fill=INK)
+        self.y += 110
 
-    def steps(self, items: list[tuple[str, str, str]], cols: int = 3):
-        """(név, alcím, ok|fail|skip) csempék, soronként `cols` darab."""
+    def fields(self, items: list[tuple[str, str, str | None]]):
+        """(címke, érték, állapot|None) – legfeljebb 3 oszlop."""
         d = self.d
-        gap = 12
-        tw = (W - 2 * PAD - gap * (cols - 1)) / cols
-        th = 70
-        for i, (name, sub, st) in enumerate(items):
-            r, c = divmod(i, cols)
-            x = PAD + c * (tw + gap)
-            y = self.y + r * (th + gap)
-            d.rounded_rectangle([x, y, x + tw, y + th], 10, fill=TILE)
-            col = {"ok": GREEN, "fail": RED, "warn": AMBER}.get(st, MUT)
-            cx, cy = x + 30, y + th / 2
-            d.ellipse([cx - 14, cy - 14, cx + 14, cy + 14], fill=col if st != "skip" else CHIP)
-            if st == "ok":
-                d.line([(cx - 7, cy), (cx - 2, cy + 6), (cx + 8, cy - 6)], fill=BG, width=4, joint="curve")
-            elif st == "fail":
-                d.line([(cx - 6, cy - 6), (cx + 6, cy + 6)], fill=BG, width=4)
-                d.line([(cx - 6, cy + 6), (cx + 6, cy - 6)], fill=BG, width=4)
-            elif st == "warn":
-                d.rounded_rectangle([cx - 2, cy - 8, cx + 2, cy + 3], 2, fill=BG)
-                d.ellipse([cx - 2, cy + 6, cx + 2, cy + 10], fill=BG)
-            maxw = tw - 62
-            d.text((x + 54, y + 12), fit(d, name, font("SemiBold", 22), maxw), font=font("SemiBold", 22), fill=FG)
-            d.text((x + 54, y + 40), fit(d, sub, font("Regular", 18), maxw), font=font("Regular", 18), fill=SEC)
-        rows = (len(items) + cols - 1) // cols
-        self.y += rows * (th + gap) - gap + 24
+        items = items[:3]
+        cw = (W - 2 * PAD) / max(1, len(items))
+        for i, (k, v, st) in enumerate(items):
+            x = PAD + i * cw
+            d.text((x, self.y), k, font=font("Regular", 20), fill=MUT)
+            col = TONE[st][0] if st else INK
+            d.text((x, self.y + 28), fit(d, v, font("SemiBold", 28), cw - 16), font=font("SemiBold", 28), fill=col)
+        self.y += 90
 
-    def chips(self, label: str, names: list[str], tone=CHIP, ink=FG):
+    def stub(self, head: str, text: str, status: str):
+        """A tépésvonal alatti teendő/hiba – ez az egyetlen, amivel Batornak dolga van."""
         d = self.d
-        d.text((PAD, self.y), label, font=font("Regular", 18), fill=MUT)
-        self.y += 30
-        f = font("Medium", 20)
-        x, y = PAD, self.y
-        for n in names:
-            w = d.textlength(n, font=f) + 24
-            if x + w > W - PAD and x > PAD:
-                x, y = PAD, y + 42
-            d.rounded_rectangle([x, y, x + w, y + 34], 8, fill=tone)
-            d.text((x + 12, y + 5), n, font=f, fill=ink)
-            x += w + 8
-        self.y = y + 34 + 24
-
-    def band(self, head: str, text: str, color=AMBER):
-        """Teendő-sáv: ez az egyetlen, amit Batornak tennie kell."""
-        d = self.d
-        fh, ft = font("SemiBold", 22), font("Regular", 20)
-        maxw = W - 2 * PAD - 44
-        words, lines, cur = text.split(), [], ""
-        for w_ in words:
-            t = (cur + " " + w_).strip()
-            if d.textlength(t, font=ft) > maxw and cur:
-                lines.append(cur)
-                cur = w_
-            else:
-                cur = t
-        if cur:
-            lines.append(cur)
-        h = 22 + 30 + 28 * len(lines) + 14
-        d.rounded_rectangle([PAD, self.y, W - PAD, self.y + h], 10, fill=mix(color, .14))
-        d.rounded_rectangle([PAD, self.y, PAD + 6, self.y + h], 3, fill=color)
-        d.text((PAD + 26, self.y + 16), head, font=fh, fill=color)
+        self.y += 8
+        self.tear_y = self.y
+        self.y += 36
+        fg, bg = TONE[status]
+        lines = wrap(d, text, font("Regular", 22), W - 2 * PAD - 48)
+        h = 48 + 30 * len(lines) + 16
+        d.rounded_rectangle([PAD, self.y, W - PAD, self.y + h], 16, fill=bg)
+        d.text((PAD + 24, self.y + 14), head, font=font("SemiBold", 22), fill=fg)
         for i, ln in enumerate(lines):
-            d.text((PAD + 26, self.y + 50 + 28 * i), ln, font=ft, fill=FG)
-        self.y += h + 24
+            d.text((PAD + 24, self.y + 48 + 30 * i), ln, font=font("Regular", 22), fill=INK)
+        self.y += h + 4
 
     def png(self) -> bytes:
-        h = self.y - 24 + PAD
-        img = self.img.crop((0, 0, W, h + 8))
-        ImageDraw.Draw(img).rectangle([0, h, W, h + 8], fill=STATUS[self.status])
+        h = self.y + 32
+        img = self.img.crop((0, 0, W, h))
+        d = ImageDraw.Draw(img)
+        # alsó lekerekítés a vágás után
+        mask = Image.new("L", (W, h), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([0, 0, W - 1, h - 1], 28, fill=255)
+        img.putalpha(ImageChops.darker(img.getchannel("A"), mask))
+        if self.tear_y is not None:
+            for cx in (0, W):
+                d.ellipse([cx - 18, self.tear_y - 18, cx + 18, self.tear_y + 18], fill=(0, 0, 0, 0))
+            for x in range(PAD - 4, W - PAD, 20):
+                d.line([(x, self.tear_y), (x + 10, self.tear_y)], fill=LINE, width=3)
         buf = io.BytesIO()
         img.save(buf, "PNG", optimize=True)
         return buf.getvalue()
 
 
-def _short(path: str) -> str:
-    return path.rsplit("/", 1)[-1]
-
-
 # --- 1. custom restore -------------------------------------------------------
 def custom_restore_card(r: dict) -> tuple[str, bytes]:
-    """r: kind (ok|failed|blocked|crashed), version, prev_version, custom, merged, removed,
-    merged_notes [(file, clean)], steps [(name, sub, st)], conflicts [str], error, rebase_base, duration_s."""
+    """r: kind (ok|failed|blocked|crashed), version, prev_version, t_start, t_end, duration_s,
+    files, merged_notes [(file, clean)], steps [(name, sub, ok|fail)], conflicts [str], error, rebase_base."""
     kind = r.get("kind", "ok")
     status = "ok" if kind == "ok" else "fail"
-    if kind == "ok" and r.get("rebase_base"):
-        status = "warn"
-    pill = {"ok": "Visszaállítva", "failed": "Hiba", "blocked": "Leállítva", "crashed": "Összeomlott"}[kind]
-    c = Card("Dawarich · custom restore", status, pill)
-    dur = fmt_dur(r["duration_s"]) if r.get("duration_s") else ""
-    c.version_spine(r.get("prev_version"), r.get("version", "?"), dur)
-    if r.get("steps"):
-        c.steps(r["steps"])
-    if r.get("merged_notes"):
-        clean = [_short(f) for f, ok in r["merged_notes"] if ok]
-        bad = [_short(f) for f, ok in r["merged_notes"] if not ok]
-        if clean:
-            c.chips(f"Upstream változott, tisztán merge-elve ({len(clean)})", clean)
-        if bad:
-            c.chips(f"Ütközés ({len(bad)})", bad, tone=mix(RED, .25), ink=FG)
+    chip = {"ok": "Kész", "failed": "Hiba", "blocked": "Leállítva", "crashed": "Összeomlott"}[kind]
+    t = Ticket("Dawarich frissítés · custom restore", chip, status)
+    mid = fmt_dur(r["duration_s"]) if r.get("duration_s") else ("ütközés" if kind == "blocked" else "")
+    t.route(r.get("prev_version"), r.get("version", "?"), r.get("t_start", ""), r.get("t_end", ""), mid)
+
+    notes = r.get("merged_notes") or []
+    bad = [f for f, ok in notes if not ok]
+    steps = r.get("steps") or []
+    failed = next((n for n, _, st in steps if st == "fail"), None)
+    smoke = next((sub for n, sub, st in steps if n == "Smoke" and st == "ok"), "")
+    if failed:
+        check = (failed, "fail")  # a piros szín mondja, hogy ez bukott
+    elif smoke:
+        n = len([p for p in smoke.split("·") if p.strip()])
+        check = (f"{n} / {n} rendben", None)
+    else:
+        check = ("nem futott" if kind != "ok" else "–", None)
+    t.fields([
+        ("Fájl", thousands(r["files"]) if r.get("files") is not None else "0", None),
+        ("Upstream merge", f"{len(bad)} ütközik" if bad else (f"{len(notes)} tiszta" if notes else "nincs"),
+         "fail" if bad else None),
+        ("Ellenőrzés", *check),
+    ])
     if kind == "blocked":
-        c.band("Semmi nem íródott",
-               "Az app upstream állapotban fut, transit nélkül. " + ("; ".join(r.get("conflicts") or [])[:400] or "Lásd a naplót."), RED)
+        t.stub("Semmi nem íródott – az app transit nélkül fut",
+               "; ".join(r.get("conflicts") or []) or "Lásd a naplót.", "fail")
     elif kind in ("failed", "crashed"):
-        c.band("Hiba", (r.get("error") or "ismeretlen")[:400], RED)
+        t.stub("Hiba", r.get("error") or "ismeretlen", "fail")
     elif r.get("rebase_base"):
-        c.band("Teendő: rebase",
-               f"A merge-bázis még {r['rebase_base']}. A CT 139-en: restore_custom.py rebase, majd commit + push.")
-    return status, c.png()
+        t.stub("Teendő", f"rebase {r.get('version')}-re: restore_custom.py rebase, majd commit + push", "warn")
+    return status, t.png()
 
 
 # --- 2. overlay restore ------------------------------------------------------
 OVERLAY_GROUPS = (
-    ("OSRM snap", ("osrm_snap_job.rb", "track.rb", "recalculate_job.rb")),
+    ("Snap", ("osrm_snap_job.rb", "track.rb", "recalculate_job.rb")),
     ("Szegmentálás", ("segmentation.rb", "boundary_detector.rb", "orphan_point_attacher.rb")),
     ("Family réteg", ("locations.rb", "family_layer", "sprockets-manifest.json")),
 )
 
 
 def overlay_restore_card(r: dict) -> tuple[str, bytes]:
-    """r: version, prev_version, replaced [path], restarted [unit], errors [str], pinned_version, pinned_files."""
+    """r: version, prev_version, t_start, t_end, replaced [path], restarted [unit], errors [str],
+    pinned_version, pinned_files."""
     errors = r.get("errors") or []
-    pinned = r.get("pinned_version")
-    stale = bool(pinned and pinned != r.get("version") and r.get("replaced"))
-    status = "fail" if errors else ("warn" if stale else "ok")
-    c = Card("Dawarich · OSRM overlay restore", status, "Hiba" if errors else "Visszaállítva")
-    c.version_spine(r.get("prev_version"), r.get("version", "?"))
     replaced = list(r.get("replaced") or [])
-    tiles, used = [], set()
+    pinned = r.get("pinned_version")
+    stale = bool(pinned and pinned != r.get("version") and replaced)
+    status = "fail" if errors else "ok"
+    t = Ticket("Dawarich frissítés · OSRM overlay", "Hiba" if errors else "Kész", status)
+    mid = f"{len(replaced)} fájl" if replaced else ("újraindítás" if r.get("restarted") else "")
+    t.route(r.get("prev_version"), r.get("version", "?"), r.get("t_start", ""), r.get("t_end", ""), mid)
+
+    groups, used = [], set()
     for name, keys in OVERLAY_GROUPS:
         hit = [p for p in replaced if any(k in p for k in keys)]
         used.update(hit)
         if hit:
-            tiles.append((name, f"{len(hit)} fájl", "ok"))
-    rest = [p for p in replaced if p not in used]
-    if rest:
-        tiles.append(("Egyéb", f"{len(rest)} fájl", "ok"))
-    if r.get("restarted"):
-        tiles.append(("Újraindítás", " · ".join(u.replace("dawarich-", "") for u in r["restarted"]), "ok"))
-    elif replaced:
-        tiles.append(("Újraindítás", "nem kellett", "skip"))
-    for e in errors[:3]:
-        tiles.append(("Hiba", e, "fail"))
-    if tiles:
-        c.steps(tiles, cols=2 if len(tiles) <= 4 else 3)
-    if stale:
-        files = ", ".join(r.get("pinned_files") or [])
-        c.band(f"Az overlay {pinned}-hoz készült",
-               f"{files} – vesd össze az upstream/{r['version']}/ mentéssel, változott-e az eredeti.")
-    return status, c.png()
+            groups.append((name, f"{len(hit)} fájl", None))
+    if [p for p in replaced if p not in used]:
+        groups.append(("Egyéb", f"{len([p for p in replaced if p not in used])} fájl", None))
+    restarted = ", ".join(u.replace("dawarich-", "") for u in r.get("restarted") or [])
+    tail = ("Újraindítva", restarted or ("nem sikerült" if errors else "nem kellett"),
+            "fail" if errors and not restarted else None)
+    fields = groups[:2] + [tail] if groups else [("Fájl", "nem kellett", None), tail]
+    t.fields(fields)
+    if errors:
+        t.stub("Hiba", "; ".join(errors), "fail")
+    elif stale:
+        names = r.get("pinned_files") or []
+        t.stub("Ellenőrizd", f"{len(names)} overlay {pinned}-hoz készült – nézd át az upstream/{r['version']}/ mentést", "warn")
+    return status, t.png()
 
 
 # --- 3. visit cleanup ----------------------------------------------------------
 def cleanup_card(r: dict) -> tuple[str, bytes]:
-    """r: left_suggested, history [(date 'MM.DD', n)], scan_days, changes {label: n}, warn, fail, error."""
-    fail = int(r.get("fail") or 0) or bool(r.get("error"))
+    """r: left_suggested, history [('MM.DD', n)] (a mai az utolsó), scan_days, changes {címke: n},
+    warn, fail, error."""
+    fail = bool(int(r.get("fail") or 0) or r.get("error"))
     warn = int(r.get("warn") or 0)
     status = "fail" if fail else ("warn" if warn else "ok")
-    c = Card("Dawarich · látogatások", status, "Hiba" if fail else ("Figyelmeztetés" if warn else "Rendben"))
-    d, y = c.d, c.y
+    changes = [f"{v} {k}" for k, v in (r.get("changes") or {}).items() if v]
+    chip = "Hiba" if fail else (f"{warn} figyelmeztetés" if warn else (" · ".join(changes[:2]) or "Rendben"))
+    t = Ticket("Dawarich · látogatások", chip, status)
+    d, y = t.d, t.y
     n = r.get("left_suggested")
     big = "–" if n is None else thousands(n)
-    fh = font("Bold", 84)
-    d.text((PAD - 4, y - 10), big, font=fh, fill=FG)
-    hx = PAD + d.textlength(big, font=fh) + 18
-    d.text((hx, y + 8), "látogatás vár", font=font("SemiBold", 24), fill=FG)
-    d.text((hx, y + 40), "jóváhagyásra", font=font("SemiBold", 24), fill=FG)
-    hist = r.get("history") or []
-    if len(hist) >= 2:
+    fb = font("Bold", 96)
+    d.text((PAD - 4, y - 10), big, font=fb, fill=INK)
+    x = PAD + d.textlength(big, font=fb) + 16
+    d.text((x, y + 12), "látogatás vár", font=font("SemiBold", 30), fill=INK)
+    d.text((x, y + 50), "jóváhagyásra", font=font("SemiBold", 30), fill=INK)
+    hist = list(r.get("history") or [])
+    sub, sub_col = f"utolsó {r.get('scan_days', 45)} nap", MUT
+    if len(hist) >= 2 and n is not None:
         delta = hist[-1][1] - hist[-2][1]
         if delta:
-            col = GREEN if delta < 0 else AMBER
-            t = f"{'−' if delta < 0 else '+'}{abs(delta)} tegnap óta"
-            d.text((PAD, y + 92), t, font=font("SemiBold", 20), fill=col)
-            d.text((PAD + d.textlength(t, font=font("SemiBold", 20)) + 10, y + 92),
-                   f"· utolsó {r.get('scan_days', 45)} nap", font=font("Regular", 20), fill=MUT)
-    # görbe: a várakozó javaslatok napi száma (M elv: alakot mutat egyenletes adatnál is)
-    gx0, gx1, gy0, gy1 = 400, W - PAD, y + 6, y + 108
-    if len(hist) >= 2:
-        vals = [v for _, v in hist]
-        lo, hi = 0, max(vals) * 1.1 or 1
-        pts = [(gx0 + (gx1 - gx0) * i / (len(vals) - 1), gy1 - (gy1 - gy0) * (v - lo) / (hi - lo)) for i, v in enumerate(vals)]
-        layer = Image.new("RGBA", c.img.size, (0, 0, 0, 0))
-        ImageDraw.Draw(layer).polygon(pts + [(gx1, gy1), (gx0, gy1)], fill=BLUE + (46,))
-        c.img.paste(Image.alpha_composite(c.img.convert("RGBA"), layer).convert("RGB"))
-        d = c.d = ImageDraw.Draw(c.img)
-        d.line([(gx0, gy1), (gx1, gy1)], fill=CHIP, width=2)
-        d.line(pts, fill=BLUE, width=4, joint="curve")
-        lx, ly = pts[-1]
-        d.ellipse([lx - 7, ly - 7, lx + 7, ly + 7], fill=FG, outline=BLUE, width=3)
-        fa = font("Regular", 16)
-        d.text((gx0, gy1 + 6), hist[0][0], font=fa, fill=MUT)
-        d.text((gx1 - d.textlength(hist[-1][0], font=fa), gy1 + 6), hist[-1][0], font=fa, fill=MUT)
-    c.y = y + 150
-    changes = [f"{v} {k}" for k, v in (r.get("changes") or {}).items() if v]
-    if warn:
-        changes.append(f"{warn} figyelmeztetés")
-    if changes:
-        c.chips("Ma", changes)
+            sub = f"{abs(delta)}-vel {'kevesebb' if delta < 0 else 'több'}, mint előző nap"
+            sub_col = TONE["ok" if delta < 0 else "warn"][0]
+    d.text((PAD, y + 114), sub, font=font("Regular", 22), fill=sub_col)
+    t.y = y + 170
+    h14 = hist[-14:]
+    if len(h14) >= 2:  # oszlopsor: magasság = várakozó javaslat, a mai kiemelve (M elv)
+        top, bot = t.y, t.y + 110
+        mx = max(v for _, v in h14) or 1
+        gap = 8
+        bw = min(46, (W - 2 * PAD - gap * (len(h14) - 1)) / len(h14))
+        left = W - PAD - len(h14) * bw - gap * (len(h14) - 1)  # kevés napnál jobbra zárva, a „ma” fölött
+        for i, (_, v) in enumerate(h14):
+            x0 = left + i * (bw + gap)
+            hh = max(6, (bot - top) * v / mx)
+            col = (TONE["fail"][0] if fail else PRIMARY) if i == len(h14) - 1 else BAR
+            d.rounded_rectangle([x0, bot - hh, x0 + bw, bot], 6, fill=col)
+        fa = font("Regular", 18)
+        d.text((left, bot + 12), h14[0][0], font=fa, fill=MUT)
+        d.text((W - PAD - d.textlength("ma", font=fa), bot + 12), "ma", font=fa, fill=MUT)
+        t.y = bot + 44
     if fail:
-        c.band("Hiba", str(r.get("error") or f"{r.get('fail')} sikertelen művelet")[:400], RED)
-    return status, c.png()
+        t.stub("Hiba", r.get("error") or f"{r.get('fail')} sikertelen művelet", "fail")
+    elif len(changes) > 2:
+        t.stub("Ma", " · ".join(changes), "ok")
+    return status, t.png()
 
 
 # --- küldés --------------------------------------------------------------------
