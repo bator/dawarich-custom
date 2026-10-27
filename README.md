@@ -65,6 +65,7 @@ State: `/var/lib/dawarich-custom/` (`state.json`, backups, `conflicts/<version>/
 | `patches/<rel>.patch` | `upstream` → `ours` diff, for reading only (generated) |
 | `manifest.json` | `base_version`, `custom_files`, `patched_files` |
 | `systemd/` | drop-in that chains the restore after the OSRM overlay restore |
+| `dawarich_cards.py` | Discord PNG cards: this restore, the OSRM overlay restore (`/opt/dawarich-osrm/restore_overlays.py` imports it from here) and the pve visit cleanup (copy in `/usr/local/sbin/`). Needs `python3-pil` + `fonts-inter`; without them the text embed is sent |
 | `docker/` | `Dockerfile`, compose override, bot entrypoint and env example ([docs/docker.md](docs/docker.md)) |
 | `install/` | `proxmox.sh` (on the node) and `lxc.sh` (in the container) ([docs/proxmox.md](docs/proxmox.md)) |
 

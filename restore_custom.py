@@ -182,11 +182,37 @@ def run(cmd: list[str], timeout: int, env: dict | None = None) -> None:
         raise RuntimeError(f"{' '.join(cmd)} failed ({r.returncode}):\n{tail}")
 
 
-def notify(title: str, lines: list[str], ok: bool) -> None:
+CARD_URL = "https://onedev.crusand.org/dawarich-custom"
+MERGE_NOTE_RE = re.compile(r"^`(.+?)`: upstream changed it, merged \((clean|CONFLICT)\)$")
+
+
+def merged_notes(notes: list[str]) -> list[tuple[str, bool]]:
+    """plan_restore notes -> [(file, merged cleanly)] for the card."""
+    return [(m.group(1), m.group(2) == "clean") for m in map(MERGE_NOTE_RE.match, notes) if m]
+
+
+def fmt_secs(sec: float) -> str:
+    sec = int(round(sec))
+    return f"{sec} mp" if sec < 60 else f"{sec // 60} p {sec % 60} mp"
+
+
+def notify(title: str, lines: list[str], ok: bool, card: dict | None = None) -> None:
+    """PNG card (dawarich_cards.py) when `card` is given; the text embed is the fallback,
+    so a missing Pillow or a render bug never swallows the alert."""
     webhook = os.environ.get("DISCORD_WEBHOOK_URL") or load_dotenv(DISCORD_ENV).get("DISCORD_WEBHOOK_URL")
     if not webhook:
         log("no DISCORD_WEBHOOK_URL; skip notify", err=True)
         return
+    if card is not None:
+        try:
+            sys.path.insert(0, str(REPO))
+            import dawarich_cards
+            status, png = dawarich_cards.custom_restore_card(card)
+            dawarich_cards.send_card(webhook, "Dawarich custom restore", status, png, "\n".join(lines),
+                                     url=CARD_URL, user_agent="dawarich-custom-restore")
+            return
+        except Exception as e:  # noqa: BLE001 -- fall back to the text embed
+            log(f"card notify failed, sending text: {type(e).__name__}: {e}", err=True)
     payload = {"embeds": [{
         "title": title,
         "description": "\n".join(lines)[:3900],
@@ -471,6 +497,8 @@ def restore(dry_run: bool) -> int:
         if not p.is_file():
             atomic_write(p, data)
 
+    card = {"version": version, "merged_notes": merged_notes(notes),
+            "prev_version": state.get("app_version") if state.get("app_version") != version else None}
     if conflicts:
         cdir = VAR / "conflicts" / version
         for rel, data in conflict_output.items():
@@ -482,7 +510,8 @@ def restore(dry_run: bool) -> int:
                 "Semmit nem írtam az appba, a GTFS/transit és a track_pick most nem fut. Ütközések:",
                 *[f"• {c}" for c in conflicts],
                 f"Merge-kimenet: `{cdir}/`. Feloldás után: `restore_custom.py --dry-run`, majd újrafuttatás.",
-            ], ok=False)
+            ], ok=False, card={**card, "kind": "blocked",
+                               "conflicts": [c.replace("`", "") for c in conflicts] + [f"Merge-kimenet: {cdir}/"]})
         state["blocked"] = {"version": version, "conflicts": conflicts}
         save_state(state)
         return 2
@@ -500,21 +529,36 @@ def restore(dry_run: bool) -> int:
         f" (előző: {state.get('app_version')})" if state.get("app_version") not in (None, version) else "")]
     env = rails_env()
     previous: dict[str, bytes | None] = {}
+    started = time.monotonic()
+    steps: list[tuple[str, str, str]] = []
+    card.update(steps=steps)
+
+    def timed(name: str, cmd: list[str], timeout: int) -> None:
+        t0 = time.monotonic()
+        steps.append((name, "", "fail"))  # replaced on success; a raise leaves it red
+        run(cmd, timeout, env)
+        steps[-1] = (name, fmt_secs(time.monotonic() - t0), "ok")
+
     try:
         if writes:
             previous = apply_writes(writes, stamp)
             log(f"wrote {len(writes)} file(s), backup: {VAR / 'backup' / stamp}")
-            lines.append(f"Visszatett fájlok: {sum(1 for r in writes if r in manifest['custom_files'])} custom, "
-                         f"{sum(1 for r in writes if r in manifest['patched_files'])} merge-elt upstream, "
-                         f"{sum(1 for d in writes.values() if d is None)} törölt (kikerült a manifestből)")
+            n_custom = sum(1 for r in writes if r in manifest['custom_files'])
+            n_merged = sum(1 for r in writes if r in manifest['patched_files'])
+            n_removed = sum(1 for d in writes.values() if d is None)
+            lines.append(f"Visszatett fájlok: {n_custom} custom, {n_merged} merge-elt upstream, "
+                         f"{n_removed} törölt (kikerült a manifestből)")
             lines.extend(f"• {n}" for n in notes)
+            steps.append((f"{len(writes)} fájl", f"{n_custom} + {n_merged} merge"
+                          + (f", {n_removed} törölt" if n_removed else ""), "ok"))
             if any(r in GEM_FILES for r in writes):
                 try:
-                    run(["bundle", "check"], 300, env)
+                    timed("bundle", ["bundle", "check"], 300)
                 except RuntimeError:
-                    run(["bundle", "install"], 1800, env)
-            run(["bundle", "exec", "rails", "db:migrate"], 1800, env)
-            run(["bundle", "exec", "rake", "assets:precompile"], 1800, env)
+                    steps.pop()
+                    timed("bundle install", ["bundle", "install"], 1800)
+            timed("db:migrate", ["bundle", "exec", "rails", "db:migrate"], 1800)
+            timed("precompile", ["bundle", "exec", "rake", "assets:precompile"], 1800)
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as e:
         # Gems, migrate or assets failed: running processes still have the old
         # code loaded, so put the files back and do not restart.
@@ -524,7 +568,9 @@ def restore(dry_run: bool) -> int:
         except OSError as re_err:
             rolled = f"ROLLBACK FAILED: {re_err}"
         log(f"failed: {e} ({rolled})", err=True)
-        notify("Dawarich custom restore FAILED", lines + [f"Hiba: {e}", rolled], ok=False)
+        notify("Dawarich custom restore FAILED", lines + [f"Hiba: {e}", rolled], ok=False,
+               card={**card, "kind": "failed", "error": f"{str(e).splitlines()[0]} – {rolled}",
+                     "duration_s": time.monotonic() - started})
         save_state(state)
         return 1
 
@@ -540,14 +586,23 @@ def restore(dry_run: bool) -> int:
     if not errors:
         state["restart_pending"] = False
         lines.append("Újraindítva: " + ", ".join(f"`{u}`" for u in units))
+        steps.append(("Újraindítás", f"{len(units)} szolgáltatás", "ok"))
         errors = smoke_check(units)
+    else:
+        steps.append(("Újraindítás", f"{len(errors)} hiba", "fail"))
     save_state(state)
+    ports = [url.split(":")[2].split("/")[0] for url, unit in SMOKE_URLS if unit in units]
     if not errors:
-        ports = ", ".join(url.split(":")[2].split("/")[0] for url, unit in SMOKE_URLS if unit in units)
-        lines.append(f"Smoke check: `/transit` routolva ({ports})" + (", a bot fut." if BOT_UNIT in units else "."))
+        lines.append(f"Smoke check: `/transit` routolva ({', '.join(ports)})" + (", a bot fut." if BOT_UNIT in units else "."))
+        steps.append(("Smoke", " · ".join(ports + (["bot"] if BOT_UNIT in units else [])), "ok"))
         if version != manifest["base_version"]:
             lines.append(f"Merge-bázis még {manifest['base_version']}: `restore_custom.py rebase`, majd commit + push.")
-    notify("Dawarich custom restore" + (" FAILED" if errors else ""), lines + [f"• {e}" for e in errors], ok=not errors)
+            card["rebase_base"] = manifest["base_version"]
+    elif steps[-1][0] != "Újraindítás" or steps[-1][2] == "ok":
+        steps.append(("Smoke", "sikertelen", "fail"))
+    card.update(kind="failed" if errors else "ok", error="; ".join(errors), duration_s=time.monotonic() - started)
+    notify("Dawarich custom restore" + (" FAILED" if errors else ""), lines + [f"• {e}" for e in errors],
+           ok=not errors, card=card)
     for e in errors:
         log(e, err=True)
     return 1 if errors else 0
