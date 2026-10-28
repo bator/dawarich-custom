@@ -1,6 +1,6 @@
 --- a/config/brakeman.ignore
 +++ b/config/brakeman.ignore
-@@ -160,6 +160,52 @@
+@@ -183,6 +183,52 @@
          89
        ],
        "note": "Column names are internal constants; zone geometry comes from floats."

@@ -1,6 +1,6 @@
 --- a/app/javascript/maps_maplibre/utils/settings_manager.js
 +++ b/app/javascript/maps_maplibre/utils/settings_manager.js
-@@ -71,6 +71,9 @@
+@@ -73,6 +73,9 @@
    Photos: "photosEnabled",
    Tracks: "tracksEnabled",
    Flights: "flightsEnabled",

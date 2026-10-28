@@ -47,6 +47,8 @@ const DEFAULT_SETTINGS = {
   minutesBetweenRoutes: 30,
   minMinutesSpentInCity: 60,
   gpsFilteringEnabled: true,
+  gpsAccuracyFilterEnabled: false,
+  gpsAccuracyThreshold: 100,
   pointDraggingEnabled: false,
   enabledTransportationModes: [
     "unknown",
@@ -100,6 +102,8 @@ const BACKEND_SETTINGS_MAP = {
   minutesBetweenRoutes: "minutes_between_routes",
   minMinutesSpentInCity: "min_minutes_spent_in_city",
   gpsFilteringEnabled: "gps_filtering_enabled",
+  gpsAccuracyFilterEnabled: "gps_accuracy_filter_enabled",
+  gpsAccuracyThreshold: "gps_accuracy_threshold",
   pointDraggingEnabled: "point_dragging_enabled",
   enabledTransportationModes: "enabled_transportation_modes",
   distance_unit: "distance_unit",
@@ -242,7 +246,15 @@ export class SettingsManager {
                 value,
                 DEFAULT_SETTINGS.minMinutesSpentInCity,
               )
-            } else if (frontendKey === "gpsFilteringEnabled") {
+            } else if (frontendKey === "gpsAccuracyThreshold") {
+              value = SettingsManager._parseIntOr(
+                value,
+                DEFAULT_SETTINGS.gpsAccuracyThreshold,
+              )
+            } else if (
+              frontendKey === "gpsFilteringEnabled" ||
+              frontendKey === "gpsAccuracyFilterEnabled"
+            ) {
               value = value === true || value === "true"
             } else if (frontendKey === "pointDraggingEnabled") {
               value = value === true || value === "true"

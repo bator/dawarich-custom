@@ -1,6 +1,6 @@
 --- a/app/queries/tracks/speed_vector_tile_query.rb
 +++ b/app/queries/tracks/speed_vector_tile_query.rb
-@@ -115,9 +115,18 @@
+@@ -116,9 +116,18 @@
        ) AS ordered_points
        WHERE previous_position IS NOT NULL
          #{"AND import_id = #{@clip_import_id.to_i} AND previous_import_id = #{@clip_import_id.to_i}" if @clip_import_id}

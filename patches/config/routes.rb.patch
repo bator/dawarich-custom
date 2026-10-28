@@ -29,7 +29,7 @@
      resources :users, only: %i[index show create destroy edit update] do
        member do
          post 'regenerate_api_key'
-@@ -445,6 +460,23 @@
+@@ -448,6 +463,23 @@
  
        resources :flights, only: %i[index]
  

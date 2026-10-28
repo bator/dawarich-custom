@@ -1,6 +1,6 @@
 --- a/app/javascript/maps_maplibre/services/api_client.js
 +++ b/app/javascript/maps_maplibre/services/api_client.js
-@@ -999,6 +999,74 @@
+@@ -1023,6 +1023,74 @@
      return response.json()
    }
  

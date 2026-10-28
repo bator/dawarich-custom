@@ -1,6 +1,6 @@
 --- a/app/javascript/controllers/maps/maplibre/data_loader.js
 +++ b/app/javascript/controllers/maps/maplibre/data_loader.js
-@@ -195,11 +195,49 @@
+@@ -143,11 +143,49 @@
            })
        : Promise.resolve({ type: "FeatureCollection", features: [] })
  
@@ -51,7 +51,7 @@
      ])
  
      const emptyGeoJSON = { type: "FeatureCollection", features: [] }
-@@ -216,6 +254,11 @@
+@@ -164,6 +202,11 @@
        type: "FeatureCollection",
        features: [],
      }

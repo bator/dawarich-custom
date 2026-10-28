@@ -1,8 +1,8 @@
 --- a/Gemfile.lock
 +++ b/Gemfile.lock
-@@ -735,6 +735,7 @@
-   bundler-audit
+@@ -737,6 +737,7 @@
    capybara
+   cgi
    chartkick
 +  chunky_png (~> 1.4)
    connection_pool (< 4)

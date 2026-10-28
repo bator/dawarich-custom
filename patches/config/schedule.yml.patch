@@ -1,8 +1,8 @@
 --- a/config/schedule.yml
 +++ b/config/schedule.yml
-@@ -125,6 +125,52 @@
-   class: "Stats::ToponymsRefreshJob"
+@@ -149,6 +149,52 @@
    queue: stats
+   active_job: true
  
 +gtfs_match_recent_job:
 +  # before the feed sync below: decision K4 keeps only active + one backup timetable (docs/gtfs.md)

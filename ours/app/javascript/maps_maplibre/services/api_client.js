@@ -11,6 +11,10 @@ function maskPrivacyZones(params) {
   params.set(PRIVACY_FLAG, "true")
 }
 
+function dateRange(start_at, end_at) {
+  return start_at && end_at ? { start_at, end_at } : {}
+}
+
 export class ApiClient {
   constructor(apiKey, importId = null) {
     this.apiKey = apiKey
@@ -340,7 +344,12 @@ export class ApiClient {
    * @param {Object} options - { tag_ids, page, per_page }
    * @returns {Promise<Object>} { places, currentPage, totalPages }
    */
-  async fetchPlacesPage({ tag_ids = [], page = 1, per_page = 500 } = {}) {
+  async fetchPlacesPage({
+    tag_ids = [],
+    page = 1,
+    per_page = 500,
+    filter,
+  } = {}) {
     const params = new URLSearchParams({
       page: page.toString(),
       per_page: per_page.toString(),
@@ -353,6 +362,7 @@ export class ApiClient {
     }
 
     maskPrivacyZones(params)
+    if (filter) params.set("filter", filter)
     const url = `${this.baseURL}/places?${params.toString()}`
 
     const response = await fetch(url, {
@@ -377,7 +387,20 @@ export class ApiClient {
    * @param {Object} options - { tag_ids, onProgress }
    * @returns {Promise<Array>} All places
    */
-  async fetchPlaces({ tag_ids = [], onProgress = null } = {}) {
+  async fetchPlaces({
+    tag_ids = [],
+    onProgress = null,
+    filter,
+    includeArchived = false,
+  } = {}) {
+    if (includeArchived) {
+      const [active, archived] = await Promise.all([
+        this.fetchPlaces({ tag_ids, onProgress }),
+        this.fetchPlaces({ tag_ids, filter: "archived" }),
+      ])
+      return [...active, ...archived]
+    }
+
     const allPlaces = []
     let page = 1
     let totalPages = 1
@@ -387,7 +410,7 @@ export class ApiClient {
         places,
         currentPage,
         totalPages: total,
-      } = await this.fetchPlacesPage({ tag_ids, page, per_page: 500 })
+      } = await this.fetchPlacesPage({ tag_ids, page, per_page: 500, filter })
 
       allPlaces.push(...places)
       totalPages = total
@@ -609,7 +632,7 @@ export class ApiClient {
   /**
    * Fetch points within a geographic area
    * @param {Object} options - { start_at, end_at, min_longitude, max_longitude, min_latitude, max_latitude }
-   * @returns {Promise<Array>} Points within the area
+   * @returns {Promise<{points: Array, truncated: boolean}>} Points within the area; truncated when more exist than one page holds
    */
   async fetchPointsInArea({
     start_at,
@@ -620,8 +643,7 @@ export class ApiClient {
     max_latitude,
   }) {
     const params = new URLSearchParams({
-      start_at,
-      end_at,
+      ...dateRange(start_at, end_at),
       min_longitude: min_longitude.toString(),
       max_longitude: max_longitude.toString(),
       min_latitude: min_latitude.toString(),
@@ -640,7 +662,10 @@ export class ApiClient {
       throw new Error(`Failed to fetch points in area: ${response.statusText}`)
     }
 
-    return response.json()
+    return {
+      points: await response.json(),
+      truncated: Number(response.headers.get("X-Total-Pages")) > 1,
+    }
   }
 
   /**
@@ -657,8 +682,7 @@ export class ApiClient {
     ne_lng,
   }) {
     const params = new URLSearchParams({
-      start_at,
-      end_at,
+      ...dateRange(start_at, end_at),
       selection: "true",
       sw_lat: sw_lat.toString(),
       sw_lng: sw_lng.toString(),

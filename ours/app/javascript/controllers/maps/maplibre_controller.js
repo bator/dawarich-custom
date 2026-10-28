@@ -1,6 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
 import { formatNumber, formatTime, translate } from "i18n"
+import { deletePlace } from "maps_maplibre/components/place_actions"
 import { Toast } from "maps_maplibre/components/toast"
+import { PlacePanelBridge } from "maps_maplibre/editing/place_panel_bridge"
 import { ReplayPanel } from "maps_maplibre/managers/replay_panel"
 import { TimelineSegmentHover } from "maps_maplibre/managers/timeline_segment_hover"
 import { ApiClient } from "maps_maplibre/services/api_client"
@@ -13,9 +15,11 @@ import { performanceMonitor } from "maps_maplibre/utils/performance_monitor"
 import { parseTimestamp } from "maps_maplibre/utils/realtime_date_filter"
 import { SearchManager } from "maps_maplibre/utils/search_manager"
 import { SettingsManager } from "maps_maplibre/utils/settings_manager"
+import { syncSidebarLayout } from "maps_maplibre/utils/sidebar_layout"
 import { setPrivacyZonesFingerprint } from "maps_maplibre/utils/tile_freshness"
 import { timeOverlapOpacityExpr } from "maps_maplibre/utils/time_overlap"
 import { AreaSelectionManager } from "./maplibre/area_selection_manager"
+import { consumeCreatePlaceLink } from "./maplibre/create_place_link"
 import { DataLoader } from "./maplibre/data_loader"
 import { DateManager } from "./maplibre/date_manager"
 import { EventHandlers } from "./maplibre/event_handlers"
@@ -60,6 +64,7 @@ export default class extends Controller {
     "fogThresholdValue",
     "minMinutesInCityValue",
     "gpsFilteringToggle",
+    "gpsAccuracyThresholdValue",
     // Search
     "searchInput",
     "searchResults",
@@ -90,6 +95,7 @@ export default class extends Controller {
     "familyMembersContainer",
     // Area selection
     "selectAreaButton",
+    "selectAllTimeCheckbox",
     "selectionActions",
     "deletePointsButton",
     "deleteButtonText",
@@ -143,6 +149,11 @@ export default class extends Controller {
     // disconnect (so the mid-init teardown guard doesn't fire on a fresh map).
     this._disconnected = false
 
+    // A Turbo snapshot taken while the WebGL error was showing comes back
+    // with it; start from the map view and let the checks below decide.
+    this.containerTarget.classList.remove("hidden")
+    this.webglErrorTarget.classList.add("hidden")
+
     if (!this.isWebGLSupported()) {
       this.showWebGLError()
       return
@@ -158,25 +169,15 @@ export default class extends Controller {
     this.settings = this.settingsController.settings
     this.settings.timezone = this.timezoneValue
 
-    // When the page loads with the Timeline panel open (deep link or
-    // SPA-style nav from elsewhere), the visits layer is always relevant —
-    // it's the on-map counterpart of the rail. Force it on for this session
-    // even if the user's saved layer toggle is off, without persisting back
-    // to the server.
-    const urlParams = new URLSearchParams(window.location.search)
-    if (urlParams.get("panel") === "timeline") {
-      this.settings.visitsEnabled = true
-      this.settingsController.settings.visitsEnabled = true
-    }
-
     // Sync toggle states with loaded settings
     this.settingsController.syncToggleStates()
 
     await this.initializeMap()
     // initializeMap bails without setting this.map if the controller
     // disconnected mid-init (fast Turbo nav); don't build managers on a
-    // dead controller with an undefined map.
-    if (this._disconnected) return
+    // dead controller with an undefined map. It also returns without a map
+    // when the browser refused a WebGL context.
+    if (this._disconnected || !this.map) return
 
     this.initializeAPI()
 
@@ -196,13 +197,14 @@ export default class extends Controller {
     this.areaSelectionManager = new AreaSelectionManager(this)
     this.visitsManager = new VisitsManager(this)
     // The moveend viewport-refetch normally attaches when the user flips the
-    // Visits toggle on. When the layer starts enabled (saved setting or the
-    // panel=timeline force-enable above), attach it here so panning keeps
-    // the dots in sync with the viewport.
+    // Visits toggle on. When the layer starts enabled by the saved setting,
+    // attach it here so panning keeps the dots in sync with the viewport.
     if (this.settings.visitsEnabled) {
       this.visitsManager.attachViewportRefetch()
     }
     this.placesManager = new PlacesManager(this)
+    this.placePanel = new PlacePanelBridge(this)
+    consumeCreatePlaceLink(this.placesManager)
     this.layerVisibilityManager = new LayerVisibilityManager(this)
 
     // Listen for tab changes to trigger timeline feed loading via Turbo Frame
@@ -308,6 +310,11 @@ export default class extends Controller {
       this.boundHandlePlaceUpdated,
     )
 
+    const [serverStartDate, serverEndDate] = [
+      this.startDateValue,
+      this.endDateValue,
+    ].map((value) => value.split("T")[0])
+
     // Format initial dates
     this.startDateValue = DateManager.formatDateForAPI(
       new Date(this.startDateValue),
@@ -323,6 +330,8 @@ export default class extends Controller {
     this.defaultDateRange = {
       startValue: this.startDateValue,
       endValue: this.endDateValue,
+      startDate: serverStartDate,
+      endDate: serverEndDate,
       reachesNow: loadEnd !== null && loadEnd >= Date.now(),
     }
 
@@ -350,6 +359,7 @@ export default class extends Controller {
   disconnect() {
     this._disconnected = true
     if (this._familyHistoryTimer) clearTimeout(this._familyHistoryTimer)
+    this.placePanel?.destroy()
     this.replayPanel?.destroy()
     this.settingsController?.stopRecalculationPolling()
     this.searchManager?.destroy()
@@ -358,7 +368,7 @@ export default class extends Controller {
     this.eventHandlers?.destroy()
     cancelAllPreviews()
     if (this._persistView) this.map?.off("moveend", this._persistView)
-    this.cleanup.cleanup()
+    this.cleanup?.cleanup()
     this.layerManager?.clearLayerReferences()
     this.map?.remove()
     performanceMonitor.logReport()
@@ -367,7 +377,11 @@ export default class extends Controller {
   isWebGLSupported() {
     try {
       const canvas = document.createElement("canvas")
-      return !!canvas.getContext("webgl2")
+      const gl = canvas.getContext("webgl2")
+      // Hand the probe's context back at once: iOS caps live WebGL contexts,
+      // and this one would otherwise linger until GC on every day switch.
+      gl?.getExtension("WEBGL_lose_context")?.loseContext()
+      return !!gl
     } catch {
       return false
     }
@@ -382,25 +396,36 @@ export default class extends Controller {
    * Initialize MapLibre map
    */
   async initializeMap() {
+    syncSidebarLayout(this.settingsPanelTarget, this.containerTarget, true)
     // Reopen at the user's last viewport instead of the zoomed-out globe.
     // When the date range has data, fitBounds overrides this; when it has
     // none, the map stays on the last-known view rather than the world.
     const lastView = loadLastView(this.apiKeyValue)
 
-    const map = await MapInitializer.initialize(
-      this.containerTarget,
-      {
-        mapStyle: this.settings.mapStyle,
-        globeProjection: this.settings.globeProjection,
-        hiddenTileCategories: this.settings.hiddenTileCategories || [],
-        disabledPoiGroups: this.settings.disabledPoiGroups || [],
-        customTheme: this.settings.customTheme,
-        vectorTilesUrl: this.settings.vectorTilesUrl,
-        tilesFallback: this.settings.tilesFallback === true,
-        ...(lastView ? { center: lastView.center, zoom: lastView.zoom } : {}),
-      },
-      this.apiKeyValue,
-    )
+    let map
+    try {
+      map = await MapInitializer.initialize(
+        this.containerTarget,
+        {
+          mapStyle: this.settings.mapStyle,
+          globeProjection: this.settings.globeProjection,
+          hiddenTileCategories: this.settings.hiddenTileCategories || [],
+          disabledPoiGroups: this.settings.disabledPoiGroups || [],
+          customTheme: this.settings.customTheme,
+          vectorTilesUrl: this.settings.vectorTilesUrl,
+          tilesFallback: this.settings.tilesFallback === true,
+          ...(lastView ? { center: lastView.center, zoom: lastView.zoom } : {}),
+        },
+        this.apiKeyValue,
+      )
+    } catch (error) {
+      // The isWebGLSupported() probe passes, yet the browser can still refuse
+      // the map its own context, e.g. iOS Safari past its WebGL context limit.
+      if (error?.name !== "GPUInitializationError") throw error
+      console.warn("[Maps V2] WebGL context refused:", error)
+      this.showWebGLError()
+      return
+    }
 
     // The controller may have disconnected while the style was loading (e.g.
     // fast Turbo navigation). Tear the map down instead of attaching a listener
@@ -447,7 +472,10 @@ export default class extends Controller {
     return this.mapDataManager.loadMapData(
       this.startDateValue,
       this.endDateValue,
-      options,
+      {
+        ...options,
+        fitBounds: options.fitBounds !== false && !this.placePanel?.isOpen,
+      },
     )
   }
 
@@ -644,20 +672,14 @@ export default class extends Controller {
 
       // Shrink/expand map container
       if (this.hasContainerTarget) {
-        this.containerTarget.classList.toggle("panel-open", isOpening)
-        // The Timeline tab puts the map container in `panel-timeline-expanded`
-        // (720px-wide panel + matching margin-left). When the user closes the
-        // panel we have to clear that too — otherwise the panel slides
-        // off-screen but the map keeps its 720px left margin and the user
-        // sees an empty dark column where the panel used to be.
         if (!isOpening) {
-          this.containerTarget.classList.remove("panel-timeline-expanded")
           this.settingsPanelTarget.classList.remove("timeline-expanded")
           // Cluster doubles as the panel's tab strip — clear its active
           // state when the panel is dismissed (e.g. via the header X) so
           // users don't see a button still highlighted with no panel open.
           document.dispatchEvent(new CustomEvent("map-panel:closed"))
         }
+        syncSidebarLayout(this.settingsPanelTarget, this.containerTarget)
         // Tell MapLibre to recalculate after the CSS transition
         setTimeout(() => this.map?.resize(), 350)
       }
@@ -671,58 +693,9 @@ export default class extends Controller {
     const { tab } = event.detail
     if (tab === "timeline-feed") {
       this.loadTimelineFeed()
-      // The timeline rail is the on-panel counterpart of the visits map
-      // layer — keep them in sync. If the visits layer is currently off,
-      // turn it on (session-only, no persistence) so the dots appear next
-      // to the day's entries.
-      this._ensureVisitsLayerEnabled()
     } else if (this._highlightedDay) {
       // Leaving timeline-feed tab — restore full opacity
       this._clearDayHighlight()
-    }
-  }
-
-  // Force-enables the visits layer for this session without persisting the
-  // change to the server — the user's saved Layers preference shouldn't be
-  // flipped just because they opened Timeline once.
-  //
-  // We DO update the in-memory `settings.visitsEnabled` so subsequent
-  // `loadMapData()` calls (e.g. when the user navigates to a different
-  // day) include visits in the fetch + the loading-counter expectations.
-  // Otherwise the loader badge reads "N tracks" only and the map ends
-  // up with stale visits when a new day is selected.
-  async _ensureVisitsLayerEnabled() {
-    if (!this.hasVisitsToggleTarget) return
-
-    // In-memory only — don't go through SettingsManager.updateSetting,
-    // which would persist back to the server.
-    if (this.settings) this.settings.visitsEnabled = true
-    if (this.dataLoader?.settings) this.dataLoader.settings.visitsEnabled = true
-    if (this.settingsController?.settings) {
-      this.settingsController.settings.visitsEnabled = true
-    }
-
-    if (this.visitsToggleTarget.checked) return
-    this.visitsToggleTarget.checked = true
-    if (this.hasVisitsSearchTarget) {
-      this.visitsSearchTarget.style.display = "block"
-    }
-
-    const visitsLayer = this.layerManager?.getLayer("visits")
-    if (!visitsLayer) return
-
-    try {
-      if (!visitsLayer.data?.features?.length) {
-        const visits = await this.api.fetchVisits({
-          start_at: this.startDateValue,
-          end_at: this.endDateValue,
-        })
-        this.filterManager?.setAllVisits(visits)
-        visitsLayer.update(this.dataLoader.visitsToGeoJSON(visits))
-      }
-      visitsLayer.show()
-    } catch (err) {
-      console.error("Failed to auto-enable visits layer for timeline:", err)
     }
   }
 
@@ -1262,6 +1235,9 @@ export default class extends Controller {
   updateAdvancedSettings(event) {
     return this.settingsController.updateAdvancedSettings(event)
   }
+  updateGpsAccuracyThresholdDisplay(event) {
+    return this.settingsController.updateGpsAccuracyThresholdDisplay(event)
+  }
   updateFogRadiusDisplay(event) {
     return this.settingsController.updateFogRadiusDisplay(event)
   }
@@ -1318,6 +1294,9 @@ export default class extends Controller {
   // Places Manager methods
   togglePlaces(event) {
     return this.placesManager.togglePlaces(event)
+  }
+  toggleArchivedPlaces(event) {
+    return this.placesManager.toggleArchivedPlaces(event)
   }
   togglePlaceBoundaries(event) {
     return this.placesManager.togglePlaceBoundaries(event)
@@ -1694,9 +1673,6 @@ export default class extends Controller {
       case "visit":
         this.openVisitModal(id)
         break
-      case "place":
-        this.openPlaceEditModal(id)
-        break
       default:
         console.warn("[Maps V2] Unknown entity type:", entityType)
     }
@@ -1714,6 +1690,8 @@ export default class extends Controller {
       case "point":
         this.deletePoint(id)
         break
+      case "place":
+        return deletePlace(this, id)
       default:
         console.warn("[Maps V2] Unknown entity type for delete:", entityType)
     }
@@ -1771,34 +1749,8 @@ export default class extends Controller {
     }
   }
 
-  /**
-   * Open place edit modal
-   */
-  async openPlaceEditModal(placeId) {
-    try {
-      // Fetch place details
-      const response = await fetch(`/api/v1/places/${placeId}`, {
-        headers: {
-          Authorization: `Bearer ${this.apiKeyValue}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch place: ${response.status}`)
-      }
-
-      const place = await response.json()
-
-      // Trigger place edit event
-      const event = new CustomEvent("place:edit", {
-        detail: { place },
-        bubbles: true,
-      })
-      document.dispatchEvent(event)
-    } catch (_error) {
-      Toast.error(translate("messages.failed_to_load_place_details"))
-    }
+  openPlace(event) {
+    this.placePanel.open(event.currentTarget.dataset.id)
   }
 
   switchToToolsTab() {

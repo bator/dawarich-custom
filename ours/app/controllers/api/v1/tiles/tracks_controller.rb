@@ -5,7 +5,7 @@ class Api::V1::Tiles::TracksController < ApiController
 
   # ETag material — bump when Tracks::VectorTileQuery's SQL or its emitted
   # properties change.
-  TILE_SCHEMA_VERSION = 7
+  TILE_SCHEMA_VERSION = 8
   # dawarich-custom: ?hide=walks,rides cuts the raw line under the walks /
   # rides the map draws (Gtfs::TrackCutouts, docs/atlas.md)
   CUTOUTS_VERSION = 5

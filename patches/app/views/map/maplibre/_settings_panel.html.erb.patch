@@ -1,6 +1,6 @@
 --- a/app/views/map/maplibre/_settings_panel.html.erb
 +++ b/app/views/map/maplibre/_settings_panel.html.erb
-@@ -57,6 +57,8 @@
+@@ -60,6 +60,8 @@
          </div>
        </div>
  
@@ -9,7 +9,7 @@
        <!-- Layers Tab -->
        <div class="tab-content<%= ' active' unless timeline_panel_open %>" data-tab-content="layers" data-map-panel-target="tabContent">
          <div class="layer-tiles">
-@@ -137,6 +139,52 @@
+@@ -140,6 +142,52 @@
              </div>
            </div>
  

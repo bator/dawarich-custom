@@ -168,6 +168,9 @@ Rails.application.routes.draw do
       post :merge
     end
     collection do
+      patch :bulk_update
+      delete :bulk_destroy
+      post :bulk_merge
       get 'nearby'
     end
   end
