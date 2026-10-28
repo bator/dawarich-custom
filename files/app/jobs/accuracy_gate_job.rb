@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Hides the points worse than each user's gps_accuracy_threshold (AccuracyGate):
-# hourly over the last RECENT_HOURS (config/schedule.yml, ACCURACY_GATE_CRON),
-# and over all of a user's history with all: true (ACCURACY_GATE_NIGHTLY_CRON),
-# which also catches what Points::AnomalyBackfillUserJob showed again.
+# Hides the points worse than each user's gps_accuracy_threshold (AccuracyGate),
+# over the last RECENT_HOURS, or over all of a user's history with all: true.
+# Not scheduled since Dawarich 1.19.0, whose own filter does this
+# (gps_accuracy_filter_enabled, docs/atlas.md); kept for manual runs.
 class AccuracyGateJob < ApplicationJob
   queue_as :default
 

@@ -120,20 +120,22 @@ ones.
 
 ## Points worse than the accuracy threshold
 
-A user's `gps_accuracy_threshold` setting (metres; Dawarich 1.17.0 keeps it but no longer reads it)
-hides the points with a worse reported accuracy (`AccuracyGate`). They are flagged the way Dawarich
-flags GPS noise (`anomaly = TRUE`, `track_id = NULL`), and nothing is deleted.
+Since 1.19.0 Dawarich does this itself again: map settings → GPS Noise Filtering → "Hide inaccurate
+points" (`gps_accuracy_filter_enabled`, threshold `gps_accuracy_threshold`, 50–1000 m), then "Apply
+Settings" and "Re-evaluate past data" for the history (`Points::AnomalyBackfillUserJob` with
+`reset: true`, which rebuilds all tracks and stats). Hand-set modes come back through
+`TrackModeCorrections`; timetable modes need `gtfs:track_modes DAYS=3650 WRITE=1` afterwards.
 
-- Every hidden id is logged in `/opt/dawarich/accuracy-gate/state/<user_id>/<local day>.jsonl`.
-- The days with hidden points get their tracks built again (bulk mode, as after a track_pick pick).
-- `AccuracyGateJob` runs hourly over the last 48 h (`ACCURACY_GATE_CRON`, minute 41) and nightly over
-  all history (`ACCURACY_GATE_NIGHTLY_CRON`, 04:50). The nightly run also re-hides what an anomaly
-  backfill (`Points::AnomalyBackfillUserJob`, which clears every flag first) showed again.
-- `bin/rails accuracy_gate:run` is a dry run; `WRITE=1` hides, `USER_ID=` and `DAYS=` narrow it.
+`AccuracyGate` (our version for 1.11.0–1.18.x, which ignored the setting) no longer runs on a
+schedule. Its log stays, so what it hid can still be shown again:
+
+- Every id it hid is in `/opt/dawarich/accuracy-gate/state/<user_id>/<local day>.jsonl`.
 - `bin/rails "accuracy_gate:undo[USER_ID,FROM,TO]"` shows the points of those local days again and
-  rebuilds their tracks.
-- User 2 (threshold 100 m), 2026-10-24: 1882 points on 136 days, 328 of them in the last 48 h. On
-  the G44 of 10-23, the 1 km spikes at Velence and Martonvásár are gone.
+  rebuilds their tracks. With the upstream filter on, the next re-evaluation hides them again.
+- `bin/rails accuracy_gate:run` (dry run; `WRITE=1`, `USER_ID=`, `DAYS=`) still works by hand.
+- User 2 (threshold 100 m), 2026-10-24: 1882 points on 136 days; the upstream filter is on since
+  2026-10-28.
+
 - The tile ETag includes the kinds and the cut's epoch: the user's latest walk-leg / ride change and
   their counts, settings, privacy zones. The cut query runs with `jit = off`: JIT compiling took 167
   of 200 ms, the work itself about 30 ms.

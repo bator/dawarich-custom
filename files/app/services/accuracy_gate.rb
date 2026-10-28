@@ -12,8 +12,9 @@
 # hidden points get their tracks built again (Dawarich bulk mode, as
 # TrackPick::Hider does), and the tile revisions follow the points' update.
 #
-# Note: Points::AnomalyBackfillUserJob clears every anomaly flag of a user
-# before it re-judges; AccuracyGateJob hides those points again the next night.
+# Since Dawarich 1.19.0 the upstream filter does this (gps_accuracy_filter_enabled,
+# docs/atlas.md); AccuracyGateJob is no longer scheduled. Kept for undo and
+# manual runs (lib/tasks/accuracy_gate.rake).
 class AccuracyGate
   STATE_DIR = ENV.fetch('ACCURACY_GATE_STATE_DIR', '/opt/dawarich/accuracy-gate/state')
   DEFAULT_ZONE = 'Europe/Budapest'
