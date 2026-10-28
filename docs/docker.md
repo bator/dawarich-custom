@@ -8,14 +8,14 @@ upstream's `docker/docker-compose.yml` uses; the GitHub owner is `Freika`, the D
 `freikin`), and `docker/docker-compose.transit.yml` switches the upstream compose file over to it.
 
 ```
-freikin/dawarich:1.18.0 ──┐
+freikin/dawarich:1.19.0 ──┐
                           ├─ overlay stage: restore_custom.py export (3-way merge of ours/, plus files/)
 this repo ────────────────┘        │
                                    ▼
             final stage: upstream image + merged files → bundle install → assets:precompile
                                    │
                                    ▼
-                     dawarich-custom:1.18.0 (app, sidekiq, discord bot)
+                     dawarich-custom:1.19.0 (app, sidekiq, discord bot)
 ```
 
 The merge is the same one `restore_custom.py` does after an upgrade of the LXC install: if
@@ -37,7 +37,7 @@ mkdir dawarich && cd dawarich
 
 # 1. the upstream compose file of the same version
 curl -fLo docker-compose.yml \
-  https://raw.githubusercontent.com/Freika/dawarich/1.18.0/docker/docker-compose.yml
+  https://raw.githubusercontent.com/Freika/dawarich/1.19.0/docker/docker-compose.yml
 
 # 2. this repo, the compose override and the environment file
 git clone https://github.com/bator/dawarich-custom.git
@@ -145,10 +145,10 @@ them. Put them in `.env`, which every service reads.
 3. Build with the new version:
 
    ```bash
-   DAWARICH_VERSION=1.18.0 docker compose up -d --build
+   DAWARICH_VERSION=1.19.0 docker compose up -d --build
    ```
 
-   (or put `DAWARICH_VERSION=1.18.0` into `.env`).
+   (or put `DAWARICH_VERSION=1.19.0` into `.env`).
 
 If upstream did not touch our files, the build just works. If the merge has conflicts, the build
 stops with `CONFLICT ...` lines naming the files, and the running containers keep the old image.
