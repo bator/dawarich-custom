@@ -335,6 +335,69 @@ def cleanup_card(r: dict) -> tuple[str, bytes]:
     return status, t.png()
 
 
+# --- 4. MOTIS frissítés (pve motis-refresh.sh) ---------------------------------
+HU_MONTHS = ("jan.", "febr.", "márc.", "ápr.", "máj.", "jún.", "júl.", "aug.", "szept.", "okt.", "nov.", "dec.")
+
+
+def _release(stamp: str | None) -> tuple[str | None, str]:
+    """20261028-103952 -> ("okt. 28", "10:39")."""
+    s = str(stamp or "")
+    if len(s) < 13 or not s[:8].isdigit():
+        return None, ""
+    return f"{HU_MONTHS[int(s[4:6]) - 1]} {int(s[6:8])}", f"{s[9:11]}:{s[11:13]}"
+
+
+def motis_card(r: dict) -> tuple[str, bytes]:
+    """r: kind (fail|recovered), prev (az induláskor futó kiadás), new (a próbált / új kiadás),
+    t_end, duration_s, step, node, streak, peak_gib, error, guard [memória-védelem sorai]."""
+    import re
+    ok = r.get("kind") == "recovered"
+    status = "ok" if ok else "fail"
+    t = Ticket("MOTIS útvonaltervező · napi frissítés", "Helyreállt" if ok else "Hiba", status)
+    (a, a_t), (b, b_t) = _release(r.get("prev")), _release(r.get("new"))
+    mid = fmt_dur(r["duration_s"]) if r.get("duration_s") else ""
+    if ok:
+        rebuilt = bool(b) and r.get("new") != r.get("prev")
+        if rebuilt:
+            t.route(a, b, f"kiadás {a_t}" if a_t else "", f"kiadás {b_t}", mid)
+        else:  # változatlan bemenet: nem készült új kiadás, a régi fut
+            t.route(None, a or "–", "", f"kiadás {a_t} · változatlan" if a_t else "változatlan", mid)
+        streak = int(r.get("streak") or 0)
+        peak = r.get("peak_gib")
+        t.fields([
+            ("Előtte", f"{streak} hibás futás" if streak else "–", None),
+            ("Import csúcs", f"{float(peak):.1f} GiB RAM".replace(".", ",") if peak else "–", None),
+            ("Smoke teszt", "rendben" if rebuilt else "nem kellett", None),
+        ])
+        return status, t.png()
+
+    t.route(a, b or "–", f"fut tovább · {a_t}" if a_t else "fut tovább", r.get("t_end", ""), mid)
+    node = r.get("node") or "node"
+    mem = [(int(m), int(s)) for m, s in re.findall(r"MemAvailable=(\d+)MiB SwapFree=(\d+)MiB",
+                                                   "\n".join(r.get("guard") or []))]
+    if mem:
+        avail, swap = min(m for m, _ in mem), min(s for _, s in mem)
+        t.fields([
+            ("Elakadt", r.get("step") or "Import", "fail"),
+            (f"{node} szabad RAM", f"{avail / 1024:.1f} GiB".replace(".", ","), None),
+            ("Swap szabad", f"{swap} MiB", "fail" if swap < 256 else None),
+        ])
+        why = (f"A {node} memória-védelme leállította az importot: elfogyott a swap, a szabad RAM "
+               f"{avail} MiB (küszöb 4096). "
+               f"Log: /var/log/motis-refresh.log (pve)")
+    else:
+        streak = int(r.get("streak") or 1)
+        t.fields([
+            ("Elakadt", r.get("step") or "–", "fail"),
+            ("Node", node, None),
+            ("Hibás futás", f"{streak}. egymás után" if streak > 1 else "első", None),
+        ])
+        err = str(r.get("error") or "ismeretlen hiba")
+        why = f"{err[:1].upper()}{err[1:]}. Log: /var/log/motis-refresh.log (pve)"
+    t.stub("Hiba", why, "fail")
+    return status, t.png()
+
+
 # --- küldés --------------------------------------------------------------------
 def send_card(webhook: str, title: str, status: str, png: bytes | None, fallback_text: str,
               url: str | None = None, user_agent: str = "dawarich-cards") -> dict:
@@ -365,3 +428,27 @@ def send_card(webhook: str, title: str, status: str, png: bytes | None, fallback
         return json.loads(raw) if raw else {}
     except ValueError:
         return {}
+
+
+def _motis_cli() -> int:
+    """echo JSON | dawarich_cards.py motis -> kártya a DISCORD_WEBHOOK_URL-re; 0 = elküldve."""
+    import sys
+    import dawarich_common as dc
+    r = json.load(sys.stdin)
+    env = dc.safe_load_config()
+    webhook = (env.get("DISCORD_WEBHOOK_URL") or env.get("DISCORD_WEBHOOK") or "").strip()
+    if not webhook:
+        return 2
+    status, png = motis_card(r)
+    title = "MOTIS frissítés helyreállt" if status == "ok" else "MOTIS frissítés HIBA"
+    send_card(webhook.replace("discordapp.com", "discord.com"), title, status, png, "", user_agent="motis-refresh")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    try:
+        sys.exit(_motis_cli() if sys.argv[1:] == ["motis"] else 2)
+    except Exception as exc:  # noqa: BLE001 -- a hívó a szöveges embedre esik vissza
+        print(f"motis card failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        sys.exit(1)
