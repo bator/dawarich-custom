@@ -3,7 +3,7 @@
 # /transit/coverage: one card per user with the last live report of each
 # device (Gtfs::DeviceReports), a "typical day" (share of days with points
 # per hour), a per-day coverage tracker and the longest silent gaps
-# (Gtfs::CoverageReport). Admins see every user, everyone else only
+# (Gtfs::CoverageReport). Admins see every user not marked coverage_hidden, everyone else only
 # themselves. The shell renders at once and the cards come in a lazy Turbo
 # Frame; devices are cached for DEVICES_TTL, the coverage for CACHE_TTL.
 class TransitCoverageController < ApplicationController
@@ -23,7 +23,7 @@ class TransitCoverageController < ApplicationController
     @zone = ActiveSupport::TimeZone[current_user.timezone_iana] || Time.zone
     return unless turbo_frame_request?
 
-    @users = current_user.admin? ? User.order(:id).to_a : [current_user]
+    @users = current_user.admin? ? visible_users : [current_user]
     user_ids = @users.map(&:id)
     since = @days.days.ago.beginning_of_day
     @report_meta = Gtfs::CoverageReport.new([], since:, zone: @zone)
@@ -35,5 +35,14 @@ class TransitCoverageController < ApplicationController
     end
     @devices = rows.group_by { |row| row['user_id'] }
     render partial: 'report'
+  end
+
+  private
+
+  # Admins see every user except the ones with settings['coverage_hidden'] = true
+  # (e.g. a feed the HA Dawarich integration fills); the admin's own card always stays.
+  def visible_users
+    User.where("COALESCE(users.settings->>'coverage_hidden', '') <> 'true'")
+        .or(User.where(id: current_user.id)).order(:id).to_a
   end
 end
