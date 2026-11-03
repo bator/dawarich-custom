@@ -243,6 +243,7 @@
     "app/views/settings/_navigation.html.erb",
     "app/views/shared/_navbar.html.erb",
     "config/brakeman.ignore",
+    "config/initializers/prometheus_metrics_store.rb",
     "config/initializers/sidekiq.rb",
     "config/routes.rb",
     "config/schedule.yml",

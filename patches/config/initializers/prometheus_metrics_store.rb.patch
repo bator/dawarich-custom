@@ -1,0 +1,16 @@
+--- a/config/initializers/prometheus_metrics_store.rb
++++ b/config/initializers/prometheus_metrics_store.rb
+@@ -24,8 +24,11 @@
+ # Wipe stale files from prior process lifetimes — but ONLY for PIDs no longer
+ # alive. Blanket-wipe corrupts metrics in workers that are still serving
+ # traffic during a Puma rolling restart.
+-Dir.glob(File.join(multiproc_dir, '*.db')).each do |path|
+-  pid = File.basename(path)[/_(\d+)\.db\z/, 1]&.to_i
++# DirectFileStore names its files metric_<name>___<pid>.bin (prometheus-client
++# 4.x, DirectFileStore#filemap_filename); upstream globbed '*.db', which never
++# matched, so dead-PID files piled up and kept reporting stale gauges.
++Dir.glob(File.join(multiproc_dir, '*.bin')).each do |path|
++  pid = File.basename(path)[/___(\d+)\.bin\z/, 1]&.to_i
+   next unless pid # unknown naming pattern — leave it alone
+ 
+   begin
