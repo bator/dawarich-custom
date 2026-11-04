@@ -43,7 +43,7 @@ class AccuracyGate
   def scope
     return Point.none unless @threshold
 
-    rel = Point.where(user_id: @user.id).where('points.anomaly IS NOT TRUE')
+    rel = Point.where(user_id: @user.id, anomaly_override: false).where('points.anomaly IS NOT TRUE')
                .where('points.accuracy > ?', @threshold)
     rel = rel.where(timestamp: @from_ts..) if @from_ts
     rel = rel.where(timestamp: ..@to_ts) if @to_ts
