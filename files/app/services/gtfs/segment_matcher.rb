@@ -29,6 +29,11 @@ class Gtfs::SegmentMatcher
   GAP_NEIGHBOUR_SECS = 60 # a gap window and a movement window this close share their edge point
   EXTEND_GAP_SECS = 180 # a movement window starting this soon after a ride may be its rest
   EXTEND_MAX_STEPS = 3
+  # A train can stop short of the station (signal) and enter it after the
+  # movement window has ended: look this far past the end of an unmatched window.
+  ARRIVAL_LOOKAHEAD_SECS = 300
+  ARRIVAL_LOOKAHEAD_STEP_M = 100 # try a later point only when it moved this far from the last try
+  ARRIVAL_LOOKAHEAD_TRIES = 6
 
   attr_reader :feed_set
 
@@ -48,6 +53,7 @@ class Gtfs::SegmentMatcher
     buffer = Gtfs::Config::DAY_BUFFER_SECS
     loader = Gtfs::Matching::PointLoader.new(@user, from_ts - buffer, to_ts + buffer, privacy_zones: @privacy_zones)
     points = loader.call
+    @stream = points
     windows = Gtfs::Matching::WindowDetector.new(points, dropped_ts: loader.dropped_accuracy_ts).call
                                             .select { |w| w.start_ts >= from_ts && w.start_ts < to_ts }
     stats['points'] = points.count { |p| p.ts >= from_ts && p.ts < to_ts }
@@ -183,7 +189,48 @@ class Gtfs::SegmentMatcher
       stats['split_windows'] += 1
       return halves
     end
-    accepted ? [build_match(window, best, alternatives)] : []
+    return [build_match(window, best, alternatives)] if accepted
+
+    depth.zero? ? match_late_arrival(window, stats) : []
+  end
+
+  # 2026-10-30: the 9057 stopped 660 m before the Kelenföld stop, 08:21-08:22,
+  # and the window ended there, outside the 300 m stop radius, so the whole ride
+  # had no candidate. The fixes reached the stop at 08:22:51, after the window.
+  # An unmatched movement window is retried with the points just after it, up to
+  # the first one that makes it an accepted train ride.
+  def match_late_arrival(window, stats)
+    return [] unless window.kind == :moving
+
+    arrival_tries(window).each do |extra|
+      longer = Gtfs::Matching::WindowDetector::Window.new(points: window.points + extra, kind: :moving,
+                                                          pauses: window.pauses, moving_start: window.moving_start,
+                                                          truncated: window.truncated,
+                                                          truncated_start: window.truncated_start,
+                                                          truncated_end: window.truncated_end, sparse: window.sparse)
+      best, alternatives = evaluate(longer, stats)
+      next unless best && best.confidence >= drop_below(best) && mode_of(best) == 'rail'
+
+      stats['late_arrivals'] += 1
+      return [build_match(longer, best, alternatives)]
+    end
+    []
+  end
+
+  # => growing lists of the points right after the window; a new list only when
+  # the last point moved ARRIVAL_LOOKAHEAD_STEP_M from the previous try.
+  def arrival_tries(window)
+    following = @stream.select { |p| p.ts > window.end_ts && p.ts <= window.end_ts + ARRIVAL_LOOKAHEAD_SECS }
+    anchor = window.points.last
+    tries = []
+    following.each_with_index do |point, index|
+      next if Gtfs::Matching::Geo.haversine(anchor.lon, anchor.lat, point.lon, point.lat) < ARRIVAL_LOOKAHEAD_STEP_M
+
+      tries << following[0..index]
+      anchor = point
+      break if tries.size >= ARRIVAL_LOOKAHEAD_TRIES
+    end
+    tries
   end
 
   # The halves of a window (split at its longest pause) replace an uncertain

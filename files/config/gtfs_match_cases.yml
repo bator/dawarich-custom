@@ -89,3 +89,17 @@ cases:
         from: '17:19'
         to: '17:56'
         tolerance_min: 6
+  - id: train-stops-short-of-kelenfold
+    note: >-
+      16 Pro, 2026-10-30: the 9057 stopped 660 m before the Kelenföld stop and
+      the movement window ended there, so no candidate and no ride at all. The
+      fixes reached the stop at 08:22:51 (match_late_arrival).
+    user_id: 2
+    date: 2026-10-30
+    expect:
+      - line: '9057'
+        board: Székesfehérvár
+        alight: Budapest-Kelenföld
+        from: '07:40'
+        to: '08:22'
+        tolerance_min: 6
