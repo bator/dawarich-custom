@@ -114,10 +114,25 @@ class Gtfs::SegmentMatcher
     return separate unless best && best.confidence >= drop_below(best)
     return separate unless gap_join_allowed?(first, second, best)
     return separate unless separate.empty? || separate.any? { |m| line_label(m.score) == line_label(best) } ||
-                           best.confidence >= separate.map(&:confidence).max
+                           best.confidence >= separate.map(&:confidence).max ||
+                           train_through_gap?(separate, best, first.gap?)
 
     stats['gap_joins'] += 1
     [build_match(window, best, alternatives)]
+  end
+
+  # A movement alone scores higher than the whole ride because the gap lowers
+  # the coverage, so the ride that stops where the fix was lost wins
+  # (2026-11-05: Z30 to Kápolnásnyék 0.84, the 9796 to Székesfehérvár 0.76; the
+  # phone sent only 1-5 km fixes for the last 21 km). The longer train ride is
+  # taken when it is certain enough and shares the stop away from the gap: the
+  # outer end was checked by gap_join_allowed?, so it runs on to a real stop.
+  def train_through_gap?(separate, best, gap_first)
+    return false unless separate.one? && mode_of(best) == 'rail' && mode_of(separate.first.score) == 'rail'
+    return false if best.confidence < Gtfs::Config::MIN_CONFIDENCE
+
+    score = separate.first.score
+    gap_first ? same_stop?(score.alight, best.alight) : same_stop?(score.board, best.board)
   end
 
   # A train ride whose GPS drops out on the way (07:57-08:17 on 2026-10-22,
@@ -128,14 +143,15 @@ class Gtfs::SegmentMatcher
   # three are scored as one window too; that ride is taken when it is accepted
   # and picks the trip the first movement alone matched, so a ride is only
   # extended, never replaced by another line.
+  # The first movement often matches nothing, because it ends between two
+  # stations where the fix was lost (2026-11-05: 07:52 near Dinnyés, the 9057
+  # was lost whole). With nothing to replace, a train ride is taken as well.
   def gap_bridge?(first, gap, last)
     !first.gap? && gap.gap? && !last.gap? && gap_neighbours?(first, gap) && gap_neighbours?(gap, last)
   end
 
   def match_gap_bridge(first, gap, last, stats)
     separate = match_window(first, 0, stats)
-    return if separate.empty?
-
     window = Gtfs::Matching::WindowDetector::Window.new(points: (first.points + gap.points + last.points).uniq(&:ts),
                                                         kind: :moving, pauses: [], board_from_gap: false,
                                                         truncated: first.truncated || last.truncated,
@@ -144,7 +160,7 @@ class Gtfs::SegmentMatcher
                                                         sparse: [first, gap, last].any?(&:sparse))
     best, alternatives = evaluate(window, stats)
     return unless best && best.confidence >= drop_below(best)
-    return unless separate.any? { |m| same_trip?(m.score, best) }
+    return unless separate.empty? ? mode_of(best) == 'rail' : separate.any? { |m| same_trip?(m.score, best) }
 
     stats['gap_bridges'] += 1
     [build_match(window, best, alternatives)]

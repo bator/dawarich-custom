@@ -58,3 +58,34 @@ cases:
       - line: G44
         board: Budapest-Kelenföld
         alight: Dinnyés
+  - id: first-movement-without-stop-9057
+    note: >-
+      16 Pro, 2026-11-05: only 1-5 km fixes 07:45-08:20 on the train, hidden by
+      the 100 m accuracy filter. The first movement ended near Dinnyés, far from
+      any stop, so it matched nothing and the gap bridge gave up: no ride at all.
+    user_id: 2
+    date: 2026-11-05
+    expect:
+      - line: '9057'
+        board: Székesfehérvár
+        alight: Budapest-Kelenföld
+        from: '07:41'
+        to: '08:22'
+        tolerance_min: 6
+  - id: train-through-gap-kapolnasnyek
+    note: >-
+      16 Pro, 2026-11-05: only 1-5 km fixes for the last 21 km. The Z30 to
+      Kápolnásnyék (0.84, ride 164) outscored the whole ride (0.76).
+    user_id: 2
+    date: 2026-11-05
+    forbid:
+      - line: Z30
+        board: Budapest-Kelenföld
+        alight: Kápolnásnyék
+    expect:
+      - line: '9796'
+        board: Budapest-Kelenföld
+        alight: Székesfehérvár
+        from: '17:19'
+        to: '17:56'
+        tolerance_min: 6
