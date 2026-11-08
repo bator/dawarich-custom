@@ -1,6 +1,6 @@
 --- a/Gemfile.lock
 +++ b/Gemfile.lock
-@@ -737,6 +737,7 @@
+@@ -746,6 +746,7 @@
    capybara
    cgi
    chartkick

@@ -1,6 +1,6 @@
 --- a/app/javascript/controllers/maps/maplibre/settings_manager.js
 +++ b/app/javascript/controllers/maps/maplibre/settings_manager.js
-@@ -73,6 +73,9 @@
+@@ -76,6 +76,9 @@
        familyToggle: "familyEnabled",
        tracksToggle: "tracksEnabled",
        flightsToggle: "flightsEnabled",
@@ -10,7 +10,7 @@
        anomaliesToggle: "anomaliesEnabled",
      }
  
-@@ -101,6 +104,11 @@
+@@ -102,6 +105,11 @@
        }
      })
  

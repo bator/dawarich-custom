@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { formatNumber, formatTime, translate } from "i18n"
 import { deletePlace } from "maps_maplibre/components/place_actions"
+import { RangeStatistics } from "maps_maplibre/components/range_statistics"
 import { Toast } from "maps_maplibre/components/toast"
 import { PlacePanelBridge } from "maps_maplibre/editing/place_panel_bridge"
 import { ReplayPanel } from "maps_maplibre/managers/replay_panel"
@@ -43,11 +44,15 @@ export default class extends Controller {
     endDate: String,
     timezone: String,
     userPlan: { type: String, default: "pro" },
+    gatedLayers: { type: Array, default: [] },
     dataWindowStart: { type: String, default: "" },
     upgradeUrl: { type: String, default: "" },
     importId: { type: String, default: "" },
     privacyZonesFingerprint: { type: String, default: "" },
     currentPosition: Object,
+    explorationBounds: Array,
+    explorationSnapshot: String,
+    explorationMessages: Object,
   }
 
   static targets = [
@@ -165,12 +170,12 @@ export default class extends Controller {
     // Initialize API and settings
     SettingsManager.initialize(this.apiKeyValue)
     this.settingsController = new SettingsController(this)
-    await this.settingsController.loadSettings()
-    this.settings = this.settingsController.settings
-    this.settings.timezone = this.timezoneValue
+    await this.loadViewSettings()
 
     // Sync toggle states with loaded settings
     this.settingsController.syncToggleStates()
+    if (this.hasExplorationBoundsValue && this.hasFogToggleTarget)
+      this.fogToggleTarget.checked = true
 
     await this.initializeMap()
     // initializeMap bails without setting this.map if the controller
@@ -341,14 +346,23 @@ export default class extends Controller {
       })
     }
 
-    this.loadMapData().then(() => {
-      if (this.settings?.familyEnabled) {
-        this.loadFamilyMembers()
-      }
-      if (anomaliesVisible(SettingsManager.getSettings())) {
-        this.layerVisibilityManager.refreshAnomalies({ enabled: true })
-      }
-    })
+    this.loadMapData({ fitBounds: !this.hasExplorationBoundsValue }).then(
+      () => {
+        if (this.hasExplorationBoundsValue) {
+          this.map.fitBounds(this.explorationBoundsValue, {
+            padding: 70,
+            maxZoom: 13,
+            duration: 0,
+          })
+        }
+        if (this.settings?.familyEnabled) {
+          this.loadFamilyMembers()
+        }
+        if (anomaliesVisible(SettingsManager.getSettings())) {
+          this.layerVisibilityManager.refreshAnomalies({ enabled: true })
+        }
+      },
+    )
 
     // Show family members list immediately (doesn't depend on layer)
     if (this.settings?.familyEnabled && this.hasFamilyMembersListTarget) {
@@ -358,6 +372,7 @@ export default class extends Controller {
 
   disconnect() {
     this._disconnected = true
+    this.rangeStatistics?.destroy()
     if (this._familyHistoryTimer) clearTimeout(this._familyHistoryTimer)
     this.placePanel?.destroy()
     this.replayPanel?.destroy()
@@ -395,6 +410,16 @@ export default class extends Controller {
   /**
    * Initialize MapLibre map
    */
+  async loadViewSettings() {
+    await this.settingsController.loadSettings()
+    // A city card opens the map with fog on for this view only; the copy
+    // keeps the forced layer out of the stored settings.
+    this.settings = this.hasExplorationBoundsValue
+      ? { ...this.settingsController.settings, fogEnabled: true }
+      : this.settingsController.settings
+    this.settings.timezone = this.timezoneValue
+  }
+
   async initializeMap() {
     syncSidebarLayout(this.settingsPanelTarget, this.containerTarget, true)
     // Reopen at the user's last viewport instead of the zoomed-out globe.
@@ -445,6 +470,11 @@ export default class extends Controller {
    */
   initializeAPI() {
     this.api = new ApiClient(this.apiKeyValue, this.importIdValue || null)
+    const statistics = this.element.querySelector(
+      '[data-testid="map-range-statistics"]',
+    )
+    if (statistics)
+      this.rangeStatistics = new RangeStatistics(statistics, this.api)
   }
 
   /**
@@ -469,6 +499,8 @@ export default class extends Controller {
    * Load map data from API
    */
   async loadMapData(options = {}) {
+    this.rangeStatistics?.setUnit(this.settings?.distance_unit || "km")
+    this.rangeStatistics?.load(this.startDateValue, this.endDateValue)
     return this.mapDataManager.loadMapData(
       this.startDateValue,
       this.endDateValue,
@@ -668,6 +700,15 @@ export default class extends Controller {
   toggleSettings() {
     if (this.hasSettingsPanelTarget) {
       const isOpening = !this.settingsPanelTarget.classList.contains("open")
+      if (isOpening) {
+        this.settingsPanelTrigger = document.activeElement
+      } else if (this.settingsPanelTarget.contains(document.activeElement)) {
+        const trigger = this.settingsPanelTrigger?.isConnected
+          ? this.settingsPanelTrigger
+          : document.querySelector('[data-testid="map-button-timeline"]')
+        trigger?.focus()
+      }
+      this.settingsPanelTarget.inert = !isOpening
       this.settingsPanelTarget.classList.toggle("open")
 
       // Shrink/expand map container
@@ -1746,6 +1787,21 @@ export default class extends Controller {
       Toast.success(translate("messages.point_deleted_successfully"))
     } catch (_error) {
       Toast.error(translate("messages.failed_to_delete_point"))
+    }
+  }
+
+  /** Mark an anomaly as correct, then reload anomalies, points and tracks. */
+  async markPointValid(event) {
+    try {
+      await this.api.markPointValid(event.currentTarget.dataset.id)
+      this.mapDataManager?.invalidatePoints()
+      this.layerManager.getLayer("points-mvt")?.refresh()
+      this.layerManager.getLayer("tracks-mvt")?.refresh()
+      this.layerVisibilityManager.refreshAnomalies({ enabled: true })
+      this.closeInfo()
+      Toast.success(translate("messages.point_marked_valid"))
+    } catch (_error) {
+      Toast.error(translate("messages.failed_to_mark_point_valid"))
     }
   }
 

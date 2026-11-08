@@ -10,6 +10,7 @@
     panel element. %>
 <% timeline_panel_open = params[:panel] == 'timeline' %>
 <div id="map-settings-panel"
+     <%= "inert" unless timeline_panel_open %>
      data-turbo-permanent
      class="map-control-panel<%= ' open timeline-expanded' if timeline_panel_open %>"
      data-maps--maplibre-target="settingsPanel"
@@ -120,26 +121,8 @@
 
           <div class="layer-options__group" data-layer-options="fog">
             <span class="layer-options__label"><%= t('.fog_of_war') %></span>
-            <div class="flex flex-wrap gap-4">
-              <label class="label cursor-pointer gap-2 py-0">
-                <input type="radio"
-                       name="fogOfWarMode"
-                       value="points"
-                       class="radio radio-sm"
-                       <%= 'checked' if current_user.safe_settings.fog_of_war_mode == 'points' %>
-                       data-action="change->maps--maplibre#updateFogMode" />
-                <span class="label-text text-sm"><%= t('.per_point') %></span>
-              </label>
-              <label class="label cursor-pointer gap-2 py-0">
-                <input type="radio"
-                       name="fogOfWarMode"
-                       value="hexagons"
-                       class="radio radio-sm"
-                       <%= 'checked' if current_user.safe_settings.fog_of_war_mode == 'hexagons' %>
-                       data-action="change->maps--maplibre#updateFogMode" />
-                <span class="label-text text-sm"><%= t('.per_hexagon') %></span>
-              </label>
-            </div>
+            <p class="text-sm"><%= t('achievements.collections.fog_rules') %></p>
+            <input type="hidden" name="fogOfWarMode" value="hexagons" />
           </div>
 
           <% if Gtfs::UserSettings.new(current_user).enabled? %>
@@ -231,7 +214,7 @@
                        value="untagged"
                        class="checkbox checkbox-xs hidden peer"
                        data-action="change->maps--maplibre#filterPlacesByTags">
-                <span class="badge badge-sm badge-outline transition-all peer-checked:scale-105"
+                <span class="badge badge-sm badge-outline transition-colors"
                       style="border-color: #94a3b8; color: #94a3b8;"
                       data-checked-style="background-color: #94a3b8; color: white;">
                   <%= t('.untagged') %>
@@ -245,7 +228,7 @@
                          value="<%= tag.id %>"
                          class="checkbox checkbox-xs hidden peer"
                          data-action="change->maps--maplibre#filterPlacesByTags">
-                  <span class="badge badge-sm badge-outline transition-all peer-checked:scale-105"
+                  <span class="badge badge-sm badge-outline transition-colors"
                         style="border-color: <%= tag.color %>; color: <%= tag.color %>;"
                         data-checked-style="background-color: <%= tag.color %>; color: white;">
                     <%= tag.icon %> #<%= tag.name %>
@@ -331,7 +314,7 @@
                     <div class="grid grid-cols-6 gap-1.5 mt-1">
                       <% Array(@poster_themes).each do |theme| %>
                         <button type="button"
-                                class="w-full overflow-hidden rounded-md border border-base-300 ring-primary ring-offset-base-100 transition hover:scale-105 focus:outline-none focus-visible:ring-2"
+                                class="w-full overflow-hidden rounded-md border border-base-300 ring-primary ring-offset-base-100 transition-colors hover:border-base-content/40 focus:outline-none focus-visible:ring-2"
                                 style="height: 32px; background-image: url('<%= asset_path("poster_themes/#{theme['key']}.webp") %>'); background-size: cover; background-position: center;"
                                 title="<%= theme['name'] %>"
                                 aria-label="<%= t('.theme_aria_label', theme: theme['name']) %>"
@@ -416,7 +399,7 @@
                       data-action="click->speed-color-editor#open"><%= t('.edit_speed_colors') %></button>
               <dialog class="modal" data-speed-color-editor-target="modal" aria-labelledby="track-speed-color-title">
                 <div class="modal-box">
-                  <h3 id="track-speed-color-title" class="font-bold text-lg"><%= t('javascript.speed_gradient.title') %></h3>
+                  <h3 id="track-speed-color-title" class="font-medium text-lg"><%= t('javascript.speed_gradient.title') %></h3>
                   <p class="label"><%= t('javascript.speed_gradient.color_stops') %></p>
                   <div class="space-y-2" data-speed-color-editor-target="stopsList"></div>
                   <button type="button" class="btn btn-sm btn-ghost mt-2"
@@ -621,6 +604,16 @@
                 <p class="text-xs text-base-content/60 mt-1"><%= t('.track_split_time_hint') %></p>
               </div>
 
+              <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-3">
+                  <input type="checkbox"
+                         name="splitTracksAtMidnight"
+                         class="toggle toggle-primary" />
+                  <span class="label-text font-medium"><%= t('.split_tracks_at_midnight') %></span>
+                </label>
+                <p class="text-xs text-base-content/60 mt-1"><%= t('.split_tracks_at_midnight_hint') %></p>
+              </div>
+
               <button type="button"
                       class="btn btn-sm btn-outline btn-block"
                       data-action="click->maps--maplibre#recalculateUserData">
@@ -640,48 +633,7 @@
               </span>
             </summary>
             <div class="collapse-content space-y-4">
-          <!-- Fog of War Settings -->
-          <div class="form-control w-full">
-            <label class="label">
-              <span class="label-text font-medium"><%= t('.fog_of_war_radius') %></span>
-              <span class="label-text-alt" data-maps--maplibre-target="fogRadiusValue"><%= t('units.meters_compact', value: 1000) %></span>
-            </label>
-            <input type="range"
-                   name="fogOfWarRadius"
-                   min="5"
-                   max="2000"
-                   step="5"
-                   value="1000"
-                   class="range range-sm"
-                   data-action="input->maps--maplibre#updateFogRadiusDisplay" />
-            <div class="w-full flex justify-between text-xs px-2 mt-1">
-              <span><%= t('units.meters_compact', value: 5) %></span>
-              <span><%= t('units.meters_compact', value: 1000) %></span>
-              <span><%= t('units.meters_compact', value: 2000) %></span>
-            </div>
-            <p class="text-xs text-base-content/60 mt-1"><%= t('.clear_radius_around_visited_points') %></p>
-          </div>
-
-          <div class="form-control w-full">
-            <label class="label">
-              <span class="label-text font-medium"><%= t('.fog_of_war_threshold') %></span>
-              <span class="label-text-alt" data-maps--maplibre-target="fogThresholdValue">1</span>
-            </label>
-            <input type="range"
-                   name="fogOfWarThreshold"
-                   min="1"
-                   max="10"
-                   step="1"
-                   value="1"
-                   class="range range-sm"
-                   data-action="input->maps--maplibre#updateFogThresholdDisplay" />
-            <div class="w-full flex justify-between text-xs px-2 mt-1">
-              <span>1</span>
-              <span>5</span>
-              <span>10</span>
-            </div>
-            <p class="text-xs text-base-content/60 mt-1"><%= t('.minimum_points_to_clear_fog') %></p>
-          </div>
+              <p class="text-sm"><%= t('achievements.collections.fog_rules') %></p>
             </div>
           </details>
 

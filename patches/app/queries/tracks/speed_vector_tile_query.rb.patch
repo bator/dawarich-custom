@@ -17,5 +17,5 @@
 +  end
 +
    def point_scope_sql
-     @points_scope.except(:select, :order, :includes, :preload, :eager_load)
+     @points_scope.route_observations.except(:select, :order, :includes, :preload, :eager_load)
                   .where.not(lonlat: nil)

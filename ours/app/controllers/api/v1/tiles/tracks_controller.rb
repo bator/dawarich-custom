@@ -13,12 +13,8 @@ class Api::V1::Tiles::TracksController < ApiController
   private
 
   def tile_schema_version
-    [TILE_SCHEMA_VERSION, speed_coloring?, privacy_zone_masker.fingerprint,
+    [TILE_SCHEMA_VERSION, speed_coloring?, map_read_masker.fingerprint,
      *([CUTOUTS_VERSION, cutouts.kinds] if cutouts)]
-  end
-
-  def tile_privacy_masker
-    @tile_privacy_masker ||= privacy_zone_masker.near_tile(params[:z], params[:x], params[:y])
   end
 
   def tile_epoch_component

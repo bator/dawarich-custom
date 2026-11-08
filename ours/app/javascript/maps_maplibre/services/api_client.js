@@ -67,15 +67,16 @@ export class ApiClient {
   }
 
   /**
-   * Fetch precalculated fog-of-war H3 cell ids for date range
+   * Fetch all-history H3 openings; the date range only highlights first discoveries
    * @param {Object} options - { start_at, end_at }
    * @returns {Promise<Object>} { h3_indexes, metadata }
    */
-  async fetchFogHexagons({ start_at, end_at }) {
+  async fetchFogHexagons({ start_at, end_at, snapshot_id }) {
     const params = new URLSearchParams({
       start_date: start_at,
       end_date: end_at,
     })
+    if (snapshot_id) params.set("snapshot_id", snapshot_id)
     maskPrivacyZones(params)
 
     const response = await fetch(
@@ -89,6 +90,19 @@ export class ApiClient {
       throw new Error(`Failed to fetch fog hexagons: ${response.statusText}`)
     }
 
+    return response.json()
+  }
+
+  async fetchRangeStatistics({ start_at, end_at, signal }) {
+    const params = new URLSearchParams({ start_at, end_at })
+    maskPrivacyZones(params)
+    if (this.importId) params.set("import_id", this.importId)
+    const response = await fetch(`${this.baseURL}/maps/statistics?${params}`, {
+      headers: this.getHeaders(),
+      signal,
+    })
+    if (!response.ok)
+      throw new Error(`Failed to fetch statistics: ${response.status}`)
     return response.json()
   }
 
@@ -719,6 +733,20 @@ export class ApiClient {
     return response.json()
   }
 
+  /** Clear a point's anomaly flag and keep the filter from setting it again. */
+  async markPointValid(pointId) {
+    const response = await fetch(
+      `${this.baseURL}/points/${pointId}/mark_valid`,
+      { method: "PATCH", headers: this.getHeaders() },
+    )
+
+    if (!response.ok) {
+      throw new Error(`Failed to mark point as correct: ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+
   /**
    * Bulk delete points
    * @param {Array<number>} pointIds - Array of point IDs to delete
@@ -1008,13 +1036,11 @@ export class ApiClient {
     const params = new URLSearchParams()
     if (start_at) params.set("start_at", start_at)
     if (end_at) params.set("end_at", end_at)
+    maskPrivacyZones(params)
 
-    const query = params.toString()
-    const url = query
-      ? `${this.baseURL}/flights?${query}`
-      : `${this.baseURL}/flights`
-
-    const response = await fetch(url, { headers: this.getHeaders() })
+    const response = await fetch(`${this.baseURL}/flights?${params}`, {
+      headers: this.getHeaders(),
+    })
 
     if (!response.ok) {
       throw new Error(`Failed to fetch flights: ${response.statusText}`)

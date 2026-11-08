@@ -13,9 +13,9 @@
 +  HIDE_MIN_ZOOM = 8
  
    # rubocop:disable Naming/MethodParameterName
-   def initialize(scope:, z:, x:, y:, clip_points_scope: nil, clip_import_id: nil,
--                 clip_start_at: nil, clip_end_at: nil, privacy_zone_masker: nil)
-+                 clip_start_at: nil, clip_end_at: nil, privacy_zone_masker: nil, hide_ranges_sql: nil)
+   def initialize(scope:, z:, x:, y:, privacy_zone_masker:, clip_points_scope: nil, clip_import_id: nil,
+-                 clip_start_at: nil, clip_end_at: nil)
++                 clip_start_at: nil, clip_end_at: nil, hide_ranges_sql: nil)
      @scope = scope
      @privacy_zone_masker = privacy_zone_masker
 +    @hide_ranges_sql = hide_ranges_sql

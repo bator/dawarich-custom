@@ -1,6 +1,6 @@
 --- a/app/views/map/maplibre/_settings_panel.html.erb
 +++ b/app/views/map/maplibre/_settings_panel.html.erb
-@@ -60,6 +60,8 @@
+@@ -61,6 +61,8 @@
          </div>
        </div>
  
@@ -9,8 +9,8 @@
        <!-- Layers Tab -->
        <div class="tab-content<%= ' active' unless timeline_panel_open %>" data-tab-content="layers" data-map-panel-target="tabContent">
          <div class="layer-tiles">
-@@ -140,6 +142,52 @@
-             </div>
+@@ -123,6 +125,52 @@
+             <input type="hidden" name="fogOfWarMode" value="hexagons" />
            </div>
  
 +          <% if Gtfs::UserSettings.new(current_user).enabled? %>

@@ -162,7 +162,7 @@ Rails.application.routes.draw do
     end
   end
   resources :areas, only: %i[create update]
-  resources :places, only: %i[index show destroy create update] do
+  resources :places, only: %i[index show new edit destroy create update] do
     member do
       patch :confirm
       post :merge
@@ -193,7 +193,7 @@ Rails.application.routes.draw do
 
   namespace :share_links do
     resource :hub, only: :show, controller: 'hubs'
-    resources :shares, only: [] do
+    resources :shares, only: %i[edit update] do
       member { patch :revoke }
     end
     resource :timeline, only: %i[new create destroy], controller: 'timelines' do
@@ -251,6 +251,16 @@ Rails.application.routes.draw do
   post 'achievements/unlocks/next', to: 'achievements/unlocks#next', as: :next_achievement_unlock
   post 'achievements/unlocks/:id/seen', to: 'achievements/unlocks#seen', as: :seen_achievement_unlock
   post 'achievements/unlocks/dismiss', to: 'achievements/unlocks#dismiss', as: :dismiss_achievement_unlocks
+  resources :achievement_selections, path: 'achievements/places', controller: 'achievements/selections',
+                                    only: %i[create update destroy]
+  resources :achievement_cities, path: 'achievements/cities', controller: 'achievements/cities',
+                                only: %i[create update destroy]
+  resources :achievement_cards, path: 'achievements/cards', controller: 'achievements/collectibles',
+                               only: %i[index show] do
+    member { patch :toggle_sharing }
+  end
+  get 'shared/achievement_cards/:uuid/og.png', to: 'shared/collectibles#image', as: :shared_collectible_image
+  get 'shared/achievement_cards/:uuid', to: 'shared/collectibles#show', as: :shared_collectible
   resources :achievements, only: %i[index show], param: :key do
     member do
       patch :toggle_sharing
@@ -347,6 +357,7 @@ Rails.application.routes.draw do
       get   'ready', to: 'health#ready'
       patch 'settings', to: 'settings#update'
       get   'settings', to: 'settings#index'
+      delete 'settings/appearance', to: 'settings#reset_appearance'
       get   'settings/transportation_recalculation_status', to: 'settings#transportation_recalculation_status'
       get   'settings/mobile', to: 'settings/mobile#show'
       patch 'settings/mobile', to: 'settings/mobile#update'
@@ -388,6 +399,7 @@ Rails.application.routes.draw do
       end
       resources :points, only: %i[index create update destroy] do
         resource :position, only: :update, controller: 'points/positions'
+        patch :mark_valid, on: :member
         collection do
           delete :bulk_destroy
           post :reapply_anomaly_filter
@@ -438,6 +450,8 @@ Rails.application.routes.draw do
         resources :visited, only: :index
         resources :visited_cities, only: :index
       end
+
+      get 'maps/statistics', to: 'maps/statistics#index'
 
       namespace :points do
         get 'tracked_months', to: 'tracked_months#index'

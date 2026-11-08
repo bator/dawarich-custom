@@ -1,6 +1,6 @@
 --- a/app/javascript/controllers/maps/maplibre_controller.js
 +++ b/app/javascript/controllers/maps/maplibre_controller.js
-@@ -83,6 +83,10 @@
+@@ -88,6 +88,10 @@
      "anomaliesToggle",
      "familyToggle",
      "flightsToggle",
@@ -11,7 +11,7 @@
      "tracksToggle",
      // Globe projection
      "globeToggle",
-@@ -1344,6 +1348,22 @@
+@@ -1385,6 +1389,22 @@
    toggleFlights(event) {
      return this.layerVisibilityManager.toggleFlights(event)
    }

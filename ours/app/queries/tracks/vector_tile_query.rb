@@ -40,8 +40,8 @@ class Tracks::VectorTileQuery
   HIDE_MIN_ZOOM = 8
 
   # rubocop:disable Naming/MethodParameterName
-  def initialize(scope:, z:, x:, y:, clip_points_scope: nil, clip_import_id: nil,
-                 clip_start_at: nil, clip_end_at: nil, privacy_zone_masker: nil, hide_ranges_sql: nil)
+  def initialize(scope:, z:, x:, y:, privacy_zone_masker:, clip_points_scope: nil, clip_import_id: nil,
+                 clip_start_at: nil, clip_end_at: nil, hide_ranges_sql: nil)
     @scope = scope
     @privacy_zone_masker = privacy_zone_masker
     @hide_ranges_sql = hide_ranges_sql
@@ -256,7 +256,7 @@ class Tracks::VectorTileQuery
   end
 
   def privacy_clip(geometry)
-    return geometry unless @privacy_zone_masker&.any?
+    return geometry unless @privacy_zone_masker.any?
 
     "(CASE WHEN #{@privacy_zone_masker.touches_sql(geometry)} " \
       "THEN #{@privacy_zone_masker.clip_sql(geometry)} ELSE #{geometry} END)"

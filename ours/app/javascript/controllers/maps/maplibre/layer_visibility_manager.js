@@ -35,6 +35,8 @@ export class LayerVisibilityManager {
     }
 
     const intercepted = gatedToggle({
+      layer: "Heatmap",
+      gatedLayers: this.controller.gatedLayersValue,
       layerName: "Heatmap",
       userPlan: this.controller.userPlanValue,
       toggle,
@@ -62,6 +64,8 @@ export class LayerVisibilityManager {
     const toggle = event.target
 
     const intercepted = gatedToggle({
+      layer: "Hexagons",
+      gatedLayers: this.controller.gatedLayersValue,
       layerName: "Hexagons",
       userPlan: this.controller.userPlanValue,
       toggle,
@@ -121,6 +125,8 @@ export class LayerVisibilityManager {
     }
 
     const intercepted = gatedToggle({
+      layer: "Fog of War",
+      gatedLayers: this.controller.gatedLayersValue,
       layerName: "Fog of War",
       userPlan: this.controller.userPlanValue,
       toggle,
@@ -196,6 +202,8 @@ export class LayerVisibilityManager {
     }
 
     const intercepted = gatedToggle({
+      layer: "Scratch map",
+      gatedLayers: this.controller.gatedLayersValue,
       layerName: translate("layers.scratch_map"),
       userPlan: this.controller.userPlanValue,
       toggle,
@@ -495,7 +503,7 @@ export class LayerVisibilityManager {
     this.layerManager
       .getLayer("tracks-mvt")
       ?.setEnabled(settings.tracksEnabled === true)
-    const fogTiled = (settings.fogOfWarMode || "points") !== "hexagons"
+    const fogTiled = false
     this.layerManager.getLayer("fog")?.setTiledSource(fogTiled)
     this.layerManager
       .getLayer("points-mvt")
