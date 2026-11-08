@@ -34,6 +34,7 @@ class Gtfs::SegmentMatcher
   ARRIVAL_LOOKAHEAD_SECS = 300
   ARRIVAL_LOOKAHEAD_STEP_M = 100 # try a later point only when it moved this far from the last try
   ARRIVAL_LOOKAHEAD_TRIES = 6
+  ARRIVAL_MAX_GAP_SECS = 1200 # one GPS gap this long (a metro underground) may lie in the lookahead
 
   attr_reader :feed_set
 
@@ -62,6 +63,7 @@ class Gtfs::SegmentMatcher
     matches = match_windows(windows, stats)
     matches = merge_same_trip(drop_overlaps(matches), points, windows, stats)
     matches = extend_into_next(matches, points, windows, stats)
+    matches = extend_arrivals(matches, stats)
     stats['matches'] = matches.size
     stats['ms'] = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
     Result.new(matches:, stats:)
@@ -217,10 +219,44 @@ class Gtfs::SegmentMatcher
     []
   end
 
+  # 2026-11-06 (M4): the ride ended at II. János Pál pápa tér, the last point of
+  # its window; the next fix, 145 s later, was at Keleti but in no window.
+  # 2026-11-07 (M4): from Keleti the window ended at Rákóczi tér, then 10 min
+  # without a fix underground, then fixes 370 m from the Kelenföld stop (metro
+  # radius 120 m), so the gap could not be joined. A matched ride is retried
+  # with the points after it; the furthest try that stays on the same line,
+  # alights at another stop and is accepted replaces it.
+  def extend_arrivals(matches, stats)
+    matches.map { |match| extend_arrival(match, matches, stats) || match }
+  end
+
+  def extend_arrival(match, matches, stats)
+    window = match.window
+    return if window.nil? || window.gap?
+
+    next_start = matches.reject { |m| m.equal?(match) }.map { |m| m.started_at.to_i }.select { |t| t > window.end_ts }.min
+    found = nil
+    arrival_tries(window, stop_ts: next_start).each do |extra|
+      longer = Gtfs::Matching::WindowDetector::Window.new(points: window.points + extra, kind: :moving,
+                                                          pauses: window.pauses, moving_start: window.moving_start,
+                                                          board_from_gap: window.board_from_gap,
+                                                          truncated: window.truncated,
+                                                          truncated_start: window.truncated_start,
+                                                          truncated_end: window.truncated_end, sparse: window.sparse)
+      best, alternatives = evaluate(longer, stats)
+      next unless best && best.confidence >= drop_below(best) && line_label(best) == line_label(match.score)
+      next if same_stop?(best.alight, match.score.alight) || best.ended_at.to_i <= match.ended_at.to_i
+
+      found = build_match(longer, best, alternatives)
+    end
+    stats['extended_arrivals'] += 1 if found
+    found
+  end
+
   # => growing lists of the points right after the window; a new list only when
   # the last point moved ARRIVAL_LOOKAHEAD_STEP_M from the previous try.
-  def arrival_tries(window)
-    following = @stream.select { |p| p.ts > window.end_ts && p.ts <= window.end_ts + ARRIVAL_LOOKAHEAD_SECS }
+  def arrival_tries(window, stop_ts: nil)
+    following = following_points(window.end_ts, stop_ts)
     anchor = window.points.last
     tries = []
     following.each_with_index do |point, index|
@@ -231,6 +267,34 @@ class Gtfs::SegmentMatcher
       break if tries.size >= ARRIVAL_LOOKAHEAD_TRIES
     end
     tries
+  end
+
+  # The points of the ARRIVAL_LOOKAHEAD_SECS after end_ts (before stop_ts). One
+  # GPS gap up to ARRIVAL_MAX_GAP_SECS is stepped over and does not count.
+  def following_points(end_ts, stop_ts)
+    start = @stream.bsearch_index { |p| p.ts > end_ts }
+    return [] unless start
+
+    out = []
+    budget = ARRIVAL_LOOKAHEAD_SECS
+    gap_used = false
+    prev = end_ts
+    @stream[start..].each do |point|
+      break if stop_ts && point.ts >= stop_ts
+
+      dt = point.ts - prev
+      if dt > ARRIVAL_LOOKAHEAD_SECS
+        break if gap_used || dt > ARRIVAL_MAX_GAP_SECS
+
+        gap_used = true
+      else
+        budget -= dt
+        break if budget.negative?
+      end
+      out << point
+      prev = point.ts
+    end
+    out
   end
 
   # The halves of a window (split at its longest pause) replace an uncertain

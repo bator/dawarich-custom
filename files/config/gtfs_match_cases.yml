@@ -103,3 +103,21 @@ cases:
         from: '07:40'
         to: '08:22'
         tolerance_min: 6
+  - id: metro-underground-to-kelenfold
+    note: >-
+      16 Pro, 2026-11-07: M4 from Keleti; no fix 17:36-17:46 underground, then
+      fixes 370 m from the Kelenföld stop (metro radius 120 m). The ride ended
+      at Rákóczi tér (ride 172). Skipped once the day's BKK timetable is gone.
+    user_id: 2
+    date: 2026-11-07
+    expect:
+      - line: M4
+        board: Keleti pályaudvar
+        alight: Kelenföld vasútállomás
+        from: '17:33'
+        to: '17:48'
+        tolerance_min: 6
+    forbid:
+      - line: M4
+        board: Keleti pályaudvar
+        alight: Rákóczi tér
