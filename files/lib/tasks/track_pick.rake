@@ -12,26 +12,26 @@ namespace :track_pick do
     end
     comparison = TrackPick::Comparison.new(date)
     puts comparison.to_text
-    target = TrackPick::Config.target_user
-    comparison.call.each do |s|
-      next if s.user.id == target.id
-
-      n = TrackPick::Copier.new(date, s.user, target).call(dry_run: true)
-      puts "  ha #{TrackPick::Config.handle(s.user)} lesz kiválasztva: #{n} új pont kerülne #{TrackPick::Config.handle(target)} fiókjába"
-    end
     rides = begin
       TrackPick::MapImage.rides(comparison)
     rescue StandardError => e
       warn "gtfs rides failed: #{e.class}: #{e.message}"
       []
     end
+    # the day in segments, each picked on its own (TrackPick::Segments, since 2026-11-08)
+    segments = TrackPick::Segments.new(comparison, rides)
+    segs = segments.call
+    if segs.empty?
+      puts 'no segment to pick (nobody moved): nothing posted'
+      next
+    end
     sheet = begin
-      TrackPick::MapImage.build_sheet(comparison, rides) # one image, one row per GTFS ride
+      TrackPick::MapImage.build_segment_sheet(comparison, segs) # one image, one row per segment
     rescue StandardError => e
       warn "map sheet failed: #{e.class}: #{e.message}"
       nil
     end
-    payload = TrackPick::Message.payload(comparison, sheet:, rides:)
+    payload = TrackPick::Message.segment_payload(comparison, segs, sheet:)
     if (decided = TrackPick::Config.decision(date))
       puts "#{TrackPick::Message.decided_line(decided)} -> no choice offered, nothing posted"
       next
@@ -40,6 +40,7 @@ namespace :track_pick do
       dir = ENV['TRACK_PICK_MAP_DIR'].presence || '/tmp'
       path = sheet && File.join(dir, TrackPick::Message.sheet_filename(date))
       File.binwrite(path, sheet) if path
+      File.write(File.join(dir, "track-pick-#{date.iso8601}-payload.json"), JSON.pretty_generate(payload))
       puts "DRY RUN: nothing sent, nothing written to the database (map sheet: #{path || 'none'})"
       puts payload[:embeds].first[:description]
       payload[:components].each do |row|
@@ -68,6 +69,7 @@ namespace :track_pick do
       next
     end
     begin
+      segments.save! # a click refers to a segment by its number
       files = TrackPick::Message.files(date, sheet)
       msg = Gtfs::Discord::Client.new.post_message(TrackPick::Config.channel_id, payload, files:)
       File.write(marker, "#{msg['id']}\n")

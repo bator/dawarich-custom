@@ -96,6 +96,47 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
     canvas.to_blob(color_mode: ChunkyPNG::COLOR_TRUECOLOR, compression: Zlib::BEST_COMPRESSION)
   end
 
+  # One row per TrackPick::Segments segment, top to bottom in the order of the list: each
+  # source's GPS in the segment's time (1-3) and, for a ride, the timetable line (A); a move
+  # has no timetable line, its last panel stays grey. Same bounding box within a row.
+  def self.build_segment_sheet(comparison, segments)
+    png = nil
+    PANELS.each do |w, h|
+      png = segment_sheet(comparison, segments, w, h)
+      return png if png.bytesize <= UPLOAD_LIMIT - UPLOAD_MARGIN
+
+      warn "track_pick: segment sheet at #{w}x#{h} panels is #{png.bytesize / 1024} KB, trying smaller"
+    end
+    png
+  end
+
+  def self.segment_sheet(comparison, segments, panel_w, panel_h)
+    stats = comparison.call.first(3)
+    with_line = segments.any? { |s| s.kind == :ride }
+    cols = stats.size + (with_line ? 1 : 0)
+    rows = [segments.size, 1].max
+    canvas = ChunkyPNG::Image.new((cols * panel_w) + ((cols + 1) * GUTTER), (rows * panel_h) + ((rows + 1) * GUTTER),
+                                  SHEET_BG)
+    with_size(panel_w, panel_h) do
+      segments.each_with_index do |seg, r|
+        top = GUTTER + (r * (panel_h + GUTTER))
+        line = seg.kind == :ride ? ride_line(seg.ride_segment) : nil
+        windows = stats.map { |s| s.times.zip(s.coords).select { |ts, _| ts.between?(seg.from, seg.to) }.map(&:last) }
+        bbox = bbox_of(windows.flatten(1) + (line ? line.coordinates : []))
+        stats.each_with_index do |_s, i|
+          png = windows[i].size >= 2 && bbox ? render_one(windows[i], i, bbox:) : nil
+          paste(canvas, png, GUTTER, top, panel_w, panel_h, (i + 1).to_s, color(i), col: i)
+        end
+        next unless with_line
+
+        gtfs = line && bbox && seg.gtfs ? render_line(seg.ride_segment, line, bbox) : nil
+        paste(canvas, gtfs, GUTTER, top, panel_w, panel_h, 'A', ChunkyPNG::Color.from_hex('#333333'),
+              col: stats.size)
+      end
+    end
+    canvas.to_blob(color_mode: ChunkyPNG::COLOR_TRUECOLOR, compression: Zlib::BEST_COMPRESSION)
+  end
+
   def self.color(index) = ChunkyPNG::Color.from_hex(TrackPick::Config::COLORS[index % 3])
 
   # [[min lon, min lat], [max lon, max lat]] or nil

@@ -51,6 +51,16 @@ class TrackPick::DiscordHandler
     return Plan.new(ephemeral('Ismeretlen választás.')) unless action
 
     case action[:kind]
+    when :seg_select
+      rows, line = TrackPick::Message.restate_segments(Array(interaction.dig('message', 'components')),
+                                                       date:, picks: action[:picks], note: action[:note])
+      Plan.new({ type: UPDATE_MESSAGE, data: { content: line, components: rows } })
+    when :seg_confirm
+      if action[:picks] != :recommended && action[:picks].empty?
+        return Plan.new(ephemeral('Előbb válassz szakaszt, vagy fogadd el az ajánlottat.'))
+      end
+
+      Plan.new({ type: DEFERRED_UPDATE_MESSAGE }, -> { work_segments(interaction, date, action[:picks], user) })
     when :select
       rows, line = TrackPick::Message.restate(Array(interaction.dig('message', 'components')),
                                               date:, day: action[:day], bp: action[:bp], picks: action[:picks],
@@ -79,6 +89,17 @@ class TrackPick::DiscordHandler
 
       value == 'skip' ? { kind: :skip } : { kind: :confirm, day: value, bp: 'same', picks: {} }
     when 'skip' then { kind: :skip }
+    when 'rec' then { kind: :seg_confirm, picks: :recommended } # segment pick (2026-11-08)
+    when /\As:([^:]+)\z/
+      return nil unless TrackPick::Message.decode_picks(Regexp.last_match(1))
+
+      chosen, conflict = TrackPick::Message.picks_from_values(values)
+      return { kind: :seg_select, picks: {}, note: 'Szakaszonként egy forrást válassz.' } if conflict
+
+      { kind: :seg_select, picks: chosen }
+    when /\Asok:([^:]+)\z/
+      picks = TrackPick::Message.decode_picks(Regexp.last_match(1)) or return nil
+      { kind: :seg_confirm, picks: }
     when /\A\d+\z/ then { kind: :confirm, day: rest, bp: 'same', picks: {} } # older per-user button
     when /\A(d|b|r|ok):([^:]+):([^:]+):([^:]+)\z/ # current: full state in every control
       action, day, bp, picks = Regexp.last_match.captures
@@ -159,6 +180,91 @@ class TrackPick::DiscordHandler
     Gtfs::Discord::Client.new.edit_message(interaction['channel_id'], interaction.dig('message', 'id'),
                                            TrackPick::Message.done_payload(text))
     {}
+  end
+
+  # --- segment pick (TrackPick::Segments, state/segments-<date>.json) ----------------------
+
+  Window = Struct.new(:started_at, :ended_at, keyword_init: true)
+
+  def work_segments(interaction, date, picks, user)
+    actor = (user['global_name'].presence || user['username'].presence || 'ismeretlen').to_s
+    target = TrackPick::Config.target_user
+    TrackPick::Config.with_decision_lock(date) { decide_segments(interaction, date, picks, actor, target) }
+  rescue StandardError => e
+    Rails.logger.error("[track_pick] #{e.class}: #{e.message}")
+    { error: "Nem sikerült (#{e.class.name.demodulize}); részletek a bot logjában." }
+  end
+
+  def decide_segments(interaction, date, picks, actor, target)
+    if (decided = TrackPick::Config.decision(date))
+      remove_menu(interaction, decided)
+      return { error: "Erre a napra már döntöttél: #{TrackPick::Config.decided_text(decided)}" }
+    end
+    saved = TrackPick::Segments.load(date) or return { error: 'Ehhez a naphoz nincs mentett szakaszlista.' }
+    by_index = saved.index_by { |s| s['index'].to_s }
+    if picks == :recommended
+      picks = saved.to_h { |s| [s['index'].to_s, s['recommended']] }
+                   .select { |_, src| TrackPick::Message.copies?(src) }
+    end
+    picks = picks.reject { |_, src| src == target.id.to_s } # the target's own points stay anyway
+    items = segment_items(date, picks, by_index) or return { error: 'Ismeretlen vagy nem használható szakasz.' }
+
+    inserted = items.empty? ? 0 : copy_segments(date, items, target)
+    label = items.empty? ? 'minden szakasz marad' : segment_label(items)
+    hidden = @hidden.to_i.positive? ? ", #{@hidden} saját pont elrejtve" : ''
+    text = "#{date}: #{label} → #{TrackPick::Config.handle(target)}, " \
+           "#{inserted.positive? ? "#{inserted} új pont" : 'nincs másolás'}#{hidden} (#{actor})."
+    TrackPick::Config.record_decision!(date, choice: label, user: actor, inserted:)
+    Rails.logger.info("[track_pick] #{text}")
+    $stdout.puts("[track_pick] #{text}")
+    Gtfs::Discord::Client.new.edit_message(interaction['channel_id'], interaction.dig('message', 'id'),
+                                           TrackPick::Message.done_payload(text))
+    {}
+  end
+
+  # [[window, user | :gtfs, transit segment | nil, saved segment], ...] in time order, or nil
+  def segment_items(date, picks, by_index)
+    users = TrackPick::Config.source_users.index_by { |u| u.id.to_s }
+    picks.map do |index, src|
+      saved = by_index[index.to_s] or return nil
+      window = Window.new(started_at: saved['from'].to_i, ended_at: saved['to'].to_i)
+      if src == 'g'
+        seg = saved['kind'] == 'ride' && TransitSegment.find_by(id: saved['segment_id'])
+        return nil unless seg && TrackPick::GtfsPoints.new(date, seg).usable?
+
+        [window, :gtfs, seg, saved]
+      else
+        (u = users[src]) ? [window, u, nil, saved] : (return nil)
+      end
+    end.sort_by { |window, *| window.started_at }
+  end
+
+  # The target's own points in every picked segment are hidden (TrackPick::Hider, nothing
+  # deleted), then the picked source's points of that time (or the timetable line) are copied.
+  def copy_segments(date, items, target)
+    hider = TrackPick::Hider.new(date, target)
+    hidden = []
+    inserted = ActiveRecord::Base.transaction do
+      hidden = hider.hide(items.map { |w, *| [w.started_at, w.ended_at] })
+      items.sum do |w, src, seg, _|
+        if src == :gtfs
+          TrackPick::GtfsPoints.new(date, seg, target).call
+        else
+          TrackPick::Copier.new(date, src, target, window: [w.started_at, w.ended_at]).call
+        end
+      end
+    end
+    hider.rebuild(hidden:, inserted:)
+    @hidden = hidden.size
+    inserted
+  end
+
+  def segment_label(items)
+    parts = items.map do |_, src, _, saved|
+      mark = TrackPick::Message::CIRCLED[saved['index'].to_i - 1]
+      "#{mark} #{src == :gtfs ? 'menetrendi vonal' : TrackPick::Config.handle(src)}"
+    end
+    "szakaszok: #{parts.join(', ')}"
   end
 
   # [[segment, user | :gtfs], ...] in time order, or nil when a pick is not a ride of that day

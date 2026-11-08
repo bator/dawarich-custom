@@ -153,6 +153,7 @@
     "app/services/track_pick/map_image.rb",
     "app/services/track_pick/message.rb",
     "app/services/track_pick/ride_line.rb",
+    "app/services/track_pick/segments.rb",
     "app/views/map/maplibre/_atlas_directions.html.erb",
     "app/views/settings/transit/show.html.erb",
     "app/views/shared/_transit_period_form.html.erb",
