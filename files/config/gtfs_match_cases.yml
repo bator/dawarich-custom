@@ -139,3 +139,17 @@ cases:
       - line: '9057'
         board: Székesfehérvár
         alight: Velence
+  - id: train-makes-up-delay-in-gap
+    note: >-
+      16 Pro, 2026-11-12: the IC 849 left Székesfehérvár 4 min late (07:41) and reached
+      Kelenföld 1.5 min late; only coarse fixes between Dinnyés and Kelenföld. The single
+      offset end timing rejected it and the morning had no ride (rail end timing in Scorer).
+    user_id: 2
+    date: 2026-11-12
+    expect:
+      - line: IC 849 TÓPART
+        board: Székesfehérvár
+        alight: Budapest-Kelenföld
+        from: '07:41'
+        to: '08:17'
+        tolerance_min: 6

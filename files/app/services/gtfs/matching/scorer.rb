@@ -587,8 +587,21 @@ class Gtfs::Matching::Scorer
     { score: time_value(error, delay), delay: }
   end
 
+  # A train also gets the rail timing below; the better of the two counts, so it can only
+  # rescue a ride, never lower one the single-offset timing already accepted.
   def endpoint_time_score
-    first_t = ride_start - @day_start
+    legacy = offset_endpoint_time_score
+    return legacy unless rail_endpoint_timing?
+
+    rail = offset_endpoint_time_score(rail: true)
+    return rail if legacy[:reason]
+    return legacy if rail[:reason]
+
+    rail[:score] > legacy[:score] ? rail : legacy
+  end
+
+  def offset_endpoint_time_score(rail: false)
+    first_t = (rail ? endpoint_start : ride_start) - @day_start
     last_t = ride_end - @day_start
     scheduled = @alight.arrival_secs - @board.departure_secs
     elapsed = last_t - first_t
@@ -600,12 +613,48 @@ class Gtfs::Matching::Scorer
     too_long = elapsed > scheduled + tolerance + slack
     return { reason: "elapsed #{elapsed}s does not fit scheduled #{scheduled}s" } if too_short || too_long
 
+    return rail_endpoint_time_score(first_t, last_t, elapsed, scheduled, tolerance) if rail
+
     endpoint_error = lambda do |offset|
       [(first_t - offset) - @board.departure_secs, 0].max + [@alight.arrival_secs - (last_t - offset), 0].max
     end
     delay, = best_offset { |offset| endpoint_error.call(offset) + fix_offset_error(offset) }
     { score: time_value(endpoint_error.call(delay), delay) * (1.0 - (0.5 * gap_excess(elapsed, scheduled, tolerance))),
       delay: }
+  end
+
+  # 2026-11-12: the IC 849 left Székesfehérvár 4 min late (07:41 for 07:37) and reached
+  # Kelenföld 1.5 min late; the fixes in between were too coarse, so only the two ends were
+  # timed. One offset for both ends cannot follow a train that makes up time, so the ride was
+  # rejected ("schedule does not fit") and the morning had no ride at all. A train is timed at
+  # its two ends like stop_passage_time_score: its own delay at each end, leaving early or
+  # arriving much too early costs, and so does making up more than DELAY_RECOVERY_SLACK.
+  def rail_endpoint_timing?
+    !@window.gap? && rail_trip?
+  end
+
+  def rail_endpoint_time_score(first_t, last_t, elapsed, scheduled, tolerance)
+    delays = [first_t - @board.departure_secs, last_t - @alight.arrival_secs]
+    # a fix standing at the stop before the timetable is waiting, not leaving early (user 7 sends
+    # one fix every ~4 min: 22:21 at Kelenföld for the 22:27 G44); only a confirmed departure counts
+    delays[0] = 0 if delays[0].negative? && !rail_departure_point(@board, Gtfs::Config::STOP_PASS_RADIUS_M)
+    return { reason: 'delay outside the tolerance' } if delays.any? { |d| d.abs > Gtfs::Config::TIME_TOLERANCE_SECS }
+
+    error = [-delays[0] - Gtfs::Config::EARLY_DEPARTURE_SLACK, 0].max +
+            [-delays[1] - Gtfs::Config::EARLY_ARRIVAL_SLACK, 0].max +
+            [delays[0] - delays[1] - Gtfs::Config::DELAY_RECOVERY_SLACK, 0].max
+    delay = delays.max_by(&:abs)
+    { score: time_value(error.fdiv(2), delay) * (1.0 - (0.5 * gap_excess(elapsed, scheduled, tolerance))),
+      delay: delay.round }
+  end
+
+  # The start of the timed ride: on a train the moment it left the boarding stop (the last fix
+  # standing there, see departure_ts), not a fix taken on the platform minutes before.
+  def endpoint_start
+    return ride_start unless rail_endpoint_timing?
+
+    departed = departure_ts(@board, Gtfs::Config::STOP_PASS_RADIUS_M)
+    departed && departed > ride_start ? departed : ride_start
   end
 
   def access_slack
