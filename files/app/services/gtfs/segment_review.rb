@@ -39,6 +39,7 @@ class Gtfs::SegmentReview
     if changed
       sync_discord(segment)
       Gtfs::TrackModesJob.perform_later(segment.user_id) # the track's mode follows the review
+      late_ride_line(segment) if action == 'confirm'
     end
     segment
   end
@@ -101,6 +102,12 @@ class Gtfs::SegmentReview
 
   # A change made on the web or through the API also updates the Discord
   # message of the ride (the Discord path edits it itself).
+  # a ride confirmed after its day's track pick gets its timetable line (TrackPick::LateRideLine)
+  def late_ride_line(segment)
+    date = Time.zone.at(segment.started_at).in_time_zone(TrackPick::Config.zone).to_date
+    TrackPick::LateRideLineJob.perform_later(segment.user_id, date.iso8601)
+  end
+
   def sync_discord(segment)
     return if @source == 'discord' || !Gtfs::Discord::Config.enabled?
 

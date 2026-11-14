@@ -82,6 +82,7 @@ class Gtfs::MatchUserDaysJob < ApplicationJob
     end
     Gtfs::Discord::NotifyJob.perform_later(user.id) if Gtfs::Discord::Config.enabled_for?(user)
     Gtfs::Discord::MessageCleanupJob.perform_later(user.id) if Gtfs::Discord::Config.enabled?
+    TrackPick::LateRideLineJob.perform_later(user.id, date.iso8601) # a ride after the day's pick
   rescue Gtfs::MatchDay::Busy => e
     return record_failure!(e) if busy_retries >= MAX_BUSY_RETRIES
 
