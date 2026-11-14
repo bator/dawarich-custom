@@ -121,3 +121,21 @@ cases:
       - line: M4
         board: Keleti pályaudvar
         alight: Rákóczi tér
+  - id: whole-window-before-halves-velence
+    note: >-
+      16 Pro, 2026-11-13: the window ran Székesfehérvár 07:44 - 08:22 but ended 500 m short
+      of the Kelenföld stop, so it had no candidate; its first half matched the 9057 to
+      Velence (ride 179). The late arrival is tried before the halves.
+    user_id: 2
+    date: 2026-11-13
+    expect:
+      - line: IC 849 TÓPART
+        board: Székesfehérvár
+        alight: Budapest-Kelenföld
+        from: '07:44'
+        to: '08:23'
+        tolerance_min: 6
+    forbid:
+      - line: '9057'
+        board: Székesfehérvár
+        alight: Velence

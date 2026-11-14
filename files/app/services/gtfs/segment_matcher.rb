@@ -186,14 +186,20 @@ class Gtfs::SegmentMatcher
     accepted = best && best.confidence >= drop_below(best)
     return [build_match(window, best, alternatives)] if accepted && best.confidence >= Gtfs::Config::AUTO_ACCEPT
 
+    # 2026-11-13: the whole window (Székesfehérvár 07:44 - 08:22) ended 500 m short of the
+    # Kelenföld stop and had no candidate; its first half matched the 9057 to Velence, so the
+    # late arrival below was never tried. A whole-window train ride comes before the halves.
+    unless accepted || depth.positive?
+      late = match_late_arrival(window, stats)
+      return late if late.any?
+    end
+
     halves = depth < Gtfs::Config::SPLIT_DEPTH ? split_matches(window, depth, stats) : []
     if use_halves?(halves, accepted ? best : nil)
       stats['split_windows'] += 1
       return halves
     end
-    return [build_match(window, best, alternatives)] if accepted
-
-    depth.zero? ? match_late_arrival(window, stats) : []
+    accepted ? [build_match(window, best, alternatives)] : []
   end
 
   # 2026-10-30: the 9057 stopped 660 m before the Kelenföld stop, 08:21-08:22,
