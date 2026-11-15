@@ -1,7 +1,7 @@
 --- a/app/models/user.rb
 +++ b/app/models/user.rb
-@@ -44,6 +44,7 @@
-   has_many :trip_sources, dependent: :destroy
+@@ -47,6 +47,7 @@
+   has_many :trip_detection_dismissals, dependent: :delete_all
    has_many :tracks, dependent: :destroy
    has_many :flights, dependent: :destroy
 +  has_many :transit_segments, dependent: :delete_all

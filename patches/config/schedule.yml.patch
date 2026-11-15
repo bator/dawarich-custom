@@ -1,6 +1,6 @@
 --- a/config/schedule.yml
 +++ b/config/schedule.yml
-@@ -149,6 +149,39 @@
+@@ -166,6 +166,39 @@
    queue: stats
    active_job: true
  

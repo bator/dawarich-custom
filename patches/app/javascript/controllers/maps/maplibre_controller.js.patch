@@ -1,6 +1,6 @@
 --- a/app/javascript/controllers/maps/maplibre_controller.js
 +++ b/app/javascript/controllers/maps/maplibre_controller.js
-@@ -88,6 +88,10 @@
+@@ -73,6 +73,10 @@
      "anomaliesToggle",
      "familyToggle",
      "flightsToggle",
@@ -9,28 +9,17 @@
 +    "walkLegsToggle",
 +    "corridorsToggle",
      "tracksToggle",
+     "notesToggle",
      // Globe projection
-     "globeToggle",
-@@ -1385,6 +1389,22 @@
-   toggleFlights(event) {
-     return this.layerVisibilityManager.toggleFlights(event)
-   }
-+
-+  toggleTransit(event) {
-+    return this.layerVisibilityManager.toggleTransit(event)
-+  }
-+
-+  changeTransitMode(event) {
-+    return this.layerVisibilityManager.changeTransitMode(event)
-+  }
-+
-+  toggleWalkLegs(event) {
-+    return this.layerVisibilityManager.toggleWalkLegs(event)
-+  }
-+
-+  toggleCorridors(event) {
-+    return this.layerVisibilityManager.toggleCorridors(event)
-+  }
-   toggleAnomalies(event) {
-     return this.layerVisibilityManager.toggleAnomalies(event)
-   }
+@@ -467,6 +471,11 @@
+     "toggleFlights",
+     "toggleAnomalies",
+     "toggleFamily",
++    // dawarich-custom: the transit layers (rides, walks, frequent routes)
++    "toggleTransit",
++    "changeTransitMode",
++    "toggleWalkLegs",
++    "toggleCorridors",
+   ],
+ }
+ 

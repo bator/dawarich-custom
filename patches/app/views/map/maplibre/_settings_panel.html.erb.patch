@@ -8,8 +8,8 @@
 +
        <!-- Layers Tab -->
        <div class="tab-content<%= ' active' unless timeline_panel_open %>" data-tab-content="layers" data-map-panel-target="tabContent">
-         <div class="layer-tiles">
-@@ -123,6 +125,52 @@
+         <% layer_tiles = [
+@@ -130,6 +132,52 @@
              <input type="hidden" name="fogOfWarMode" value="hexagons" />
            </div>
  

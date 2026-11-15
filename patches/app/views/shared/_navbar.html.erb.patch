@@ -1,6 +1,6 @@
 --- a/app/views/shared/_navbar.html.erb
 +++ b/app/views/shared/_navbar.html.erb
-@@ -11,6 +11,10 @@
+@@ -12,6 +12,10 @@
            class="menu menu-sm dropdown-content mt-3 z-[50] p-2 shadow bg-base-100 rounded-box w-52">
          <li><%= link_to t('.map'), preferred_map_path, class: "#{active_class?(preferred_map_path)}" %></li>
          <li><%= link_to t('.trips').html_safe, trips_url, class: "#{active_class?(trips_url)}" %></li>
@@ -11,7 +11,7 @@
          <li><%= link_to t('.insights_sup_sup_html').html_safe, insights_url, class: "#{active_class?(insights_url)}" %></li>
          <% if achievements_visible? %>
            <li><%= link_to t('achievements.ui.title'), achievements_path, class: "#{active_class?(achievements_path)}" %></li>
-@@ -76,6 +80,10 @@
+@@ -79,6 +83,10 @@
      <ul class="menu menu-horizontal px-1">
        <li><%= link_to t('.map'), preferred_map_path, class: "mx-1 #{active_class?(preferred_map_path)}" %></li>
        <li><%= link_to t('.trips').html_safe, trips_url, class: "mx-1 #{active_class?(trips_url)}" %></li>

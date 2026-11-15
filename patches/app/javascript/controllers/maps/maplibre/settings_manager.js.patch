@@ -1,24 +1,27 @@
 --- a/app/javascript/controllers/maps/maplibre/settings_manager.js
 +++ b/app/javascript/controllers/maps/maplibre/settings_manager.js
-@@ -76,6 +76,9 @@
-       familyToggle: "familyEnabled",
-       tracksToggle: "tracksEnabled",
-       flightsToggle: "flightsEnabled",
-+      transitToggle: "transitEnabled",
-+      walkLegsToggle: "walkLegsEnabled",
-+      corridorsToggle: "corridorsEnabled",
-       anomaliesToggle: "anomaliesEnabled",
-     }
- 
-@@ -102,6 +105,11 @@
-       }
-     })
- 
-+    if (controller.hasTransitModeSelectTarget) {
-+      controller.transitModeSelectTarget.value =
-+        this.settings.transitMode || "all"
-+    }
+@@ -54,6 +54,24 @@
+   /** Seed every settings form control from the loaded settings. */
+   syncToggleStates() {
+     syncSettingsForm(this)
++    this.syncTransitToggles()
++  }
 +
-     this.syncPointsEditAvailability()
++  // dawarich-custom: the transit layer toggles and the ride mode select
++  syncTransitToggles() {
++    const controller = this.controller
++    for (const [targetName, settingKey] of [
++      ["transitToggle", "transitEnabled"],
++      ["walkLegsToggle", "walkLegsEnabled"],
++      ["corridorsToggle", "corridorsEnabled"],
++    ]) {
++      const hasTarget = `has${targetName.charAt(0).toUpperCase()}${targetName.slice(1)}Target`
++      if (controller[hasTarget])
++        controller[`${targetName}Target`].checked = this.settings[settingKey]
++    }
++    if (controller.hasTransitModeSelectTarget) {
++      controller.transitModeSelectTarget.value = this.settings.transitMode || "all"
++    }
+   }
  
-     const speedToggle = controller.element.querySelector(
+   /**

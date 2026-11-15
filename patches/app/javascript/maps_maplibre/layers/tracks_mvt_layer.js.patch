@@ -1,17 +1,17 @@
 --- a/app/javascript/maps_maplibre/layers/tracks_mvt_layer.js
 +++ b/app/javascript/maps_maplibre/layers/tracks_mvt_layer.js
-@@ -34,6 +34,9 @@
+@@ -18,6 +18,9 @@
+     this.speedColoring = options.speedColoring === true
      this.speedColorScale = options.speedColorScale
-     this.onTileError = options.onTileError || null
      this.onEmptyTracks = options.onEmptyTracks || null
 +    // dawarich-custom: "walks" / "rides" the tiles cut out, as their layers
 +    // draw them (Gtfs::TrackCutouts, docs/atlas.md)
 +    this.hide = options.hide || []
-     this._tileUrl = null
-     this._tileErrorHandler = null
-     this._tileErrorReported = false
-@@ -247,6 +250,14 @@
-     this.setVisibility(wasVisible)
+     this._sourceDataHandler = null
+     this._emptyTracksReported = false
+   }
+@@ -144,7 +147,16 @@
+     this._rebuild({ startAt: this.startAt, endAt: this.endAt })
    }
  
 +  // dawarich-custom: the walks / rides layers were switched; the new tiles
@@ -22,14 +22,8 @@
 +    this.update({ startAt: this.startAt, endAt: this.endAt })
 +  }
 +
-   update(options = {}) {
-     const nextStartAt = options.startAt || null
-     const nextEndAt = options.endAt || null
-@@ -274,6 +285,7 @@
-     if (endAt) params.set("end_at", endAt)
-     if (this.importId) params.set("import_id", this.importId)
+   _appendTileParams(params) {
      if (this.speedColoring) params.set("speed_coloring", "true")
 +    if (this.hide.length) params.set("hide", this.hide.join(","))
-     // Never the raw api key: the Bearer header authenticates (transformRequest)
-     if (this.apiKey) params.set("u", trackCachePartitioner(this.apiKey))
- 
+   }
+ }

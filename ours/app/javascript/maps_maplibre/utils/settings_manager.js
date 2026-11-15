@@ -25,6 +25,7 @@ export const LAYER_NAME_MAP = {
   Places: "placesEnabled",
   "Place boundaries": "placeBoundariesEnabled",
   Anomalies: "anomaliesEnabled",
+  Notes: "notesEnabled",
 }
 
 const BOOLEAN_SETTINGS = [
@@ -37,6 +38,22 @@ const BOOLEAN_SETTINGS = [
   "liveMapEnabled",
   "tilesFallback",
 ]
+
+const INTEGER_SETTINGS_ON_SAVE = new Set([
+  "fogOfWarRadius",
+  "fogOfWarThreshold",
+  "metersBetweenRoutes",
+  "minutesBetweenRoutes",
+  "minMinutesSpentInCity",
+])
+
+const BOOLEAN_SETTINGS_ON_SAVE = new Set([
+  "globeProjection",
+  "speedColoredRoutes",
+  "liveMapEnabled",
+  "pointDraggingEnabled",
+  "splitTracksAtMidnight",
+])
 
 export const BACKEND_SETTINGS_MAP = {
   mapStyle: "maps_maplibre_style",
@@ -205,10 +222,10 @@ export class SettingsManager {
     const expandedSettings =
       SettingsManager._expandLayerSettings(frontendSettings)
 
-    SettingsManager.cachedSettings = expandedSettings
+    SettingsManager.updateCache(expandedSettings)
     SettingsManager.loaded = true
 
-    return expandedSettings
+    return SettingsManager.cachedSettings
   }
 
   /**
@@ -216,7 +233,12 @@ export class SettingsManager {
    * @param {Object} settings - Settings object
    */
   static updateCache(settings) {
-    SettingsManager.cachedSettings = { ...settings }
+    // In place: controllers hold on to the object sync() returned.
+    if (SettingsManager.cachedSettings) {
+      Object.assign(SettingsManager.cachedSettings, settings)
+    } else {
+      SettingsManager.cachedSettings = { ...settings }
+    }
   }
 
   /**
@@ -241,25 +263,9 @@ export class SettingsManager {
           if (frontendKey in settings) {
             let value = settings[frontendKey]
 
-            if (
-              frontendKey === "fogOfWarRadius" ||
-              frontendKey === "fogOfWarThreshold" ||
-              frontendKey === "metersBetweenRoutes" ||
-              frontendKey === "minutesBetweenRoutes" ||
-              frontendKey === "minMinutesSpentInCity"
-            ) {
+            if (INTEGER_SETTINGS_ON_SAVE.has(frontendKey)) {
               value = parseInt(value, 10).toString()
-            } else if (
-              frontendKey === "globeProjection" ||
-              frontendKey === "speedColoredRoutes"
-            ) {
-              value = Boolean(value)
-            } else if (frontendKey === "liveMapEnabled") {
-              value = Boolean(value)
-            } else if (
-              frontendKey === "pointDraggingEnabled" ||
-              frontendKey === "splitTracksAtMidnight"
-            ) {
+            } else if (BOOLEAN_SETTINGS_ON_SAVE.has(frontendKey)) {
               value = Boolean(value)
             }
 
@@ -292,13 +298,7 @@ export class SettingsManager {
         body: JSON.stringify({ settings: backendSettings }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        return data
-      }
-
-      return data
+      return await response.json()
     } catch (error) {
       console.error("[Settings] Failed to save to backend:", error)
       return null
