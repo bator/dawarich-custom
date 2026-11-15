@@ -28,7 +28,7 @@ It matches recorded location history against Hungarian public-transport timetabl
 </tr>
 </table>
 
-Also: **Settings** (opt-in, feeds, minimum confidence, rematch the whole history), transit layers on `/map/v2`,
+Also: **Settings → Public transit** (opt-in, feeds, minimum confidence, rematch the whole history; after Data processing), transit layers on `/map/v2`,
 **Frequent routes** (the middle line of walks and rides made many times, a map layer, and snapping new tracks onto it;
 [docs/corridors.md](docs/corridors.md)), **Directions** on `/map/v2` by car, bike, on foot and by public transport through a
 self-hosted [Dawarich Atlas](docs/atlas.md), and `track_pick`, a daily Discord pick of which user's track to copy onto the target account.
@@ -42,9 +42,10 @@ self-hosted [Dawarich Atlas](docs/atlas.md), and `track_pick`, a daily Discord p
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/bator/dawarich-custom/main/install/proxmox.sh)"
   ```
 
-- **Docker**: an image built on top of the official Dawarich image
+- **Docker**: an image built from the official Dawarich image
   ([`freikin/dawarich`](https://hub.docker.com/r/freikin/dawarich) on Docker Hub, built from
-  [Freika/dawarich](https://github.com/Freika/dawarich)), with the Discord bot as its own container
+  [Freika/dawarich](https://github.com/Freika/dawarich)): gems and assets are rebuilt with the custom code in a
+  build stage, and the final image is the upstream runtime image without build tools. The Discord bot runs as its own container
   ([docs/docker.md](docs/docker.md)).
 
 ## How it survives upgrades

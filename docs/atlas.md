@@ -120,7 +120,8 @@ ones.
 
 ## Points worse than the accuracy threshold
 
-Since 1.19.0 Dawarich does this itself again: map settings → GPS Noise Filtering → "Hide inaccurate
+Since 1.19.0 Dawarich does this itself again: Settings → Data processing (the map settings panel
+before 1.23.0) → GPS Noise Filtering → "Hide inaccurate
 points" (`gps_accuracy_filter_enabled`, threshold `gps_accuracy_threshold`, 50–1000 m), then "Apply
 Settings" and "Re-evaluate past data" for the history (`Points::AnomalyBackfillUserJob` with
 `reset: true`, which rebuilds all tracks and stats). Hand-set modes come back through

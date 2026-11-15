@@ -59,7 +59,9 @@ as for any Dawarich install, then build and start:
 docker compose -f docker-compose.yml -f docker-compose.transit.yml up -d --build
 ```
 
-The first build takes a few minutes (gems, `npm ci`, asset compilation). The web container runs
+The first build takes a few minutes (gems, `npm ci`, asset compilation). Since 1.23.0 the upstream
+image has no compilers, git or npm, so these run in a build stage with the build tools added; the
+final image is the upstream runtime image with the built app (about 2.7 GB, no build tools). The web container runs
 the migrations on start, as upstream does. On an empty database Rails loads upstream's
 `db/schema.rb` first, which marks our older migrations as done without creating our tables;
 `lib/tasks/gtfs_schema.rake` unmarks them right after the schema load, so the same run creates
@@ -170,6 +172,10 @@ LXC install, see the README).
   as for any Dawarich install.
 
 ## Tested
+
+2026-11-15: `docker build` with `freikin/dawarich:1.23.0` on Docker 29.9: build OK, no npm or gcc
+in the final image, the custom JS and one Tailwind CSS in `public/assets` and `public_dist`. The app
+boots up to the database connection; not run against a database.
 
 2026-10-20 on Docker 29.9 with Compose v5.6 and `freikin/dawarich:1.16.0`: fresh install from
 these files, all migrations, `gtfs:seed_feeds`, import of the Paks feed (7 routes, 579 trips),
