@@ -247,7 +247,7 @@ def overlay_restore_card(r: dict) -> tuple[str, bytes]:
         t.stub("Hiba", "; ".join(errors), "fail")
     elif stale:
         names = r.get("pinned_files") or []
-        t.stub("Ellenőrizd", f"{len(names)} overlay {pinned}-hoz készült – nézd át az upstream/{r['version']}/ mentést", "warn")
+        t.stub("Ellenőrizd", f"{len(names)} overlay utoljára {pinned}-n futott – nézd át az upstream/{r['version']}/ mentést", "warn")
     return status, t.png()
 
 
