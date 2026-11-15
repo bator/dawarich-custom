@@ -73,6 +73,7 @@ namespace :track_pick do
       files = TrackPick::Message.files(date, sheet)
       msg = Gtfs::Discord::Client.new.post_message(TrackPick::Config.channel_id, payload, files:)
       File.write(marker, "#{msg['id']}\n")
+      segments.save!(message_id: msg['id'].to_s)
       puts "posted message #{msg['id']}"
     rescue StandardError
       marker.delete if marker.exist? && marker.read.strip == 'pending'

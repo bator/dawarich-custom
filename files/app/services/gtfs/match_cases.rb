@@ -82,7 +82,7 @@ class Gtfs::MatchCases
       next if @user_id && c['user_id'].to_i != @user_id.to_i
 
       { kind: 'file', id: c['id'], user_id: c['user_id'].to_i, date: Date.parse(c['date'].to_s),
-        expect: Array(c['expect']), forbid: Array(c['forbid']) }
+        expect: Array(c['expect']), forbid: Array(c['forbid']), feed_key: c['feed'].presence }
     end
   end
 
@@ -124,15 +124,22 @@ class Gtfs::MatchCases
   end
 
   # a reviewed ride whose feed has no timetable that day any more
+  # A reviewed ride whose feed has no timetable that day any more, or a file case that names
+  # its feed (feed: <gtfs_feeds.key>) when that feed has none: skipped, not failed. BKK keeps
+  # only the active and one backup timetable, so a city ride case expires within days.
   def skip(kase, feeds, date)
     ride = kase[:ride]
-    return unless ride
+    return unless ride || kase[:feed_key]
 
-    feed = (@feeds ||= {})[ride.feed_id] ||= Gtfs::Feed.find_by(id: ride.feed_id)
+    feed = if ride
+             (@feeds ||= {})[ride.feed_id] ||= Gtfs::Feed.find_by(id: ride.feed_id)
+           else
+             Gtfs::Feed.find_by(key: kase[:feed_key])
+           end
     return if feed && feeds.version_for(feed, date)
 
     Result.new(case_id: kase[:id], kind: kase[:kind], user_id: kase[:user_id], date: kase[:date],
-               expected: ride_desc(ride), grade: 'no_timetable', found: nil, pass: true, skipped: true)
+               expected: ride ? ride_desc(ride) : nil, grade: 'no_timetable', found: nil, pass: true, skipped: true)
   end
 
   def check(kase, user, date, matches)

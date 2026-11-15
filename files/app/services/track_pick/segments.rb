@@ -50,19 +50,32 @@ class TrackPick::Segments
     end
   end
 
-  def to_h = { date: date.iso8601, segments: call.map(&:as_json) }
+  def to_h(message_id: nil) = { date: date.iso8601, message_id:, segments: call.map(&:as_json) }
 
   def self.path(date) = File.join(TrackPick::Config::STATE_DIR, "segments-#{date.iso8601}.json")
 
-  def save!
+  # Written before posting (message_id nil) and again with the posted message's id: a click
+  # on any other message of that day (an older one after FORCE=1) is refused, since its
+  # segment numbers may mean other times (review 2026-11-15). Written atomically.
+  def save!(message_id: nil)
     FileUtils.mkdir_p(TrackPick::Config::STATE_DIR)
-    File.write(self.class.path(date), JSON.pretty_generate(to_h))
+    path = self.class.path(date)
+    File.write("#{path}.tmp", JSON.pretty_generate(to_h(message_id:)))
+    File.rename("#{path}.tmp", path)
   end
 
   # the saved list of a posted message: [{ 'index' =>, 'kind' =>, 'from' =>, 'to' =>, ... }], or nil
-  def self.load(date)
-    JSON.parse(File.read(path(date)))['segments']
-  rescue Errno::ENOENT, JSON::ParserError
+  def self.load(date) = load_file(date)&.dig('segments')
+
+  # the id of the message the saved list belongs to (nil: not recorded)
+  def self.message_id(date) = load_file(date)&.dig('message_id')
+
+  def self.load_file(date)
+    JSON.parse(File.read(path(date)))
+  rescue Errno::ENOENT
+    nil
+  rescue JSON::ParserError => e
+    Rails.logger.error("[track_pick] #{path(date)} is not valid JSON: #{e.message}")
     nil
   end
 
@@ -76,9 +89,9 @@ class TrackPick::Segments
     out = []
     cursor = day_from
     rides.each do |(from, to), ride|
-      out.concat(moves(cursor, from))
+      out.concat(moves(cursor, from)) if from > cursor
       out << ride_segment(ride, from, to)
-      cursor = to
+      cursor = [cursor, to].max # a ride inside a longer one must not move the cursor back
     end
     out.concat(moves(cursor, day_to))
     out.sort_by(&:from)
@@ -231,10 +244,12 @@ class TrackPick::Segments
   def visit_name(ts, side)
     t = Time.zone.at(ts)
     scope = Visit.includes(:place).where(user_id: TrackPick::Config.target_user.id, deleted_at: nil)
+                 .where.not(status: :declined)
+    first = Arel.sql("CASE visits.status WHEN #{Visit.statuses['confirmed'].to_i} THEN 0 ELSE 1 END")
     scope = if side == :start
-              scope.where(ended_at: (t - 30.minutes)..(t + 15.minutes)).order(status: :desc, ended_at: :desc)
+              scope.where(ended_at: (t - 30.minutes)..(t + 15.minutes)).order(first, ended_at: :desc)
             else
-              scope.where(started_at: (t - 15.minutes)..(t + 30.minutes)).order(status: :desc, started_at: :asc)
+              scope.where(started_at: (t - 15.minutes)..(t + 30.minutes)).order(first, started_at: :asc)
             end
     v = scope.first
     v && (v.name.presence || v.place&.name.to_s.sub(/\s*\([^)]*\)\z/, '').presence)

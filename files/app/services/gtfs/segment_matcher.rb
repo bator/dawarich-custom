@@ -34,6 +34,8 @@ class Gtfs::SegmentMatcher
   ARRIVAL_LOOKAHEAD_SECS = 300
   ARRIVAL_LOOKAHEAD_STEP_M = 100 # try a later point only when it moved this far from the last try
   ARRIVAL_LOOKAHEAD_TRIES = 6
+  EXTEND_ARRIVAL_MODES = %w[rail metro].freeze
+  EXTEND_ARRIVAL_MAX_DROP = 0.15 # a longer ride may score this much lower than the cut one
   ARRIVAL_MAX_GAP_SECS = 1200 # one GPS gap this long (a metro underground) may lie in the lookahead
 
   attr_reader :feed_set
@@ -239,6 +241,7 @@ class Gtfs::SegmentMatcher
   def extend_arrival(match, matches, stats)
     window = match.window
     return if window.nil? || window.gap?
+    return unless EXTEND_ARRIVAL_MODES.include?(mode_of(match.score)) # review 2026-11-15: no bus walking on
 
     next_start = matches.reject { |m| m.equal?(match) }.map { |m| m.started_at.to_i }.select { |t| t > window.end_ts }.min
     found = nil
@@ -251,6 +254,8 @@ class Gtfs::SegmentMatcher
                                                           truncated_end: window.truncated_end, sparse: window.sparse)
       best, alternatives = evaluate(longer, stats)
       next unless best && best.confidence >= drop_below(best) && line_label(best) == line_label(match.score)
+      next unless same_stop?(best.board, match.score.board) &&
+                  best.confidence >= match.confidence - EXTEND_ARRIVAL_MAX_DROP
       next if same_stop?(best.alight, match.score.alight) || best.ended_at.to_i <= match.ended_at.to_i
 
       found = build_match(longer, best, alternatives)

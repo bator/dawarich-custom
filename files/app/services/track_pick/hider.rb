@@ -31,11 +31,18 @@ class TrackPick::Hider
     hidden
   end
 
-  # after the commit: log the hidden ids, then let Dawarich rebuild what depends on them
+  # after the commit: log the hidden ids, then let Dawarich rebuild what depends on them.
+  # The log is the only way back (#unhide), so its failure is never swallowed (review
+  # 2026-11-15): it raises to the caller, which reports the decision as failed.
   def rebuild(hidden:, inserted:)
     return if hidden.empty? && !inserted.positive?
 
     log(hidden) if hidden.any?
+    rebuild_dependents
+  end
+
+  # tile epoch, stats, tracks, achievements; a failure here leaves stale tracks, not lost data
+  def rebuild_dependents
     from, to = TrackPick::Config.day_range(@date)
     Points::TileEpoch.bump_range(@target.id, from, to)
     month = Time.zone.at(from).in_time_zone(TrackPick::Config.zone)
@@ -43,7 +50,8 @@ class TrackPick::Hider
     rebuild_tracks(from, to)
     Achievements::CheckJob.defer(@target.id, oldest_timestamp: from)
   rescue StandardError => e
-    Rails.logger.error("[track_pick] rebuild after pick failed: #{e.class}: #{e.message}")
+    Rails.logger.error("[track_pick] rebuild after pick failed (#{@date}, user #{@target.id}): " \
+                       "#{e.class}: #{e.message} at #{e.backtrace&.first}")
   end
 
   # puts back what hide wrote for the date; returns the number of points shown again

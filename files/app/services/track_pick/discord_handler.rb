@@ -201,16 +201,26 @@ class TrackPick::DiscordHandler
       return { error: "Erre a napra már döntöttél: #{TrackPick::Config.decided_text(decided)}" }
     end
     saved = TrackPick::Segments.load(date) or return { error: 'Ehhez a naphoz nincs mentett szakaszlista.' }
+    posted = TrackPick::Segments.message_id(date)
+    if posted.present? && posted != interaction.dig('message', 'id').to_s
+      return { error: 'Ez egy korábbi üzenet erre a napra; a legutóbbin válassz.' }
+    end
+
     by_index = saved.index_by { |s| s['index'].to_s }
-    if picks == :recommended
+    recommended = picks == :recommended
+    if recommended
       picks = saved.to_h { |s| [s['index'].to_s, s['recommended']] }
                    .select { |_, src| TrackPick::Message.copies?(src) }
     end
     picks = picks.reject { |_, src| src == target.id.to_s } # the target's own points stay anyway
-    items = segment_items(date, picks, by_index) or return { error: 'Ismeretlen vagy nem használható szakasz.' }
+    items, dropped = segment_items(date, picks, by_index)
+    if dropped.any? && !recommended
+      return { error: "Nem használható szakasz: #{dropped.join(', ')} (az út azóta megváltozott vagy elutasítottad)." }
+    end
 
     inserted = items.empty? ? 0 : copy_segments(date, items, target)
     label = items.empty? ? 'minden szakasz marad' : segment_label(items)
+    label = "#{label} (kihagyva: #{dropped.join(', ')})" if dropped.any?
     hidden = @hidden.to_i.positive? ? ", #{@hidden} saját pont elrejtve" : ''
     text = "#{date}: #{label} → #{TrackPick::Config.handle(target)}, " \
            "#{inserted.positive? ? "#{inserted} új pont" : 'nincs másolás'}#{hidden} (#{actor})."
@@ -222,21 +232,45 @@ class TrackPick::DiscordHandler
     {}
   end
 
-  # [[window, user | :gtfs, transit segment | nil, saved segment], ...] in time order, or nil
+  # => [[[window, user | :gtfs, transit segment | nil, saved segment], ...] in time order,
+  #      [segment marks that cannot be used]]
   def segment_items(date, picks, by_index)
     users = TrackPick::Config.source_users.index_by { |u| u.id.to_s }
-    picks.map do |index, src|
-      saved = by_index[index.to_s] or return nil
-      window = Window.new(started_at: saved['from'].to_i, ended_at: saved['to'].to_i)
-      if src == 'g'
-        seg = saved['kind'] == 'ride' && TransitSegment.find_by(id: saved['segment_id'])
-        return nil unless seg && TrackPick::GtfsPoints.new(date, seg).usable?
+    dropped = []
+    items = picks.filter_map do |index, src|
+      saved = by_index[index.to_s]
+      item = saved && segment_item(date, saved, src, users)
+      next item if item
 
-        [window, :gtfs, seg, saved]
-      else
-        (u = users[src]) ? [window, u, nil, saved] : (return nil)
-      end
-    end.sort_by { |window, *| window.started_at }
+      mark = TrackPick::Message::CIRCLED[index.to_i - 1] || index.to_s
+      Rails.logger.warn("[track_pick] #{date} segment #{index} (#{src}) not usable: " \
+                        "saved=#{saved&.slice('kind', 'segment_id', 'from', 'to').inspect}")
+      dropped << mark
+      nil
+    end
+    [items.sort_by { |window, *| window.started_at }, dropped]
+  end
+
+  def segment_item(date, saved, src, users)
+    window = Window.new(started_at: saved['from'].to_i, ended_at: saved['to'].to_i)
+    return (u = users[src]) && [window, u, nil, saved] unless src == 'g'
+    return unless saved['kind'] == 'ride'
+
+    seg = ride_for(saved, users.values)
+    seg && TrackPick::GtfsPoints.new(date, seg).usable? ? [window, :gtfs, seg, saved] : nil
+  end
+
+  # The ride a saved segment was built from; a rematch deletes auto rows and writes new ones
+  # (Gtfs::SegmentWriter), so a missing id is looked up again by time (review 2026-11-15).
+  # A rejected ride is never used.
+  def ride_for(saved, users)
+    seg = TransitSegment.where.not(status: :rejected).find_by(id: saved['segment_id'])
+    return seg if seg
+
+    TransitSegment.where(user_id: users.map(&:id)).where.not(status: :rejected)
+                  .where('started_at < ? AND ended_at > ?', saved['to'].to_i, saved['from'].to_i)
+                  .order(Arel.sql("CASE status WHEN #{TransitSegment.statuses['confirmed']} THEN 0 ELSE 1 END"),
+                         confidence: :desc).first
   end
 
   # The target's own points in every picked segment are hidden (TrackPick::Hider, nothing

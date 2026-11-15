@@ -24,9 +24,10 @@ class TrackPick::LateRideLine
 
   # => [Result, ...] for the rides that got (dry run: would get) their line
   def call(dry_run: false)
-    return [] unless TrackPick::Config.decision(@date)
+    decision = TrackPick::Config.decision(@date) or return []
+    return [] if decision['choice'].to_s == SKIPPED # "Kihagyás": the day is left as it is
 
-    candidates.filter_map do |seg|
+    candidates.reject { |seg| offered?(seg, decision) }.filter_map do |seg|
       coverage = coverage_of(seg)
       next if coverage >= MIN_COVERAGE
 
@@ -38,7 +39,23 @@ class TrackPick::LateRideLine
     end
   end
 
+  SKIPPED = 'Kihagyás'
+
   private
+
+  # A ride the day's message already offered was decided on, even when Bator kept his own
+  # points: it is not "late" (review 2026-11-15). With a saved segment list (since
+  # 2026-11-08) a ride overlapping an offered :ride segment was offered; for older messages
+  # only a ride created after the decision counts as late.
+  def offered?(seg, decision)
+    saved = TrackPick::Segments.load(@date)
+    if saved
+      saved.any? { |s| s['kind'] == 'ride' && s['from'].to_i < seg.ended_at && s['to'].to_i > seg.started_at }
+    else
+      decided_at = Time.zone.parse(decision['time'].to_s)
+      decided_at.nil? || seg.created_at <= decided_at
+    end
+  end
 
   def candidates
     from, to = TrackPick::Config.day_range(@date)
