@@ -59,6 +59,7 @@ class Gtfs::SegmentMatcher
     @stream = points
     windows = Gtfs::Matching::WindowDetector.new(points, dropped_ts: loader.dropped_accuracy_ts).call
                                             .select { |w| w.start_ts >= from_ts && w.start_ts < to_ts }
+    @windows = windows
     stats['points'] = points.count { |p| p.ts >= from_ts && p.ts < to_ts }
     stats['windows'] = windows.size
 
@@ -212,7 +213,7 @@ class Gtfs::SegmentMatcher
   def match_late_arrival(window, stats)
     return [] unless window.kind == :moving
 
-    arrival_tries(window).each do |extra|
+    arrival_tries(window, stop_ts: next_movement_start(window)).each do |extra|
       longer = Gtfs::Matching::WindowDetector::Window.new(points: window.points + extra, kind: :moving,
                                                           pauses: window.pauses, moving_start: window.moving_start,
                                                           truncated: window.truncated,
@@ -262,6 +263,15 @@ class Gtfs::SegmentMatcher
     end
     stats['extended_arrivals'] += 1 if found
     found
+  end
+
+  # Where the late-arrival lookahead must stop (review 2026-11-15: it could step over a GPS gap
+  # and on into later rides). It may reach into the next movement window, which is often the
+  # same train after the gap (2026-10-15, ride 21: stopping at its start brought the cut Z30 back),
+  # but not past that window's end. A gap window is not a stop: stepping over it is the point.
+  def next_movement_start(window)
+    nxt = Array(@windows).select { |w| !w.gap? && w.start_ts > window.end_ts }.min_by(&:start_ts)
+    nxt && (nxt.end_ts + 1)
   end
 
   # => growing lists of the points right after the window; a new list only when

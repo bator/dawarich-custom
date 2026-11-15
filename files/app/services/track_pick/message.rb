@@ -214,10 +214,11 @@ module TrackPick::Message
   # picks as in encode_picks, keyed by segment number: "2u8.4g".
   CIRCLED = %w[① ② ③ ④ ⑤ ⑥ ⑦ ⑧ ⑨ ⑩].freeze
 
-  def segment_payload(comparison, segments, sheet: nil)
+  def segment_payload(comparison, segments, sheet: nil, dropped: [])
     date = comparison.date
     embed = { title: "Track-választás – #{date.iso8601} → #{TrackPick::Config.handle(TrackPick::Config.target_user)}",
-              description: [summary(comparison), segment_lines(segments)].reject(&:blank?).join("\n\n"),
+              description: [summary(comparison), segment_lines(segments), dropped_line(dropped)]
+                .reject(&:blank?).join("\n\n"),
               color: 0x0057B8,
               footer: { text: 'Soronként egy szakasz, fentről lefelé ①, ②, …: 1–3 a GPS abban az időben, ' \
                               'A a menetrendi vonal. Amit nem választasz, az a saját nyomod marad.' } }
@@ -233,6 +234,18 @@ module TrackPick::Message
              "#{Time.zone.at(seg.to).in_time_zone(zone).strftime('%H:%M')}"
       "**#{CIRCLED[seg.index - 1]}** #{span} · #{seg.title} · ajánlott: #{recommended_label(seg)}"
     end.join("\n")
+  end
+
+  # segments beyond Segments::MAX_SEGMENTS: listed so the choice is not silently partial
+  def dropped_line(dropped)
+    return nil if dropped.blank?
+
+    zone = TrackPick::Config.zone
+    spans = dropped.map do |seg|
+      "#{Time.zone.at(seg.from).in_time_zone(zone).strftime('%H:%M')}–" \
+        "#{Time.zone.at(seg.to).in_time_zone(zone).strftime('%H:%M')} #{seg.title}"
+    end
+    "⚠ Nem fért a listába (ezek a saját nyomod maradnak): #{spans.join('; ')}"
   end
 
   def recommended_label(seg)

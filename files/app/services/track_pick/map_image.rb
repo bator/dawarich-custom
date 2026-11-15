@@ -33,7 +33,7 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
   Ride = Struct.new(:label, :segment, :from, :to, :line_source, keyword_init: true) # line_source: set by #sheet
 
   # rides of the day, oldest first, at most MAX_RIDES; segment = the best match of the ride
-  def self.rides(comparison)
+  def self.rides(comparison, max: MAX_RIDES)
     from, to = TrackPick::Config.day_range(comparison.date)
     segs = TransitSegment.where(user_id: comparison.call.map { |s| s.user.id })
                          .where(started_at: from...to).where.not(status: 'rejected').order(:started_at).to_a
@@ -45,7 +45,7 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
       end
       group ? group << seg : groups << [seg]
     end
-    groups.first(MAX_RIDES).each_with_index.map do |g, i|
+    groups.first(max).each_with_index.map do |g, i|
       best = g.max_by { |s| [s.status == 'confirmed' ? 1 : 0, s.confidence.to_f] }
       Ride.new(label: RIDE_LABELS[i], segment: best,
                from: g.map(&:started_at).min - RIDE_MARGIN, to: g.map(&:ended_at).max + RIDE_MARGIN)

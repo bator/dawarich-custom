@@ -221,8 +221,7 @@
     "lib/tasks/gtfs_shapes.rake",
     "lib/tasks/gtfs_verify.rake",
     "lib/tasks/gtfs_walk.rake",
-    "lib/tasks/track_pick.rake",
-    "spec/services/gtfs/sparse_join_transfer_spec.rb"
+    "lib/tasks/track_pick.rake"
   ],
   "patched_files": [
     "Gemfile",

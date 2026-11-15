@@ -31,7 +31,7 @@ namespace :track_pick do
       warn "map sheet failed: #{e.class}: #{e.message}"
       nil
     end
-    payload = TrackPick::Message.segment_payload(comparison, segs, sheet:)
+    payload = TrackPick::Message.segment_payload(comparison, segs, sheet:, dropped: segments.dropped)
     if (decided = TrackPick::Config.decision(date))
       puts "#{TrackPick::Message.decided_line(decided)} -> no choice offered, nothing posted"
       next

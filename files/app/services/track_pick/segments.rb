@@ -37,17 +37,41 @@ class TrackPick::Segments
 
   attr_reader :date
 
-  def initialize(comparison, rides = TrackPick::MapImage.rides(comparison))
+  def initialize(comparison, rides = TrackPick::MapImage.rides(comparison, max: MAX_SEGMENTS))
     @comparison = comparison
     @date = comparison.date
     @rides = rides
   end
 
   def call
-    @call ||= build.first(MAX_SEGMENTS).each_with_index.map do |seg, i|
-      seg.index = i + 1
-      seg
+    @call ||= begin
+      kept, @dropped = self.class.fit(build, MAX_SEGMENTS)
+      if @dropped.any?
+        Rails.logger.warn("[track_pick] #{date}: #{@dropped.size} segment(s) did not fit into #{MAX_SEGMENTS}")
+      end
+      kept.each_with_index.map do |seg, i|
+        seg.index = i + 1
+        seg
+      end
     end
+  end
+
+  # the segments that did not fit into the list (review 2026-11-15: no longer dropped silently)
+  def dropped
+    call
+    @dropped
+  end
+
+  # Picks at most `max` segments: every ride first (oldest first), then the longest moves,
+  # back in time order. => [kept, dropped], both in time order.
+  def self.fit(segments, max)
+    return [segments, []] if segments.size <= max
+
+    rides, moves = segments.partition { |s| s.kind == :ride }
+    keep = rides.first(max)
+    keep += moves.max_by(max - keep.size) { |s| s.to - s.from } if keep.size < max
+    kept = keep.sort_by(&:from)
+    [kept, (segments - kept).sort_by(&:from)]
   end
 
   def to_h(message_id: nil) = { date: date.iso8601, message_id:, segments: call.map(&:as_json) }
