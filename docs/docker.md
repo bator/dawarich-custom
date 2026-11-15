@@ -12,7 +12,11 @@ freikin/dawarich:1.23.0 ──┐
                           ├─ overlay stage: restore_custom.py export (3-way merge of ours/, plus files/)
 this repo ────────────────┘        │
                                    ▼
-            final stage: upstream image + merged files → bundle install → assets:precompile
+            build stage: upstream image + build tools (gcc, -dev headers, npm)
+                         + merged files → bundle install → assets:precompile
+                                   │
+                                   ▼
+            final stage: upstream runtime image (no build tools) + the built /var/app
                                    │
                                    ▼
                      dawarich-custom:1.23.0 (app, sidekiq, discord bot)

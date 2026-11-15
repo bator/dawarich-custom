@@ -33,15 +33,21 @@ COPY upstream /repo/upstream
 RUN DAWARICH_APP=/upstream DAWARICH_CUSTOM_STATE=/tmp/dawarich-custom \
     python3 /repo/restore_custom.py export /overlay --version "${DAWARICH_VERSION}"
 
-# 2. The upstream image with the merged files, then the same gem and asset
-#    steps as the upstream Dockerfile (Tailwind has to see the custom views).
-FROM upstream
+# 2. Build stage: since 1.23.0 the upstream image has no compilers, git or npm
+#    (upstream builds in a separate stage too). Install the same build tools on
+#    top of it, re-run the gem and asset steps with the merged files (Tailwind
+#    has to see the custom views), and keep only the resulting app directory.
+FROM node:22.23.4-bookworm-slim AS node
+
+FROM upstream AS build
 ARG DAWARICH_VERSION
-LABEL org.opencontainers.image.title="dawarich-custom" \
-      org.opencontainers.image.description="Dawarich ${DAWARICH_VERSION} (github.com/Freika/dawarich) with GTFS public transport matching" \
-      org.opencontainers.image.source="https://github.com/bator/dawarich-custom" \
-      org.opencontainers.image.base.name="docker.io/freikin/dawarich:${DAWARICH_VERSION}" \
-      org.opencontainers.image.licenses="AGPL-3.0"
+RUN apt-get update -qq \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       build-essential git libpq-dev libxml2-dev libxslt-dev libyaml-dev \
+       zlib1g-dev libgeos-dev libgeos++-dev cmake ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
 COPY --from=overlay /overlay/ /var/app/
 
@@ -50,14 +56,27 @@ COPY --from=overlay /overlay/ /var/app/
 RUN bundle install --jobs 4 --retry 3 \
     && rm -rf vendor/bundle/ruby/*/cache/*.gem
 
-RUN rm -rf public/assets \
+RUN rm -rf public/assets public_dist \
     && npm ci --no-audit --no-fund \
     && SECRET_KEY_BASE_DUMMY=1 bundle exec rake assets:precompile \
     && rm -rf node_modules tmp/cache ~/.npm \
     && mkdir -p tmp/pids tmp/cache tmp/sockets \
     && chmod -R 777 tmp \
-    && rm -rf public_dist \
     && cp -r public public_dist
+
+# 3. The upstream runtime image (no build tools) with the built app directory.
+FROM upstream
+ARG DAWARICH_VERSION
+LABEL org.opencontainers.image.title="dawarich-custom" \
+      org.opencontainers.image.description="Dawarich ${DAWARICH_VERSION} (github.com/Freika/dawarich) with GTFS public transport matching" \
+      org.opencontainers.image.source="https://github.com/bator/dawarich-custom" \
+      org.opencontainers.image.base.name="docker.io/freikin/dawarich:${DAWARICH_VERSION}" \
+      org.opencontainers.image.licenses="AGPL-3.0"
+
+# COPY only adds files: clear the upstream app first, or its stale assets stay
+RUN rm -rf /var/app && mkdir -p /var/app
+COPY --from=build /var/app /var/app
+COPY --from=build /usr/local/bundle/config /usr/local/bundle/config
 
 COPY docker/bot-entrypoint.sh /usr/local/bin/bot-entrypoint.sh
 RUN chmod +x /usr/local/bin/bot-entrypoint.sh
