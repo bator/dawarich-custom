@@ -123,7 +123,7 @@ en:
         transit: Public transport rides
         transit_hint: Detected rides (GTFS). Dashed lines are uncertain.
         all_modes: All vehicles
-        walk_legs: Walks to and from the rides
+        walk_legs: Walks, snapped to footpaths
         walk_legs_hint: "Snapped to footpaths: dark dashed line; recorded GPS: light grey dotted."
         corridors: Frequent routes
         corridors_hint: The middle line of the walks and rides you made many times; the wider, the more trips. Dashed where GPS was missing (a tunnel, an underpass) and the way was routed.

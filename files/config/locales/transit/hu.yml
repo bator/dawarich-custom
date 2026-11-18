@@ -123,7 +123,7 @@ hu:
         transit: Közlekedési szakaszok
         transit_hint: Felismert utazások (GTFS). A szaggatott vonal bizonytalan.
         all_modes: Minden jármű
-        walk_legs: Gyaloglás a járművekhez
+        walk_legs: Séták, járdára illesztve
         walk_legs_hint: "Járdára illesztve: sötét szaggatott vonal; nyers GPS: világosszürke pontozott."
         corridors: Gyakori útjaim
         corridors_hint: A sokszor megtett gyalogos és bringás utak középvonala; minél vastagabb, annál többször. Szaggatott, ahol nem volt GPS (alagút, aluljáró), és az utat útvonaltervező adta.

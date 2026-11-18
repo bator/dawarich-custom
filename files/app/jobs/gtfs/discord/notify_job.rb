@@ -2,7 +2,8 @@
 
 # Posts a message with Jóváhagyom / Elutasítom buttons for each new `auto`
 # ride of a user (enqueued after a day was matched): the users in
-# DISCORD_TRANSIT_USER_IDS, or with "all" every user. Only rides that are
+# DISCORD_TRANSIT_USER_IDS, or with "all" every user; for a user in
+# DISCORD_TRANSIT_USER_MODES only rides of those vehicles. Only rides that are
 # visible to the user (privacy zones, threshold) and started within
 # DISCORD_TRANSIT_MAX_AGE_HOURS; at most DISCORD_TRANSIT_MAX_PER_RUN per run.
 class Gtfs::Discord::NotifyJob < ApplicationJob
@@ -38,11 +39,21 @@ class Gtfs::Discord::NotifyJob < ApplicationJob
 
   private
 
+  # With DISCORD_TRANSIT_USER_MODES for the user, only rides of those
+  # vehicles (filtered in Ruby: a mode is a route_type range, and the rides
+  # of DISCORD_TRANSIT_MAX_AGE_HOURS are few).
   def pending(user)
-    TransitSegment.visible_for(user).auto
-                  .where(started_at: Gtfs::Discord::Config.max_age.ago.to_i..)
-                  .where.missing(:discord_message)
-                  .order(:started_at)
-                  .limit(Gtfs::Discord::Config.max_per_run)
+    scope = TransitSegment.visible_for(user).auto
+                          .where(started_at: Gtfs::Discord::Config.max_age.ago.to_i..)
+                          .where.missing(:discord_message)
+                          .order(:started_at)
+    self.class.only_modes(scope, Gtfs::Discord::Config.modes_for(user), Gtfs::Discord::Config.max_per_run)
+  end
+
+  # rides: a relation; modes: nil (every ride) or TransitSegment#mode names.
+  def self.only_modes(rides, modes, limit)
+    return rides.limit(limit) if modes.nil?
+
+    rides.select { |ride| modes.include?(ride.mode) }.first(limit)
   end
 end

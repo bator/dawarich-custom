@@ -8,6 +8,9 @@
 #   DISCORD_TRANSIT_USER_IDS=2              Dawarich user ids whose new rides are posted automatically,
 #                                           or "all": every user whose day gets matched
 #   DISCORD_TRANSIT_ALL_USERS=false         same as DISCORD_TRANSIT_USER_IDS=all
+#   DISCORD_TRANSIT_USER_MODES              per user, only rides of these vehicles are posted, e.g.
+#                                           "8:metro" or "8:metro,8:tram" (TransitSegment#mode: metro,
+#                                           tram, rail, suburban, bus, ferry); users not listed: every ride
 #   DISCORD_TRANSIT_ALLOWED_DISCORD_USER_IDS  Discord user ids allowed to click; required: with an empty
 #                                           list the bot does not start and nothing is posted (review H1)
 #   DISCORD_TRANSIT_APP_URL                 base URL for the map links (default from APPLICATION_PROTOCOL/HOSTS)
@@ -90,6 +93,21 @@ module Gtfs::Discord::Config
 
   def user_ids
     list('DISCORD_TRANSIT_USER_IDS').filter_map { |id| Integer(id, exception: false) }
+  end
+
+  # The vehicle modes whose rides are posted for this user
+  # (DISCORD_TRANSIT_USER_MODES), nil when the user is not listed (every
+  # ride). An entry without a user id or a mode is ignored.
+  def modes_for(user)
+    user_modes(setting('DISCORD_TRANSIT_USER_MODES', ''), user.id)
+  end
+
+  # "8:metro,8:tram" and 8 => ["metro", "tram"]; nil when none is listed.
+  def user_modes(value, user_id)
+    value.to_s.split(',').filter_map do |entry|
+      id, mode = entry.split(':', 2).map { |part| part.to_s.strip }
+      mode.downcase if mode.present? && Integer(id, exception: false) == user_id
+    end.uniq.presence
   end
 
   def allowed_discord_user_ids
