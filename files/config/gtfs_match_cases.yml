@@ -186,3 +186,23 @@ cases:
       - line: M4
         board: Bikás park
         alight: Keleti pályaudvar
+  - id: bus7-stand-at-zuglo-logger
+    note: >-
+      GPS logger (1 Hz), 2026-11-17 (Bator: "stefánia úttól busszal mentem
+      hazáig"): bus 7 left Stefánia út / Thököly út at 23:15 (29 km/h for
+      20 s), then stood 4.5 min at Zugló vasútállomás; the ride (197) boarded
+      there and the 400 m before it became a walk. Fixed with
+      extend_departures (a vehicle-speed stretch before a bus ride).
+    user_id: 8
+    date: 2026-11-17
+    expect:
+      - line: '7'
+        board: Stefánia út / Thököly út
+        alight: Rákospatak utca / Csömöri út
+        from: '23:15'
+        to: '23:28'
+        tolerance_min: 3
+    forbid:
+      - line: '7'
+        board: Zugló vasútállomás
+        alight: Rákospatak utca / Csömöri út

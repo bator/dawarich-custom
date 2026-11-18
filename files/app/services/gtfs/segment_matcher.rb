@@ -39,6 +39,17 @@ class Gtfs::SegmentMatcher
   EXTEND_ARRIVAL_MODES = %w[rail metro].freeze
   EXTEND_ARRIVAL_MAX_DROP = 0.15 # a longer ride may score this much lower than the cut one
   ARRIVAL_MAX_GAP_SECS = 1200 # one GPS gap this long (a metro underground) may lie in the lookahead
+  # A bus can stand minutes at a stop after the one it was boarded at; look this far
+  # before a bus or tram ride for the stretch it already drove (extend_departures).
+  DEPARTURE_LOOKBEHIND_SECS = 420
+  EXTEND_DEPARTURE_MODES = %w[bus tram].freeze
+  DEPARTURE_MIN_KMH = 20.0 # that stretch: this fast (no walk or run for the bus) ...
+  DEPARTURE_MIN_M = 80     # ... over this far (no multipath jump) ...
+  DEPARTURE_SPAN_SECS = (10..40) # ... between two fixes this far apart
+  DEPARTURE_BOARD_SECS = 90 # the retry starts this long before that stretch (the stop)
+  DEPARTURE_CORRIDOR_M = 120 # shift_board: the stretch's fixes this close to the trip's line ...
+  DEPARTURE_BACKSTEP_M = 40  # ... never this far back along it ...
+  DEPARTURE_STOP_M = 250     # ... and the stop this far behind its first fix at most
 
   attr_reader :feed_set
 
@@ -72,6 +83,7 @@ class Gtfs::SegmentMatcher
     # (2026-11-17: M4 182 Bikás park -> Keleti and 183 Móricz -> Keleti, both kept)
     matches = drop_overlaps(extend_arrivals(matches, stats))
     matches = extend_boards(matches, stats)
+    matches = drop_overlaps(extend_departures(matches, stats))
     stats['matches'] = matches.size
     stats['ms'] = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
     Result.new(matches:, stats:)
@@ -331,6 +343,122 @@ class Gtfs::SegmentMatcher
     stats['extended_boards'] += 1
     build_match(longer, best, alternatives)
   end
+
+  # 2026-11-17 (Bator: "stefánia úttól busszal mentem hazáig"): bus 7 left Stefánia út /
+  # Thököly út at 23:15 (the logger: 29 km/h for 20 s), then stood 4.5 min at Zugló
+  # vasútállomás; the window detector took that stand for the wait at the stop, and the ride
+  # boarded there, the 400 m before it counted as a walk. A bus or tram ride is retried with
+  # the fixes of the DEPARTURE_LOOKBEHIND_SECS before it (not before the previous ride's end)
+  # when they hold a vehicle-speed stretch (vehicle_stretch_at): walking on along the route
+  # to the next stop, or running for the bus, never reaches it (review 2026-11-15: no bus
+  # walking on), so a sparse phone keeps its ride as it was. Taken when it is the same line
+  # to the same stop, boards at another stop earlier, and is accepted.
+  def extend_departures(matches, stats)
+    matches.each_with_index.map do |match, i|
+      prev_end = i.positive? ? matches[i - 1].ended_at.to_i : nil
+      extend_departure(match, prev_end, stats) || match
+    end
+  end
+
+  def extend_departure(match, prev_end, stats)
+    window = match.window
+    return if window.nil? || window.gap? || !EXTEND_DEPARTURE_MODES.include?(mode_of(match.score))
+
+    from = window.start_ts - DEPARTURE_LOOKBEHIND_SECS
+    from = [from, prev_end].max if prev_end
+    before = @stream.select { |p| p.ts >= from && p.ts < window.start_ts }
+    fast_at = vehicle_stretch_at(before + window.points.first(1)) or return
+    extra = before.select { |p| p.ts >= fast_at - DEPARTURE_BOARD_SECS }
+    return if extra.empty?
+
+    longer = Gtfs::Matching::WindowDetector::Window.new(points: extra + window.points, kind: :moving,
+                                                        pauses: [], board_from_gap: false,
+                                                        truncated: window.truncated,
+                                                        truncated_start: window.truncated_start,
+                                                        truncated_end: window.truncated_end, sparse: window.sparse)
+    best, alternatives = evaluate(longer, stats)
+    if best && best.confidence >= drop_below(best) && line_label(best) == line_label(match.score) &&
+       same_stop?(best.alight, match.score.alight) && !same_stop?(best.board, match.score.board) &&
+       best.started_at.to_i < match.started_at.to_i && best.confidence >= match.confidence - EXTEND_ARRIVAL_MAX_DROP
+      stats['extended_departures'] += 1
+      return build_match(longer, best, alternatives)
+    end
+
+    shifted = shift_board(match, before, fast_at) or return
+    stats['shifted_boards'] += 1
+    shifted
+  end
+
+  # When the longer window fits no timetable (the bus stood minutes at a stop on the way:
+  # 2026-11-17, bus 7 at Zugló vasútállomás), the ride keeps its trip and score and only its
+  # boarding moves back to the earlier stop of the same trip where the vehicle-speed stretch
+  # starts: every fix from there to the ride lies within DEPARTURE_CORRIDOR_M of the trip's
+  # line and moves on along it, and the stop lies DEPARTURE_STOP_M or less behind the first.
+  def shift_board(match, before, fast_at)
+    score = match.score
+    profile = score.profile
+    return unless profile.respond_to?(:usable?) && profile.usable? && score.board
+
+    run = before.select { |p| p.ts >= fast_at }
+    return if run.empty?
+
+    alongs = run.map { |p| profile.project(p.lon, p.lat) }
+    return unless alongs.all? { |_, d| d <= DEPARTURE_CORRIDOR_M }
+    return unless alongs.each_cons(2).all? { |(a, _), (b, _)| b >= a - DEPARTURE_BACKSTEP_M }
+
+    first = alongs.first.first
+    stop = profile.stops.select { |s| s.sequence < score.board.sequence && s.along <= first + DEPARTURE_STOP_M }
+                  .max_by(&:sequence)
+    return unless stop && first - stop.along <= DEPARTURE_STOP_M
+
+    near = before.select do |p|
+      p.ts <= fast_at && Gtfs::Matching::Geo.haversine(p.lon, p.lat, stop.lon, stop.lat) <= Gtfs::Config::BOARD_RADIUS_M
+    end
+    board_ts = (near.max_by(&:ts) || run.first).ts
+    extra = before.select { |p| p.ts >= board_ts }
+    shifted = score.dup
+    shifted.board = stop
+    shifted.started_at = board_ts
+    shifted.point_ids = extra.map(&:id) + Array(score.point_ids)
+    shifted.distance_m = (score.alight.along - stop.along).round
+    window = match.window
+    longer = Gtfs::Matching::WindowDetector::Window.new(points: extra + window.points, kind: :moving,
+                                                        pauses: [], board_from_gap: false,
+                                                        truncated: window.truncated,
+                                                        truncated_start: window.truncated_start,
+                                                        truncated_end: window.truncated_end, sparse: window.sparse)
+    match.dup.tap do |m|
+      m.score = shifted
+      m.window = longer
+    end
+  end
+
+  # The time of the first fix that starts a vehicle-speed stretch: DEPARTURE_MIN_M or more
+  # to a fix DEPARTURE_SPAN_SECS later, at DEPARTURE_MIN_KMH or more; the next fix (5 to 40 s
+  # on) no nearer to the start and the one before it (5 s or more) as far from that fix: a
+  # multipath jump comes back, whichever end it is. nil without one.
+  def self.vehicle_stretch_at(points)
+    dist = ->(a, b) { Gtfs::Matching::Geo.haversine(a.lon, a.lat, b.lon, b.lat) }
+    points.each_with_index do |a, i|
+      points[(i + 1)..].each_with_index do |b, k|
+        dt = b.ts - a.ts
+        next if dt < DEPARTURE_SPAN_SECS.min
+        break if dt > DEPARTURE_SPAN_SECS.max
+
+        m = dist.call(a, b)
+        next unless m >= DEPARTURE_MIN_M && m / dt * 3.6 >= DEPARTURE_MIN_KMH
+
+        after = points[(i + k + 2)..].find { |c| c.ts >= b.ts + 5 }
+        next unless after && after.ts <= b.ts + 40 && dist.call(a, after) >= m
+
+        prior = points[0...i].reverse.find { |c| c.ts <= a.ts - 5 } # a itself no jump either
+        return a.ts if prior.nil? || dist.call(prior, b) >= m
+      end
+    end
+    nil
+  end
+
+  def vehicle_stretch_at(points) = self.class.vehicle_stretch_at(points)
 
   # Where the late-arrival lookahead must stop (review 2026-11-15: it could step over a GPS gap
   # and on into later rides). It may reach into the next movement window, which is often the
