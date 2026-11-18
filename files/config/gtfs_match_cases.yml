@@ -154,3 +154,35 @@ cases:
         from: '07:41'
         to: '08:17'
         tolerance_min: 6
+  - id: train-then-metro-in-one-window
+    note: >-
+      16 Pro, 2026-11-17: IC 903 Székesfehérvár 17:14 -> Kelenföld, a 12 min gap, then the
+      train's last part and the M4 after a 5 min change at Kelenföld in one movement window.
+      The gap bridge ended mid-metro and had no candidate, so the train was lost; and the M4
+      extended over the next gap reached a second M4 matched in that gap (182 and 183).
+      The M4 boarded at Bikás park (first fix underground); Bator: "kelenföldről mentem a
+      keletibe". Fixed with the bridge cut at the last window's longest pause, drop_overlaps
+      after extend_arrivals, and extend_board (the change fixes at Kelenföld).
+    user_id: 2
+    date: 2026-11-17
+    feed: mav
+    expect:
+      - line: IC 903 BAKONY
+        board: Székesfehérvár
+        alight: Budapest-Kelenföld
+        from: '17:14'
+        to: '17:59'
+        tolerance_min: 6
+      - line: M4
+        board: Kelenföld vasútállomás
+        alight: Keleti pályaudvar
+        from: '18:00'
+        to: '18:16'
+        tolerance_min: 5
+    forbid:
+      - line: M4
+        board: Móricz Zsigmond körtér
+        alight: Keleti pályaudvar
+      - line: M4
+        board: Bikás park
+        alight: Keleti pályaudvar

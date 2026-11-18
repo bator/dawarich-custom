@@ -26,6 +26,8 @@ class Gtfs::SegmentMatcher
   Result = Struct.new(:matches, :stats, keyword_init: true)
 
   OVERLAP_SECS = 30
+  TRANSFER_BACK_SECS = 600 # a metro ride starting this soon after another ride may board at its stop
+  TRANSFER_RADIUS_M = 400 # fixes this close to that ride's alighting stop are the change
   GAP_NEIGHBOUR_SECS = 60 # a gap window and a movement window this close share their edge point
   EXTEND_GAP_SECS = 180 # a movement window starting this soon after a ride may be its rest
   EXTEND_MAX_STEPS = 3
@@ -66,7 +68,10 @@ class Gtfs::SegmentMatcher
     matches = match_windows(windows, stats)
     matches = merge_same_trip(drop_overlaps(matches), points, windows, stats)
     matches = extend_into_next(matches, points, windows, stats)
-    matches = extend_arrivals(matches, stats)
+    # an arrival extended over the next gap can reach a ride matched in that gap on its own
+    # (2026-11-17: M4 182 Bikás park -> Keleti and 183 Móricz -> Keleti, both kept)
+    matches = drop_overlaps(extend_arrivals(matches, stats))
+    matches = extend_boards(matches, stats)
     stats['matches'] = matches.size
     stats['ms'] = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
     Result.new(matches:, stats:)
@@ -161,8 +166,27 @@ class Gtfs::SegmentMatcher
     !first.gap? && gap.gap? && !last.gap? && gap_neighbours?(first, gap) && gap_neighbours?(gap, last)
   end
 
+  # 2026-11-17: Székesfehérvár 17:14 -> Kelenföld by train, a 12 min gap, then the train's
+  # last part and, after a 5 min change at Kelenföld that the window detector did not cut, the
+  # M4 to Móricz in the same movement window. The three ended mid-metro and had no candidate,
+  # so the train was lost. The bridge is tried again with the last window cut at its longest
+  # pause (the change); the rest after the cut is matched on its own.
   def match_gap_bridge(first, gap, last, stats)
     separate = match_window(first, 0, stats)
+    bridged = bridge_match(first, gap, last, separate, stats)
+    return bridged if bridged
+
+    left, right = last.split
+    return unless left && Gtfs::Matching::WindowDetector.long_enough?(right)
+
+    bridged = bridge_match(first, gap, left, separate, stats, rail_only: true)
+    return unless bridged
+
+    stats['gap_bridge_cuts'] += 1
+    bridged + match_window(right, 1, stats)
+  end
+
+  def bridge_match(first, gap, last, separate, stats, rail_only: false)
     window = Gtfs::Matching::WindowDetector::Window.new(points: (first.points + gap.points + last.points).uniq(&:ts),
                                                         kind: :moving, pauses: [], board_from_gap: false,
                                                         truncated: first.truncated || last.truncated,
@@ -171,6 +195,7 @@ class Gtfs::SegmentMatcher
                                                         sparse: [first, gap, last].any?(&:sparse))
     best, alternatives = evaluate(window, stats)
     return unless best && best.confidence >= drop_below(best)
+    return if rail_only && mode_of(best) != 'rail'
     return unless separate.empty? ? mode_of(best) == 'rail' : separate.any? { |m| same_trip?(m.score, best) }
 
     stats['gap_bridges'] += 1
@@ -263,6 +288,48 @@ class Gtfs::SegmentMatcher
     end
     stats['extended_arrivals'] += 1 if found
     found
+  end
+
+  # 2026-11-17 (Bator: "kelenföldről mentem a keletibe"): IC 903 to Kelenföld 17:59, then the
+  # M4 from Kelenföld vasútállomás. The fixes at the station (17:59-18:02) belonged to the
+  # pause the window detector cut at, so the metro window started at the first fix
+  # underground, near Bikás park, and the ride boarded there. A metro ride that starts soon
+  # after another ride is retried with the fixes since that ride's end that lie near its
+  # alighting stop (the change); taken when it is the same line to the same stop, boards
+  # nearer to that stop and is accepted.
+  def extend_boards(matches, stats)
+    matches.each_with_index.map do |match, i|
+      prev = i.positive? ? matches[i - 1] : nil
+      (prev && extend_board(match, prev, stats)) || match
+    end
+  end
+
+  def extend_board(match, prev, stats)
+    window = match.window
+    return if window.nil? || window.gap? || mode_of(match.score) != 'metro'
+
+    change = match.started_at.to_i - prev.ended_at.to_i
+    return unless change.between?(0, TRANSFER_BACK_SECS)
+
+    stop = prev.score.alight or return
+    near = ->(p) { Gtfs::Matching::Geo.haversine(p.lon, p.lat, stop.lon, stop.lat) <= TRANSFER_RADIUS_M }
+    extra = @stream.select { |p| p.ts >= prev.ended_at.to_i && p.ts < window.start_ts && near.call(p) }
+    return if extra.empty?
+
+    longer = Gtfs::Matching::WindowDetector::Window.new(points: extra + window.points, kind: :moving,
+                                                        pauses: [], board_from_gap: false,
+                                                        truncated: window.truncated,
+                                                        truncated_start: window.truncated_start,
+                                                        truncated_end: window.truncated_end, sparse: window.sparse)
+    best, alternatives = evaluate(longer, stats)
+    return unless best && best.confidence >= drop_below(best) && line_label(best) == line_label(match.score)
+    return unless same_stop?(best.alight, match.score.alight) && !same_stop?(best.board, match.score.board)
+    return unless best.confidence >= match.confidence - EXTEND_ARRIVAL_MAX_DROP
+    return unless Gtfs::Matching::Geo.haversine(best.board.lon, best.board.lat, stop.lon, stop.lat) <
+                  Gtfs::Matching::Geo.haversine(match.score.board.lon, match.score.board.lat, stop.lon, stop.lat)
+
+    stats['extended_boards'] += 1
+    build_match(longer, best, alternatives)
   end
 
   # Where the late-arrival lookahead must stop (review 2026-11-15: it could step over a GPS gap
