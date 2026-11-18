@@ -68,6 +68,7 @@ class TrackPickParseTest < Minitest::Test
     assert_equal({ kind: :split_pick, index: '2', src: 'g' }, parse('p:2:g'))
     assert_equal({ kind: :split_pick, index: '3', src: '8' }, parse('p:3:8'))
     assert_equal({ kind: :split_confirm }, parse('pok'))
+    assert_equal({ kind: :split_edit, index: '4' }, parse('p:4:edit'))
     assert_nil parse('p:2:x')
   end
 
@@ -227,8 +228,10 @@ class TrackPickSplitHandlerTest < Minitest::Test
     plan = handler.prepare(interaction("trackpick:#{DATE}:p:2:#{target}", '102'))
     assert_equal 7, plan.response[:type]
     assert_equal({}, TrackPick::Segments.load_picks(DATE)) # own = stays: no pick
-    styles = plan.response[:data][:components].first[:components].map { |b| b[:style] }
-    assert_equal [TrackPick::Message::SUCCESS, TrackPick::Message::SECONDARY], styles
+    data = plan.response[:data]
+    assert_equal [], data[:embeds] # collapsed to one line
+    assert_includes data[:content], '→ **saját, marad**'
+    assert_equal ["trackpick:#{DATE}:p:2:edit"], data[:components].first[:components].map { |b| b[:custom_id] }
 
     edited = []
     client = Object.new

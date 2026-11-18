@@ -52,6 +52,7 @@ class TrackPick::DiscordHandler
 
     case action[:kind]
     when :split_pick then split_pick(interaction, date, action[:index], action[:src])
+    when :split_edit then split_edit(interaction, date, action[:index])
     when :split_confirm
       Plan.new({ type: DEFERRED_UPDATE_MESSAGE },
                -> { work_segments(interaction, date, TrackPick::Segments.load_picks(date), user) })
@@ -96,6 +97,7 @@ class TrackPick::DiscordHandler
     when 'rec' then { kind: :seg_confirm, picks: :recommended } # segment pick (2026-11-08)
     when 'pok' then { kind: :split_confirm } # split messages (2026-11-18)
     when /\Ap:(\d{1,2}):(\d+|g)\z/ then { kind: :split_pick, index: Regexp.last_match(1), src: Regexp.last_match(2) }
+    when /\Ap:(\d{1,2}):edit\z/ then { kind: :split_edit, index: Regexp.last_match(1) }
     when /\As:([^:]+)\z/
       return nil unless TrackPick::Message.decode_picks(Regexp.last_match(1))
 
@@ -212,8 +214,49 @@ class TrackPick::DiscordHandler
     end
     return Plan.new(ephemeral('Erre a napra már döntöttél.')) unless picks
 
-    Plan.new({ type: UPDATE_MESSAGE, data: { components: TrackPick::Message.split_segment_components(date, seg, picks) } },
+    Plan.new({ type: UPDATE_MESSAGE, data: TrackPick::Message.split_collapsed_payload(date, seg, picks) },
              -> { refresh_header(interaction['channel_id'], date, file, picks) })
+  end
+
+  # Módosítás on a collapsed segment: the message opens again with its image (rendered anew,
+  # the collapse dropped the attachment) and the buttons.
+  def split_edit(interaction, date, index)
+    file = TrackPick::Segments.load_file(date)
+    seg = file && Array(file['segments']).find { |s| s['index'].to_s == index }
+    return Plan.new(ephemeral('Ehhez a naphoz nincs mentett szakaszlista.')) unless seg
+    if file.dig('segment_messages', index).to_s != interaction.dig('message', 'id').to_s
+      return Plan.new(ephemeral('Ez egy korábbi üzenet erre a napra; a legutóbbin válassz.'))
+    end
+
+    Plan.new({ type: DEFERRED_UPDATE_MESSAGE }, -> { reopen_segment(interaction, date, seg) })
+  end
+
+  def reopen_segment(interaction, date, seg)
+    picks = TrackPick::Segments.load_picks(date)
+    png = segment_png(date, seg)
+    files = png ? [Gtfs::Discord::Client::Upload.new(TrackPick::Message.segment_filename(date, seg['index']), png, 'image/png')] : []
+    Gtfs::Discord::Client.new.edit_message(interaction['channel_id'], interaction.dig('message', 'id'),
+                                           TrackPick::Message.split_segment_payload(date, seg, picks, image: png.present?),
+                                           files:)
+    {}
+  rescue StandardError => e
+    Rails.logger.error("[track_pick] reopen failed: #{e.class}: #{e.message}")
+    { error: "Nem sikerült (#{e.class.name.demodulize}); részletek a bot logjában." }
+  end
+
+  def segment_png(date, saved)
+    ride = nil
+    if saved['kind'] == 'ride'
+      ts = ride_for(saved, TrackPick::Config.source_users)
+      ride = ts && TrackPick::MapImage::Ride.new(segment: ts, from: saved['from'].to_i, to: saved['to'].to_i)
+    end
+    seg = TrackPick::Segments::Segment.new(index: saved['index'].to_i, kind: saved['kind'].to_sym, from: saved['from'].to_i,
+                                           to: saved['to'].to_i, title: saved['title'], gtfs: saved['gtfs'] && ride.present?,
+                                           ride:, sources: [], recommended: saved['recommended'])
+    TrackPick::MapImage.build_segment_image(TrackPick::Comparison.new(date), seg)
+  rescue StandardError => e
+    Rails.logger.warn("[track_pick] segment image #{date} #{saved['index']} failed: #{e.class}: #{e.message}")
+    nil
   end
 
   def refresh_header(channel_id, date, file, picks)

@@ -374,7 +374,7 @@ module TrackPick::Message
               description: lines.join("\n"),
               color: seg['kind'] == 'ride' ? 0x0057B8 : 0x6B7280 }
     embed[:image] = { url: "attachment://#{segment_filename(date, seg['index'])}" } if image
-    { content: nil, embeds: [embed], components: split_segment_components(date, seg, picks),
+    { content: '', embeds: [embed], components: split_segment_components(date, seg, picks),
       allowed_mentions: { parse: [] } }
   end
 
@@ -403,6 +403,17 @@ module TrackPick::Message
     out.unshift([target, 'saját (marad)']) unless out.any? { |src, _| src == target }
     out << %w[g A\ menetrend] if seg['gtfs']
     out
+  end
+
+  # After a pick the segment message collapses to one line, like a decided card (Bator
+  # 2026-11-18: "csukódjon össze... ugyan úgy mint az előző kártya"); Módosítás opens it again.
+  def split_collapsed_payload(date, seg, picks)
+    line = "✓ #{CIRCLED[seg['index'].to_i - 1]} #{span(seg)} · #{seg['title']} → " \
+           "**#{choice_label(seg, picks[seg['index'].to_s])}**"
+    { content: line.truncate(1900), embeds: [], attachments: [], allowed_mentions: { parse: [] },
+      components: [{ type: ROW, components: [
+        { type: BUTTON, style: SECONDARY, label: 'Módosítás', custom_id: "trackpick:#{date.iso8601}:p:#{seg['index']}:edit" }
+      ] }] }
   end
 
   def choice_label(seg, src, none: 'saját, marad')
