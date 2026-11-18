@@ -31,6 +31,25 @@ class Gtfs::WalkOwners
     [own] + others
   end
 
+  # [[leg, owner], ...] without another owner's legs that overlap one of the
+  # viewer's own by more than SHADOW_SECS: the accounts are one person, so
+  # that is the same walk twice, and the phone's own one is drawn (2026-11-18:
+  # the logger's rejected, raw walk of 07:03 ran through the yards next to
+  # the phone's snapped one). Another owner's walk shows where the viewer has
+  # none (Bator: "kié melyik séta").
+  SHADOW_SECS = 60
+
+  def self.drop_shadowed(pairs)
+    own = pairs.select { |_, owner| owner.own }.map { |leg, _| [leg.started_at.to_i, leg.ended_at.to_i] }
+    pairs.reject do |leg, owner|
+      next false if owner.own
+
+      from = leg.started_at.to_i
+      to = leg.ended_at.to_i
+      own.any? { |a, b| [to, b].min - [from, a].max > SHADOW_SECS }
+    end
+  end
+
   # Full name, else the e-mail's handle (never the whole address).
   def self.label(user)
     Gtfs::Discord::Config.user_label(user)

@@ -16,13 +16,14 @@ class Api::V1::Transit::WalkLegsController < Api::V1::Transit::BaseController
   end
 
   # GET /api/v1/transit/walk_legs/map?start_at=&end_at= : GeoJSON for the map layer.
-  # Every owner's walks (Gtfs::WalkOwners), each with its colour and label.
+  # Every owner's walks (Gtfs::WalkOwners), each with its colour and label; another
+  # owner's walk only where the viewer has none at the same time.
   def map
     viewer = current_api_user
-    legs = Gtfs::WalkOwners.for(viewer).flat_map do |owner|
+    legs = Gtfs::WalkOwners.drop_shadowed(Gtfs::WalkOwners.for(viewer).flat_map do |owner|
       zones = Gtfs::WalkOwners.zones(owner, viewer)
       Gtfs::WalkLegQuery.new(owner.user, params.permit(*query_keys), zones).map_legs.map { |leg| [leg, owner] }
-    end
+    end)
     fixes = end_fixes(legs.map(&:first))
     features = legs.flat_map do |leg, owner|
       ends = [fixes[leg.point_ids&.first], fixes[leg.point_ids&.last]]

@@ -46,4 +46,13 @@ class WalkOwnersTest < Minitest::Test
     plain = Api::TransitWalkLegSerializer.new(leg).features
     assert(plain.none? { |f| f[:properties].key?(:owner_color) })
   end
+
+  def test_another_owners_walk_at_the_same_time_is_dropped
+    own = O::Owner.new(user: nil, color: O::OWN_COLOR, label: 'me', own: true)
+    other = O::Owner.new(user: nil, color: '#7C3AED', label: 'logger', own: false)
+    leg = ->(from, to) { TransitWalkLeg.new(started_at: from, ended_at: to) }
+    pairs = [[leg.(1000, 1600), own], [leg.(1180, 1620), other], [leg.(1550, 2000), other], [leg.(3000, 3300), other]]
+    kept = O.drop_shadowed(pairs)
+    assert_equal [[1000, true], [1550, false], [3000, false]], kept.map { |l, o| [l.started_at, o.own] }
+  end
 end
