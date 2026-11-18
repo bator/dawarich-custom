@@ -143,6 +143,7 @@
     "app/services/gtfs/walk/stationary_filter.rb",
     "app/services/gtfs/walk/valhalla_client.rb",
     "app/services/gtfs/walk/zone_check.rb",
+    "app/services/gtfs/walk_owners.rb",
     "app/services/gtfs/zip_reader.rb",
     "app/services/track_mode_corrections.rb",
     "app/services/track_pick/comparison.rb",

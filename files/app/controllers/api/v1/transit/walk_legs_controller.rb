@@ -15,14 +15,18 @@ class Api::V1::Transit::WalkLegsController < Api::V1::Transit::BaseController
     }
   end
 
-  # GET /api/v1/transit/walk_legs/map?start_at=&end_at= : GeoJSON for the map layer
+  # GET /api/v1/transit/walk_legs/map?start_at=&end_at= : GeoJSON for the map layer.
+  # Every owner's walks (Gtfs::WalkOwners), each with its colour and label.
   def map
-    query = Gtfs::WalkLegQuery.new(current_api_user, params.permit(*query_keys))
-    legs = query.map_legs
-    fixes = end_fixes(legs)
-    features = legs.flat_map do |leg|
+    viewer = current_api_user
+    legs = Gtfs::WalkOwners.for(viewer).flat_map do |owner|
+      zones = Gtfs::WalkOwners.zones(owner, viewer)
+      Gtfs::WalkLegQuery.new(owner.user, params.permit(*query_keys), zones).map_legs.map { |leg| [leg, owner] }
+    end
+    fixes = end_fixes(legs.map(&:first))
+    features = legs.flat_map do |leg, owner|
       ends = [fixes[leg.point_ids&.first], fixes[leg.point_ids&.last]]
-      Api::TransitWalkLegSerializer.new(leg, ends:).features
+      Api::TransitWalkLegSerializer.new(leg, ends:, owner:).features
     end
     render json: { type: 'FeatureCollection', features: }
   end

@@ -12,9 +12,11 @@ class Api::TransitWalkLegSerializer
 
   # ends: the leg's first and last recorded fix ([lon, lat] each), where the
   # map's raw track line meets the walk
-  def initialize(leg, ends: nil)
+  # owner: a Gtfs::WalkOwners::Owner on the map (whose walk, its colour)
+  def initialize(leg, ends: nil, owner: nil)
     @leg = leg
     @ends = ends
+    @owner = owner
   end
 
   def call
@@ -34,6 +36,7 @@ class Api::TransitWalkLegSerializer
 
   def features
     props = call
+    props = props.merge(owner_color: @owner.color, owner_label: @owner.label, own: @owner.own) if @owner
     parts.each_with_index.filter_map do |part, index|
       coords = part['coords'].map { |lon, lat| [lon.to_f.round(DIGITS), lat.to_f.round(DIGITS)] }
       geometry = if part['source'] == 'stationary'

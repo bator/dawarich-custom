@@ -91,7 +91,8 @@ export class WalkLegsLayer extends BaseLayer {
         filter: line,
         layout: { "line-join": "round" },
         paint: {
-          "line-color": WALK_COLOR,
+          // whose walk (Gtfs::WalkOwners): the viewer's own in WALK_COLOR
+          "line-color": ["coalesce", ["get", "owner_color"], WALK_COLOR],
           "line-width": 3,
           "line-dasharray": [2, 1.2],
         },
@@ -158,10 +159,13 @@ export class WalkLegsLayer extends BaseLayer {
       p.p95_m === null || p.p95_m === undefined
         ? ""
         : `<div class="text-xs opacity-70">${escapeHtml(walkTr("accuracy"))} ${Math.round(p.p95_m)} m</div>`
+    // whose walk: the owner's colour, and its name when several owners show
+    const color = /^#[0-9A-Fa-f]{6}$/.test(p.owner_color || "") ? p.owner_color : WALK_COLOR
+    const owner = p.owner_label ? ` · ${escapeHtml(p.owner_label)}` : ""
     const html = `
       <div class="text-sm space-y-1">
         <div class="flex items-center gap-2">
-          <span class="badge font-bold" style="background:${WALK_COLOR};color:#FFFFFF">🚶 ${escapeHtml(walkTr("title"))}</span>
+          <span class="badge font-bold" style="background:${color};color:#FFFFFF">🚶 ${escapeHtml(walkTr("title"))}${owner}</span>
         </div>
         <div>${clock(p.started_at)}–${clock(p.ended_at)}</div>
         ${length}

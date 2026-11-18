@@ -19,6 +19,8 @@ OVERLAY = ENV.fetch('DC_TEST_OVERLAY', '/tmp/dc-test/files')
   app/services/gtfs/discord/client.rb
   app/services/gtfs/discord/config.rb
   app/jobs/gtfs/discord/notify_job.rb
+  app/services/gtfs/walk_owners.rb
+  app/serializers/api/transit_walk_leg_serializer.rb
 ].each do |rel|
   path = File.join(OVERLAY, rel)
   silence_warnings { load path } if File.exist?(path) # constant redefinition warnings only
