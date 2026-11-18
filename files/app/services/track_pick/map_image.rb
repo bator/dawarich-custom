@@ -137,6 +137,44 @@ class TrackPick::MapImage < Gtfs::Discord::MapRenderer
     canvas.to_blob(color_mode: ChunkyPNG::COLOR_TRUECOLOR, compression: Zlib::BEST_COMPRESSION)
   end
 
+  # One segment's image for the split messages (2026-11-18): only the panels with something to
+  # show (the sources that have points in that time, the timetable line of a ride), side by side
+  # with the same bounding box, each keeping its number (1-3, A) so it matches the buttons.
+  def self.build_segment_image(comparison, seg)
+    png = nil
+    PANELS.each do |w, h|
+      png = segment_image(comparison, seg, w, h)
+      return png if png.bytesize <= UPLOAD_LIMIT - UPLOAD_MARGIN
+
+      warn "track_pick: segment #{seg.index} image at #{w}x#{h} panels is #{png.bytesize / 1024} KB, trying smaller"
+    end
+    png
+  end
+
+  def self.segment_image(comparison, seg, panel_w, panel_h)
+    stats = comparison.call.first(3)
+    line = seg.kind == :ride ? ride_line(seg.ride_segment) : nil
+    windows = stats.map { |s| s.times.zip(s.coords).select { |ts, _| ts.between?(seg.from, seg.to) }.map(&:last) }
+    bbox = bbox_of(windows.flatten(1) + (line ? line.coordinates : []))
+    panels = []
+    with_size(panel_w, panel_h) do
+      stats.each_index do |i|
+        next unless windows[i].size >= 2 && bbox
+
+        panels << [render_one(windows[i], i, bbox:), (i + 1).to_s, color(i)]
+      end
+      gtfs = line && bbox && seg.gtfs ? render_line(seg.ride_segment, line, bbox) : nil
+      panels << [gtfs, 'A', ChunkyPNG::Color.from_hex('#333333')] if gtfs
+    end
+    panels = [[nil, '1', color(0)]] if panels.empty?
+    canvas = ChunkyPNG::Image.new((panels.size * panel_w) + ((panels.size + 1) * GUTTER), panel_h + (2 * GUTTER),
+                                  SHEET_BG)
+    panels.each_with_index do |(png, label, badge), col|
+      paste(canvas, png, GUTTER, GUTTER, panel_w, panel_h, label, badge, col:)
+    end
+    canvas.to_blob(color_mode: ChunkyPNG::COLOR_TRUECOLOR, compression: Zlib::BEST_COMPRESSION)
+  end
+
   def self.color(index) = ChunkyPNG::Color.from_hex(TrackPick::Config::COLORS[index % 3])
 
   # [[min lon, min lat], [max lon, max lat]] or nil

@@ -331,6 +331,106 @@ module TrackPick::Message
     [rows, [note, line].compact.join(' ')]
   end
 
+  # --- split pick (since 2026-11-18): a header message + one message per segment ----------
+  # Bator: "ezt daraboljuk szét inkább üzenetekre. Mivel így kb érthetetlen" (one embed with a
+  # tile sheet and one select for every segment). Each segment message shows its own image (the
+  # sources that have points there, side by side, and the timetable line of a ride) and one
+  # button per source; the green one is the current pick, at first the recommendation. The
+  # header lists every segment with its pick and holds Jóváhagyás / Kihagyás. Picks are kept in
+  # state/picks-<date>.json. Custom ids:
+  #   trackpick:<date>:p:<index>:<src>   a segment's button (src: user id or g)
+  #   trackpick:<date>:pok               Jóváhagyás on the header
+  #   trackpick:<date>:skip              Kihagyás
+  # `file`: the hash state/segments-<date>.json holds (string keys).
+
+  def split_header_payload(date, file, picks)
+    segs = Array(file['segments'])
+    copied = segs.count { |s| copies?(picks[s['index'].to_s]) }
+    lines = segs.map do |s|
+      "**#{CIRCLED[s['index'].to_i - 1]}** #{span(s)} · #{s['title']} → **#{choice_label(s, picks[s['index'].to_s])}**"
+    end
+    count = "#{segs.size} szakasz · #{copied} átvesz, #{segs.size - copied} marad"
+    embed = { title: "Track-választás – #{date.iso8601} → #{TrackPick::Config.handle(TrackPick::Config.target_user)}",
+              description: [file['summary'], count, lines.join("\n"), file['dropped_line']]
+                .reject(&:blank?).join("\n\n"),
+              color: 0x0057B8,
+              footer: { text: 'Alatta szakaszonként egy üzenet: a zöld gomb a választás (elsőre az ajánlott, ★). ' \
+                              'A Jóváhagyás után kerül át; ami a saját nyomodon marad, az nem változik.' } }
+    { content: nil, embeds: [embed], components: [{ type: ROW, components: [
+      { type: BUTTON, style: SUCCESS, label: 'Jóváhagyás', custom_id: "trackpick:#{date.iso8601}:pok" },
+      { type: BUTTON, style: SECONDARY, label: 'Kihagyás', custom_id: "trackpick:#{date.iso8601}:skip" }
+    ] }], allowed_mentions: { parse: [] } }
+  end
+
+  def split_segment_payload(date, seg, picks, image: false)
+    target = TrackPick::Config.target_user.id.to_s
+    lines = Array(seg['sources']).each_with_index.map do |s, i|
+      own = s['user_id'] == target ? ' (saját)' : ''
+      "**#{i + 1}** #{s['handle']}#{own} · #{s['count']} p · #{(s['coverage'].to_f * 100).round} % lefedés"
+    end
+    lines << '**A** menetrendi vonal' if seg['gtfs']
+    lines << "Ajánlott: #{choice_label(seg, seg['recommended'], none: 'nincs, marad')}"
+    embed = { title: "#{CIRCLED[seg['index'].to_i - 1]} #{span(seg)} · #{seg['title']}".truncate(250),
+              description: lines.join("\n"),
+              color: seg['kind'] == 'ride' ? 0x0057B8 : 0x6B7280 }
+    embed[:image] = { url: "attachment://#{segment_filename(date, seg['index'])}" } if image
+    { content: nil, embeds: [embed], components: split_segment_components(date, seg, picks),
+      allowed_mentions: { parse: [] } }
+  end
+
+  # one button per source with points there (the target's own = "marad") and the timetable line
+  def split_segment_components(date, seg, picks)
+    target = TrackPick::Config.target_user.id.to_s
+    chosen = picks[seg['index'].to_s].presence || target
+    buttons = split_choices(seg).map do |src, label|
+      star = seg['recommended'].to_s == src || (seg['recommended'].blank? && src == target) ? '★ ' : ''
+      { type: BUTTON, style: chosen == src ? SUCCESS : SECONDARY, label: "#{star}#{label}".truncate(80),
+        custom_id: "trackpick:#{date.iso8601}:p:#{seg['index']}:#{src}" }
+    end
+    [{ type: ROW, components: buttons.first(5) }]
+  end
+
+  # [[src, button label], ...]: the target (stays), every other source with >= 2 points, the line
+  def split_choices(seg)
+    target = TrackPick::Config.target_user.id.to_s
+    out = Array(seg['sources']).each_with_index.filter_map do |s, i|
+      if s['user_id'] == target
+        [target, "#{i + 1} #{s['handle']} (marad)"]
+      elsif s['count'].to_i >= 2
+        [s['user_id'], "#{i + 1} #{s['handle']}"]
+      end
+    end
+    out.unshift([target, 'saját (marad)']) unless out.any? { |src, _| src == target }
+    out << %w[g A\ menetrend] if seg['gtfs']
+    out
+  end
+
+  def choice_label(seg, src, none: 'saját, marad')
+    target = TrackPick::Config.target_user.id.to_s
+    return none if src.blank? || src.to_s == target
+    return 'A menetrend' if src.to_s == 'g'
+
+    i = Array(seg['sources']).index { |s| s['user_id'] == src.to_s }
+    i ? "#{i + 1} #{seg['sources'][i]['handle']}" : 'ismeretlen'
+  end
+
+  def span(seg)
+    zone = TrackPick::Config.zone
+    "#{Time.zone.at(seg['from'].to_i).in_time_zone(zone).strftime('%H:%M')}–" \
+      "#{Time.zone.at(seg['to'].to_i).in_time_zone(zone).strftime('%H:%M')}"
+  end
+
+  def segment_filename(date, index)
+    "track-pick-#{date.iso8601}-seg#{index}.png"
+  end
+
+  # the initial picks: every recommendation that copies something
+  def initial_picks(segs)
+    Array(segs).each_with_object({}) do |s, h|
+      h[s['index'].to_s] = s['recommended'].to_s if copies?(s['recommended'])
+    end
+  end
+
   def files(date, sheet)
     return [] unless sheet
 

@@ -51,6 +51,10 @@ class TrackPick::DiscordHandler
     return Plan.new(ephemeral('Ismeretlen választás.')) unless action
 
     case action[:kind]
+    when :split_pick then split_pick(interaction, date, action[:index], action[:src])
+    when :split_confirm
+      Plan.new({ type: DEFERRED_UPDATE_MESSAGE },
+               -> { work_segments(interaction, date, TrackPick::Segments.load_picks(date), user) })
     when :seg_select
       rows, line = TrackPick::Message.restate_segments(Array(interaction.dig('message', 'components')),
                                                        date:, picks: action[:picks], note: action[:note])
@@ -90,6 +94,8 @@ class TrackPick::DiscordHandler
       value == 'skip' ? { kind: :skip } : { kind: :confirm, day: value, bp: 'same', picks: {} }
     when 'skip' then { kind: :skip }
     when 'rec' then { kind: :seg_confirm, picks: :recommended } # segment pick (2026-11-08)
+    when 'pok' then { kind: :split_confirm } # split messages (2026-11-18)
+    when /\Ap:(\d{1,2}):(\d+|g)\z/ then { kind: :split_pick, index: Regexp.last_match(1), src: Regexp.last_match(2) }
     when /\As:([^:]+)\z/
       return nil unless TrackPick::Message.decode_picks(Regexp.last_match(1))
 
@@ -179,7 +185,57 @@ class TrackPick::DiscordHandler
     $stdout.puts("[track_pick] #{text}")
     Gtfs::Discord::Client.new.edit_message(interaction['channel_id'], interaction.dig('message', 'id'),
                                            TrackPick::Message.done_payload(text))
+    remove_split_messages(interaction['channel_id'], date)
     {}
+  end
+
+  # --- split messages (2026-11-18): one message per segment, picks in state/picks-<date>.json ---
+
+  # A segment button: the pick is stored, the segment message re-styled (UPDATE_MESSAGE), and
+  # the header's list re-written afterwards. Nothing is copied before Jóváhagyás.
+  def split_pick(interaction, date, index, src)
+    file = TrackPick::Segments.load_file(date)
+    seg = file && Array(file['segments']).find { |s| s['index'].to_s == index }
+    return Plan.new(ephemeral('Ehhez a naphoz nincs mentett szakaszlista.')) unless seg
+    if file.dig('segment_messages', index).to_s != interaction.dig('message', 'id').to_s
+      return Plan.new(ephemeral('Ez egy korábbi üzenet erre a napra; a legutóbbin válassz.'))
+    end
+    return Plan.new(ephemeral('Ismeretlen választás.')) unless TrackPick::Message.split_choices(seg).any? { |c, _| c == src }
+
+    picks = TrackPick::Config.with_decision_lock(date) do
+      next nil if TrackPick::Config.decision(date)
+
+      current = TrackPick::Segments.load_picks(date)
+      src == TrackPick::Config.target_user.id.to_s ? current.delete(index) : current[index] = src
+      TrackPick::Segments.save_picks!(date, current)
+      current
+    end
+    return Plan.new(ephemeral('Erre a napra már döntöttél.')) unless picks
+
+    Plan.new({ type: UPDATE_MESSAGE, data: { components: TrackPick::Message.split_segment_components(date, seg, picks) } },
+             -> { refresh_header(interaction['channel_id'], date, file, picks) })
+  end
+
+  def refresh_header(channel_id, date, file, picks)
+    return {} if file['message_id'].blank?
+
+    Gtfs::Discord::Client.new.edit_message(channel_id, file['message_id'],
+                                           TrackPick::Message.split_header_payload(date, file, picks))
+    {}
+  rescue StandardError => e
+    Rails.logger.error("[track_pick] header refresh failed: #{e.class}: #{e.message}")
+    {}
+  end
+
+  # after a decision the segment messages go; the header keeps the one-line result
+  def remove_split_messages(channel_id, date)
+    ids = TrackPick::Segments.load_file(date)&.dig('segment_messages')&.values || []
+    client = Gtfs::Discord::Client.new
+    ids.each do |id|
+      client.delete_message(channel_id, id)
+    rescue StandardError => e
+      Rails.logger.warn("[track_pick] segment message #{id} not deleted: #{e.class}: #{e.message}")
+    end
   end
 
   # --- segment pick (TrackPick::Segments, state/segments-<date>.json) ----------------------
@@ -229,6 +285,7 @@ class TrackPick::DiscordHandler
     $stdout.puts("[track_pick] #{text}")
     Gtfs::Discord::Client.new.edit_message(interaction['channel_id'], interaction.dig('message', 'id'),
                                            TrackPick::Message.done_payload(text))
+    remove_split_messages(interaction['channel_id'], date)
     {}
   end
 

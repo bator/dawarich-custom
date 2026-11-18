@@ -49,6 +49,11 @@ class Gtfs::Discord::Client
     request(:patch, "/channels/#{id!(channel_id)}/messages/#{id!(message_id)}", payload, files)
   end
 
+  # the bot's own message (the track pick's segment messages after a decision)
+  def delete_message(channel_id, message_id)
+    request(:delete, "/channels/#{id!(channel_id)}/messages/#{id!(message_id)}")
+  end
+
   # Answer to a button click (must happen within 3 s of the click).
   def interaction_callback(interaction_id, interaction_token, payload)
     raise ArgumentError, 'invalid interaction token' unless interaction_token.to_s.match?(/\A[\w.-]+\z/)

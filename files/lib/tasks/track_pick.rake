@@ -25,29 +25,38 @@ namespace :track_pick do
       puts 'no segment to pick (nobody moved): nothing posted'
       next
     end
-    sheet = begin
-      TrackPick::MapImage.build_segment_sheet(comparison, segs) # one image, one row per segment
-    rescue StandardError => e
-      warn "map sheet failed: #{e.class}: #{e.message}"
-      nil
+    # split messages (2026-11-18): a header + one message per segment with its own image
+    extra = { summary: TrackPick::Message.summary(comparison),
+              dropped_line: TrackPick::Message.dropped_line(segments.dropped) }
+    file = JSON.parse(JSON.generate(segments.to_h(**extra)))
+    picks = TrackPick::Message.initial_picks(file['segments'])
+    images = segs.to_h do |seg|
+      png = begin
+        TrackPick::MapImage.build_segment_image(comparison, seg)
+      rescue StandardError => e
+        warn "segment #{seg.index} image failed: #{e.class}: #{e.message}"
+        nil
+      end
+      [seg.index.to_s, png]
     end
-    payload = TrackPick::Message.segment_payload(comparison, segs, sheet:, dropped: segments.dropped)
+    header = TrackPick::Message.split_header_payload(date, file, picks)
+    seg_payloads = file['segments'].map do |s|
+      [s, TrackPick::Message.split_segment_payload(date, s, picks, image: images[s['index'].to_s].present?)]
+    end
     if (decided = TrackPick::Config.decision(date))
       puts "#{TrackPick::Message.decided_line(decided)} -> no choice offered, nothing posted"
       next
     end
     if dry
       dir = ENV['TRACK_PICK_MAP_DIR'].presence || '/tmp'
-      path = sheet && File.join(dir, TrackPick::Message.sheet_filename(date))
-      File.binwrite(path, sheet) if path
-      File.write(File.join(dir, "track-pick-#{date.iso8601}-payload.json"), JSON.pretty_generate(payload))
-      puts "DRY RUN: nothing sent, nothing written to the database (map sheet: #{path || 'none'})"
-      puts payload[:embeds].first[:description]
-      payload[:components].each do |row|
-        row[:components].each do |c|
-          items = c[:options]&.map { |o| "#{o[:label]}=#{o[:value]}" } || [c[:label]]
-          puts "#{c[:custom_id]}: #{items.join(' | ')}"
-        end
+      images.each { |i, png| File.binwrite(File.join(dir, TrackPick::Message.segment_filename(date, i)), png) if png }
+      File.write(File.join(dir, "track-pick-#{date.iso8601}-payload.json"),
+                 JSON.pretty_generate([header] + seg_payloads.map(&:last)))
+      puts "DRY RUN: nothing sent, nothing written to the database (images and payloads in #{dir})"
+      puts header[:embeds].first[:description]
+      seg_payloads.each do |s, payload|
+        puts "#{payload[:embeds].first[:title]}: " +
+             payload[:components].flat_map { |r| r[:components] }.map { |c| "#{c[:label]}=#{c[:custom_id]}" }.join(' | ')
       end
       next
     end
@@ -68,14 +77,44 @@ namespace :track_pick do
       puts "already posted (or posting) for #{date.iso8601} (#{marker}: #{marker.read.strip}); FORCE=1 to post again"
       next
     end
+    client = Gtfs::Discord::Client.new
+    channel = TrackPick::Config.channel_id
+    posted = []
+    # up to 9 messages in a row: Discord allows ~5 per 5 s per channel, so wait when it says so
+    post = lambda do |payload, files|
+      tries = 0
+      begin
+        client.post_message(channel, payload, files:)
+      rescue Gtfs::Discord::Client::RateLimited => e
+        raise if (tries += 1) > 5
+
+        sleep(e.retry_after.to_f + 0.2)
+        retry
+      end
+    end
     begin
-      segments.save! # a click refers to a segment by its number
-      files = TrackPick::Message.files(date, sheet)
-      msg = Gtfs::Discord::Client.new.post_message(TrackPick::Config.channel_id, payload, files:)
-      File.write(marker, "#{msg['id']}\n")
-      segments.save!(message_id: msg['id'].to_s)
-      puts "posted message #{msg['id']}"
+      segments.save!(**extra) # a click refers to a segment by its number
+      TrackPick::Segments.save_picks!(date, picks)
+      head = post.call(header, [])
+      posted << head['id']
+      segments.save!(message_id: head['id'].to_s, **extra)
+      ids = {}
+      seg_payloads.each do |s, payload|
+        png = images[s['index'].to_s]
+        files = png ? [Gtfs::Discord::Client::Upload.new(TrackPick::Message.segment_filename(date, s['index']), png, 'image/png')] : []
+        msg = post.call(payload, files)
+        posted << msg['id']
+        ids[s['index'].to_s] = msg['id'].to_s
+        segments.save!(message_id: head['id'].to_s, segment_messages: ids, **extra)
+      end
+      File.write(marker, "#{head['id']}\n")
+      puts "posted header #{head['id']} and #{ids.size} segment message(s)"
     rescue StandardError
+      posted.each do |id|
+        client.delete_message(channel, id)
+      rescue StandardError => e
+        warn "could not delete #{id}: #{e.class}"
+      end
       marker.delete if marker.exist? && marker.read.strip == 'pending'
       raise
     end

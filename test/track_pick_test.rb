@@ -64,6 +64,13 @@ class TrackPickParseTest < Minitest::Test
     assert_equal({ kind: :seg_confirm, picks: :recommended }, parse('rec'))
   end
 
+  def test_split_actions
+    assert_equal({ kind: :split_pick, index: '2', src: 'g' }, parse('p:2:g'))
+    assert_equal({ kind: :split_pick, index: '3', src: '8' }, parse('p:3:8'))
+    assert_equal({ kind: :split_confirm }, parse('pok'))
+    assert_nil parse('p:2:x')
+  end
+
   def test_older_message_formats_still_parse
     assert_equal({ kind: :confirm, day: '8', bp: 'same', picks: {} }, parse('ok:8:same:-'))
     assert_equal({ kind: :confirm, day: '8', bp: 'same', picks: {} }, parse('ok:8:same'))
@@ -130,5 +137,113 @@ class LateRideLineTest < Minitest::Test
       assert lr.send(:offered?, Seg.new(created_at: Time.zone.parse('2026-11-13 05:00')), decision)
       refute lr.send(:offered?, Seg.new(created_at: Time.zone.parse('2026-11-14 10:00')), decision)
     end
+  end
+end
+
+class TrackPickSplitMessageTest < Minitest::Test
+  M = TrackPick::Message
+
+  def target = TrackPick::Config.target_user.id.to_s
+
+  def ride
+    { 'index' => 2, 'kind' => 'ride', 'from' => 1_763_398_920, 'to' => 1_763_399_760, 'title' => 'M4 Kelenföld → Keleti',
+      'gtfs' => true, 'recommended' => 'g',
+      'sources' => [{ 'user_id' => target, 'handle' => 'minekte', 'count' => 5, 'coverage' => 0.02 },
+                    { 'user_id' => '8', 'handle' => 'toth.bator', 'count' => 0, 'coverage' => 0.0 }] }
+  end
+
+  def move
+    { 'index' => 1, 'kind' => 'move', 'from' => 1_763_350_000, 'to' => 1_763_398_900, 'title' => '… → Bikás park',
+      'gtfs' => false, 'recommended' => '8',
+      'sources' => [{ 'user_id' => target, 'handle' => 'minekte', 'count' => 152, 'coverage' => 0.38 },
+                    { 'user_id' => '8', 'handle' => 'toth.bator', 'count' => 2647, 'coverage' => 0.93 }] }
+  end
+
+  def test_initial_picks_are_the_recommendations_that_copy
+    assert_equal({ '2' => 'g', '1' => '8' }, M.initial_picks([ride, move, move.merge('index' => 3, 'recommended' => target)]))
+  end
+
+  def test_choices_keep_own_skip_empty_sources_and_add_the_line
+    assert_equal [target, 'g'], M.split_choices(ride).map(&:first)
+    assert_equal [target, '8'], M.split_choices(move).map(&:first)
+  end
+
+  def test_buttons_green_on_the_pick_star_on_the_recommendation
+    date = Date.new(2026, 11, 17)
+    buttons = M.split_segment_components(date, ride, { '2' => 'g' }).first[:components]
+    assert_equal ["trackpick:2026-11-17:p:2:#{target}", 'trackpick:2026-11-17:p:2:g'], buttons.map { |b| b[:custom_id] }
+    assert_equal [M::SECONDARY, M::SUCCESS], buttons.map { |b| b[:style] }
+    assert buttons.last[:label].start_with?('★ ')
+    own = M.split_segment_components(date, ride, {}).first[:components]
+    assert_equal [M::SUCCESS, M::SECONDARY], own.map { |b| b[:style] }
+  end
+
+  def test_header_lists_every_pick_and_counts
+    file = { 'summary' => 'S', 'segments' => [move, ride] }
+    payload = M.split_header_payload(Date.new(2026, 11, 17), file, { '2' => 'g' })
+    text = payload[:embeds].first[:description]
+    assert_includes text, '2 szakasz · 1 átvesz, 1 marad'
+    assert_includes text, '→ **A menetrend**'
+    assert_includes text, '→ **saját, marad**'
+    assert_equal %w[trackpick:2026-11-17:pok trackpick:2026-11-17:skip],
+                 payload[:components].first[:components].map { |c| c[:custom_id] }
+  end
+end
+
+class TrackPickSplitHandlerTest < Minitest::Test
+  C = TrackPick::Config
+  DATE = Date.new(2026, 1, 2)
+
+  def setup
+    @dir = Dir.mktmpdir('trackpick')
+    @old = C::STATE_DIR
+    C.send(:remove_const, :STATE_DIR)
+    C.const_set(:STATE_DIR, @dir)
+  end
+
+  def teardown
+    C.send(:remove_const, :STATE_DIR)
+    C.const_set(:STATE_DIR, @old)
+    FileUtils.rm_rf(@dir)
+  end
+
+  def interaction(custom_id, message_id)
+    { 'type' => 3, 'channel_id' => C.channel_id.to_s, 'application_id' => '99',
+      'member' => { 'user' => { 'id' => C.allowed_discord_user_ids.first.to_s, 'username' => 't' } },
+      'message' => { 'id' => message_id, 'author' => { 'id' => '99' } },
+      'data' => { 'custom_id' => custom_id } }
+  end
+
+  def test_segment_click_stores_the_pick_and_restyles_only_that_message
+    target = C.target_user.id.to_s
+    seg = { 'index' => 2, 'kind' => 'move', 'from' => 1, 'to' => 2, 'title' => 't', 'gtfs' => false, 'recommended' => '8',
+            'sources' => [{ 'user_id' => target, 'handle' => 'a', 'count' => 5, 'coverage' => 0.1 },
+                          { 'user_id' => '8', 'handle' => 'b', 'count' => 9, 'coverage' => 0.9 }] }
+    TrackPick::Segments.write_file(DATE, { 'date' => DATE.iso8601, 'message_id' => '100', 'summary' => 'S',
+                                           'segment_messages' => { '2' => '102' }, 'segments' => [seg] })
+    TrackPick::Segments.save_picks!(DATE, { '2' => '8' })
+    handler = TrackPick::DiscordHandler.new
+
+    plan = handler.prepare(interaction("trackpick:#{DATE}:p:2:#{target}", '102'))
+    assert_equal 7, plan.response[:type]
+    assert_equal({}, TrackPick::Segments.load_picks(DATE)) # own = stays: no pick
+    styles = plan.response[:data][:components].first[:components].map { |b| b[:style] }
+    assert_equal [TrackPick::Message::SUCCESS, TrackPick::Message::SECONDARY], styles
+
+    edited = []
+    client = Object.new
+    client.define_singleton_method(:edit_message) { |_c, id, payload| edited << [id, payload] }
+    Gtfs::Discord::Client.define_singleton_method(:new) { |*| client }
+    begin
+      plan.work.call
+    ensure
+      Gtfs::Discord::Client.singleton_class.send(:remove_method, :new)
+    end
+    assert_equal '100', edited.first[0]
+    assert_includes edited.first[1][:embeds].first[:description], '0 átvesz, 1 marad'
+
+    stale = handler.prepare(interaction("trackpick:#{DATE}:p:2:8", '555'))
+    assert_equal 4, stale.response[:type] # ephemeral: an older message
+    assert_equal({}, TrackPick::Segments.load_picks(DATE))
   end
 end

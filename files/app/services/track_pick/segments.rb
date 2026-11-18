@@ -22,7 +22,12 @@ class TrackPick::Segments
     def ride_segment = ride&.segment
 
     def as_json(*)
-      { index:, kind: kind.to_s, from:, to:, title:, segment_id: ride_segment&.id, gtfs:, recommended: }
+      { index:, kind: kind.to_s, from:, to:, title:, segment_id: ride_segment&.id, gtfs:, recommended:,
+        # what a segment message and the header need on a click, without the Comparison
+        sources: sources.map do |s|
+          { user_id: s.user.id.to_s, handle: TrackPick::Config.handle(s.user), count: s.count,
+            coverage: s.coverage.to_f.round(3) }
+        end }
     end
   end
 
@@ -74,17 +79,44 @@ class TrackPick::Segments
     [kept, (segments - kept).sort_by(&:from)]
   end
 
-  def to_h(message_id: nil) = { date: date.iso8601, message_id:, segments: call.map(&:as_json) }
+  def to_h(message_id: nil, **extra)
+    { date: date.iso8601, message_id:, **extra, segments: call.map(&:as_json) }
+  end
 
   def self.path(date) = File.join(TrackPick::Config::STATE_DIR, "segments-#{date.iso8601}.json")
 
   # Written before posting (message_id nil) and again with the posted message's id: a click
   # on any other message of that day (an older one after FORCE=1) is refused, since its
   # segment numbers may mean other times (review 2026-11-15). Written atomically.
-  def save!(message_id: nil)
+  # extra: split messages (2026-11-18): summary, dropped_line, segment_messages ({index => id})
+  def save!(message_id: nil, **extra)
     FileUtils.mkdir_p(TrackPick::Config::STATE_DIR)
-    path = self.class.path(date)
-    File.write("#{path}.tmp", JSON.pretty_generate(to_h(message_id:)))
+    self.class.write_file(date, to_h(message_id:, **extra))
+  end
+
+  def self.write_file(date, hash)
+    path = path(date)
+    File.write("#{path}.tmp", JSON.pretty_generate(hash))
+    File.rename("#{path}.tmp", path)
+  end
+
+  # split messages: the picks so far, { "2" => "g", "4" => "8" } (a segment not in it keeps
+  # the target's own points). Starts as the recommendations that copy something.
+  def self.picks_path(date) = File.join(TrackPick::Config::STATE_DIR, "picks-#{date.iso8601}.json")
+
+  def self.load_picks(date)
+    JSON.parse(File.read(picks_path(date))).to_h { |k, v| [k.to_s, v.to_s] }
+  rescue Errno::ENOENT
+    {}
+  rescue JSON::ParserError => e
+    Rails.logger.error("[track_pick] #{picks_path(date)}: #{e.message}")
+    {}
+  end
+
+  def self.save_picks!(date, picks)
+    FileUtils.mkdir_p(TrackPick::Config::STATE_DIR)
+    path = picks_path(date)
+    File.write("#{path}.tmp", JSON.generate(picks))
     File.rename("#{path}.tmp", path)
   end
 
