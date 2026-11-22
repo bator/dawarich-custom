@@ -11,7 +11,7 @@
 # The versions are read once when the run starts and used for the whole run
 # (spec 17.11); SegmentWriter refuses to save if a feed changed meanwhile.
 class Gtfs::Matching::FeedSet
-  Entry = Struct.new(:feed, :versions, keyword_init: true)
+  Entry = Struct.new(:feed, :versions, :base_id, keyword_init: true) # base_id: archive feeds (archive_of)
 
   attr_reader :entries
 
@@ -19,11 +19,25 @@ class Gtfs::Matching::FeedSet
   def self.for_user(user, feed_keys: Gtfs::UserSettings.new(user).feed_keys)
     scope = Gtfs::Feed.enabled.where('active_version > 0')
     scope = scope.where(key: feed_keys) if feed_keys.present?
-    new(scope.order(:id).to_a)
+    feeds = scope.order(:id).to_a
+    new(feeds + archives_of(feeds))
+  end
+
+  # Disabled archive feeds (config archive_of) of the feeds in use, with an imported version.
+  def self.archives_of(feeds)
+    keys = feeds.map(&:key)
+    archive_keys = Gtfs::FeedRegistry.definitions.select { |_, d| keys.include?(d['archive_of'].to_s) }.keys
+    return [] if archive_keys.empty?
+
+    Gtfs::Feed.where(key: archive_keys).where('active_version > 0').order(:id).to_a
   end
 
   def initialize(feeds)
-    @entries = feeds.map { |feed| Entry.new(feed:, versions: versions_of(feed)) }
+    by_key = feeds.index_by(&:key)
+    @entries = feeds.map do |feed|
+      base = by_key[Gtfs::FeedRegistry.definition(feed.key)&.dig('archive_of').to_s]
+      Entry.new(feed:, versions: versions_of(feed), base_id: base&.id)
+    end
     @coverage = {}
   end
 
@@ -35,6 +49,10 @@ class Gtfs::Matching::FeedSet
   def version_for(feed, date)
     entry = @entries.find { |e| e.feed.id == feed.id }
     return nil unless entry
+
+    # an archive only fills the days its base feed has no timetable for (no duplicate trips)
+    return nil if entry.base_id && (base = @entries.find { |e| e.feed.id == entry.base_id }) &&
+                  version_for(base.feed, date)
 
     entry.versions.find { |version| covers?(feed.id, version, date) }
   end

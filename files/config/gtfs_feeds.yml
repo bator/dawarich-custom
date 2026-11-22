@@ -40,6 +40,14 @@ feeds:
     # menetbrand mirror of the BKK feed.
     name: BKK Budapest
     url: https://gtfs.menetbrand.com/download/budapest/
+  budapest_archive:
+    # An older BKK timetable for days `budapest` no longer has (only its active and one backup
+    # version are kept). Stays DISABLED, so it is not synced and Atlas/MOTIS does not get a second
+    # copy of the network; the matcher uses it through `archive_of`, only on dates the base feed
+    # has no version for (Gtfs::Matching::FeedSet). No URL: imported by hand with
+    # gtfs:import_file, e.g. a Mobility Database snapshot (mdb-990).
+    name: BKK Budapest (archív)
+    archive_of: budapest
   dombovar:
     name: Dombóvár local buses
     url: https://gtfs.menetbrand.com/download/dombovar/
