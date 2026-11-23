@@ -10,6 +10,7 @@ OVERLAY = ENV.fetch('DC_TEST_OVERLAY', '/tmp/dc-test/files')
 %w[
   app/services/gtfs/matching/window_detector.rb
   app/services/gtfs/matching/scorer.rb
+  app/services/gtfs/matching/feed_set.rb
   app/services/gtfs/segment_matcher.rb
   app/services/gtfs/match_cases.rb
   app/services/track_pick/segments.rb

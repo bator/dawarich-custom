@@ -28,6 +28,8 @@ class Gtfs::SegmentMatcher
   OVERLAP_SECS = 30
   TRANSFER_BACK_SECS = 600 # a metro ride starting this soon after another ride may board at its stop
   TRANSFER_RADIUS_M = 400 # fixes this close to that ride's alighting stop are the change
+  TRANSFER_WAIT_SECS = 1200 # waiting at the end of a gap before the next ride (gaps_before_transfers)
+  TRANSFER_GAP_METRO_SHARE = 0.8 # metro_over_rail
   GAP_NEIGHBOUR_SECS = 60 # a gap window and a movement window this close share their edge point
   EXTEND_GAP_SECS = 180 # a movement window starting this soon after a ride may be its rest
   EXTEND_MAX_STEPS = 3
@@ -83,6 +85,7 @@ class Gtfs::SegmentMatcher
     # (2026-11-17: M4 182 Bikás park -> Keleti and 183 Móricz -> Keleti, both kept)
     matches = drop_overlaps(extend_arrivals(matches, stats))
     matches = extend_boards(matches, stats)
+    matches = gaps_before_transfers(matches, stats)
     matches = drop_overlaps(extend_departures(matches, stats))
     stats['matches'] = matches.size
     stats['ms'] = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
@@ -459,6 +462,45 @@ class Gtfs::SegmentMatcher
   end
 
   def vehicle_stretch_at(points) = self.class.vehicle_stretch_at(points)
+
+  # 2026-11-22 (toth.bator, GPS logger): 133E to Keleti, then the M4 to Kelenföld underground,
+  # then waiting for the S30. No fix from 13:28:53 (Keleti) to 13:52:39 (Kelenföld, the S30
+  # leaving), so the gap held a 13 min ride and 10 min on the platform; scored as a slow ride the
+  # M4 got 0.46 and was dropped. An unmatched gap that ends where the next ride boards (within
+  # GAP_NEIGHBOUR_SECS and TRANSFER_RADIUS_M of its stop) is scored again with up to
+  # TRANSFER_WAIT_SECS of waiting at its end; a metro or train ride found that way is added.
+  def gaps_before_transfers(matches, stats)
+    added = Array(@windows).select(&:gap?).filter_map do |gap|
+      next if matches.any? { |m| m.started_at.to_i < gap.end_ts && m.ended_at.to_i > gap.start_ts }
+
+      nxt = matches.select { |m| (m.started_at.to_i - gap.end_ts).between?(-GAP_NEIGHBOUR_SECS, GAP_NEIGHBOUR_SECS) }
+                   .min_by { |m| m.started_at.to_i }
+      next unless nxt && (stop = nxt.score.board)
+
+      last = gap.points.last
+      next if Gtfs::Matching::Geo.haversine(last.lon, last.lat, stop.lon, stop.lat) > TRANSFER_RADIUS_M
+
+      waiting = gap.dup.tap { |w| w.wait_at_end = TRANSFER_WAIT_SECS }
+      best, alternatives = evaluate(waiting, stats)
+      best, alternatives = metro_over_rail(best, alternatives)
+      next unless best && best.confidence >= drop_below(best) && %w[metro rail].include?(mode_of(best))
+
+      stats['transfer_gaps'] += 1
+      build_match(waiting, best, alternatives)
+    end
+    added.empty? ? matches : drop_overlaps(matches + added)
+  end
+
+  # With the wait the end of the gap no longer pins the arrival, so the timing cannot tell a
+  # train from the metro (2026-11-22: rjx 66 0.60, M4 0.58). A train runs above ground, where
+  # the logger keeps its fix; a gap without any fix between two stations is the metro, so a
+  # metro trip within TRANSFER_GAP_METRO_SHARE of the best train is taken.
+  def metro_over_rail(best, alternatives)
+    return [best, alternatives] unless best && mode_of(best) == 'rail'
+
+    metro = alternatives.find { |s| mode_of(s) == 'metro' && s.confidence >= best.confidence * TRANSFER_GAP_METRO_SHARE }
+    metro ? [metro, [best] + (alternatives - [metro])] : [best, alternatives]
+  end
 
   # Where the late-arrival lookahead must stop (review 2026-11-15: it could step over a GPS gap
   # and on into later rides). It may reach into the next movement window, which is often the

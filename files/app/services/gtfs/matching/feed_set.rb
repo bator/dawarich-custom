@@ -20,7 +20,7 @@ class Gtfs::Matching::FeedSet
     scope = Gtfs::Feed.enabled.where('active_version > 0')
     scope = scope.where(key: feed_keys) if feed_keys.present?
     feeds = scope.order(:id).to_a
-    new(feeds + archives_of(feeds))
+    new(feeds + archives_of(feeds), user:)
   end
 
   # Disabled archive feeds (config archive_of) of the feeds in use, with an imported version.
@@ -32,8 +32,9 @@ class Gtfs::Matching::FeedSet
     Gtfs::Feed.where(key: archive_keys).where('active_version > 0').order(:id).to_a
   end
 
-  def initialize(feeds)
+  def initialize(feeds, user: nil)
     by_key = feeds.index_by(&:key)
+    @user = user
     @entries = feeds.map do |feed|
       base = by_key[Gtfs::FeedRegistry.definition(feed.key)&.dig('archive_of').to_s]
       Entry.new(feed:, versions: versions_of(feed), base_id: base&.id)
@@ -50,9 +51,15 @@ class Gtfs::Matching::FeedSet
     entry = @entries.find { |e| e.feed.id == feed.id }
     return nil unless entry
 
-    # an archive only fills the days its base feed has no timetable for (no duplicate trips)
-    return nil if entry.base_id && (base = @entries.find { |e| e.feed.id == entry.base_id }) &&
-                  version_for(base.feed, date)
+    # an archive only fills the days its base feed has no timetable for (no duplicate trips), and
+    # never a day the base feed matched for this user while it had one: those rides came from the
+    # real timetable and an archive ride would sit next to them (2026-11-23: the night rematch
+    # after a budapest import doubled user 8's rides of 11-17..11-21)
+    if entry.base_id
+      base = @entries.find { |e| e.feed.id == entry.base_id }
+      return nil if base && version_for(base.feed, date)
+      return nil if base_matched_dates(entry.base_id).include?(date)
+    end
 
     entry.versions.find { |version| covers?(feed.id, version, date) }
   end
@@ -89,6 +96,18 @@ class Gtfs::Matching::FeedSet
     backup = Gtfs::ServiceDay.where(feed_id: feed.id).where(version: ...feed.active_version)
                              .distinct.pluck(:version).max
     [feed.active_version, backup].compact
+  end
+
+  # local dates on which the user has rides of the base feed (any status)
+  def base_matched_dates(base_id)
+    return Set.new unless @user
+
+    @base_matched ||= {}
+    @base_matched[base_id] ||= begin
+      zone = ActiveSupport::TimeZone[@user.timezone_iana.to_s] || Time.zone
+      TransitSegment.where(user_id: @user.id, feed_id: base_id).pluck(:started_at)
+                    .to_set { |ts| Time.zone.at(ts).in_time_zone(zone).to_date }
+    end
   end
 
   def covers?(feed_id, version, date)

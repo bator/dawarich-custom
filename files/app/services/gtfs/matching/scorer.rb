@@ -607,6 +607,9 @@ class Gtfs::Matching::Scorer
     elapsed = last_t - first_t
     return { reason: 'scheduled ride time unknown' } unless scheduled.positive?
 
+    # a gap that ends at a change: the wait for the next ride is not ride time (2026-11-22)
+    elapsed -= [elapsed - scheduled, @window.wait_at_end.to_i, 0].sort[1] if @window.gap?
+
     tolerance = Gtfs::Config::GAP_DURATION_TOLERANCE * scheduled
     slack = access_slack
     too_short = elapsed < scheduled - tolerance

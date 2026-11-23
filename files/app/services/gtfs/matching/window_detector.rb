@@ -39,8 +39,10 @@ class Gtfs::Matching::WindowDetector
   # truncated_start / truncated_end: which side the dropped point is on
   # (truncated = either). A window built without them counts as truncated
   # at the end when `truncated` is set (the conservative side).
+  # wait_at_end: seconds of waiting the end of a gap may hold (a change to the next ride, set by
+  # Gtfs::SegmentMatcher#gap_before_transfer); the scorer does not count them as a slow ride
   Window = Struct.new(:points, :kind, :pauses, :moving_start, :board_from_gap, :truncated, :sparse,
-                      :truncated_start, :truncated_end, keyword_init: true) do
+                      :truncated_start, :truncated_end, :wait_at_end, keyword_init: true) do
     def start_ts = points.first.ts
     def end_ts = points.last.ts
     def duration = end_ts - start_ts
