@@ -85,7 +85,7 @@ hu:
   transit_coverage:
     index:
       title: "Követés: eszközök és lefedettség"
-      note: "Az idő mekkora részében jöttek élő pontok (a 15 percen belüli pontok folytonosnak számítanak, az importált pontok nem)."
+      note: "Az idő mekkora részében jöttek élő pontok (a 15 percen belüli pontok folytonosnak számítanak, az importált és a track pick által átvett pontok nem)."
       loading: Lefedettség betöltése…
       last: "utolsó pont %{time} ezelőtt"
       covered: az idő lefedve

@@ -85,7 +85,7 @@ en:
   transit_coverage:
     index:
       title: "Tracking: devices and coverage"
-      note: "How much of the time live points came in (points less than 15 min apart count as continuous; imported points not counted)."
+      note: "How much of the time live points came in (points less than 15 min apart count as continuous; imported points and points taken over by a track pick not counted)."
       loading: Loading coverage…
       last: "last point %{time} ago"
       covered: of the time covered

@@ -5,11 +5,16 @@
 # had a point, the point count, and the longest silent gaps. Reads only (user_id,
 # timestamp) of the live points of the period (imports excluded); that is
 # the whole cost (no index on import_id), so the page caches the result.
+# Points a track pick wrote onto the user (copies of another user's tracker and
+# timetable lines, raw_data.track_pick) are not the user's own tracking and
+# are left out, here and in Gtfs::DeviceReports.
 class Gtfs::CoverageReport
   MERGE_S = 15 * 60 # points closer than this belong to one span
   MIN_SPAN_S = 5 * 60 # a lone point still shows as a short span
   GAP_S = 3 * 3600 # a silence of 3 h or more is listed as a gap
   TOP_GAPS = 5
+  # Not written by a track pick (TrackPick::Copier, TrackPick::GtfsPoints); IS NOT TRUE keeps NULL raw_data.
+  OWN_POINTS_SQL = "(raw_data ? 'track_pick') IS NOT TRUE"
 
   # days: { Date => { minutes:, points:, hours: [0..23, ...] } } (local days)
   # hour_points: points per local hour of day over the whole period (24 ints)
@@ -83,6 +88,7 @@ class Gtfs::CoverageReport
   # { user_id => Entry }
   def call
     rows = Point.where(user_id: @user_ids, import_id: nil).where('timestamp >= ?', @since.to_i)
+                .where(OWN_POINTS_SQL)
                 .order(:user_id, :timestamp).pluck(:user_id, :timestamp)
     rows.group_by(&:first).to_h { |user_id, list| [user_id, build(user_id, list.map(&:last))] }
   end

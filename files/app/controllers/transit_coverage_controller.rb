@@ -27,10 +27,10 @@ class TransitCoverageController < ApplicationController
     user_ids = @users.map(&:id)
     since = @days.days.ago.beginning_of_day
     @report_meta = Gtfs::CoverageReport.new([], since:, zone: @zone)
-    @cached_at, @reports = Rails.cache.fetch(['transit-coverage/v4', user_ids, @days, @zone.name], expires_in: CACHE_TTL) do
+    @cached_at, @reports = Rails.cache.fetch(['transit-coverage/v5', user_ids, @days, @zone.name], expires_in: CACHE_TTL) do
       [Time.current, Gtfs::CoverageReport.new(user_ids, since:, zone: @zone).call]
     end
-    @devices_at, rows = Rails.cache.fetch(['transit-devices/v3', user_ids, @days], expires_in: DEVICES_TTL) do
+    @devices_at, rows = Rails.cache.fetch(['transit-devices/v4', user_ids, @days], expires_in: DEVICES_TTL) do
       [Time.current, Gtfs::DeviceReports.new(user_ids, since:).call]
     end
     @devices = rows.group_by { |row| row['user_id'] }

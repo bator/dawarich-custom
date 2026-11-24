@@ -4,7 +4,9 @@
 # tracker_id (OwnTracks tid, the device_id of the Dawarich app, Overland or
 # Traccar), resolved the way Points::SlimCollectionQuery does it: from
 # point_sources when the point has a source_id, else from the legacy column.
-# Imported points are left out, they are history, not reports.
+# Imported points are left out, they are history, not reports; so are the
+# points a track pick wrote (raw_data.track_pick), they are another user's
+# tracker or a timetable line, not a device of this user.
 #
 # Speed: points have no index on the device, so the query reads every live
 # point of the period from index_points_live_on_user_id_timestamp (index-only);
@@ -36,6 +38,7 @@ class Gtfs::DeviceReports
         FROM points p
         LEFT JOIN point_sources ps ON ps.id = p.source_id
         WHERE p.user_id IN (:user_ids) AND p.import_id IS NULL AND p.timestamp >= :since
+          AND (p.raw_data ? 'track_pick') IS NOT TRUE
         GROUP BY 1, 2
       ) g
       CROSS JOIN LATERAL (
@@ -44,6 +47,7 @@ class Gtfs::DeviceReports
         FROM points p
         LEFT JOIN point_sources ps ON ps.id = p.source_id
         WHERE p.user_id = g.user_id AND p.timestamp = g.last_timestamp AND p.import_id IS NULL
+          AND (p.raw_data ? 'track_pick') IS NOT TRUE
           AND (CASE WHEN p.source_id IS NULL THEN p.tracker_id ELSE ps.tracker_id END) IS NOT DISTINCT FROM g.tracker_id
         ORDER BY p.created_at DESC
         LIMIT 1
