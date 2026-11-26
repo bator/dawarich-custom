@@ -48,6 +48,11 @@ module Gtfs::Config
   RAIL_BOARD_RADIUS_M     = int('GTFS_RAIL_BOARD_RADIUS_M', 300)
   RAIL_ROUTE_TYPES        = [2, *100..117].freeze
   TIME_TOLERANCE_SECS     = int('GTFS_TIME_TOLERANCE_SECS', 900)
+  # A vehicle stuck in traffic: when a matched ride is extended over the next window
+  # (SegmentMatcher#extend_once), its delay may grow along the ride up to this, provided it
+  # left (or passed its first timed stop) within TIME_TOLERANCE_SECS (2026-11-25: the 8069
+  # left the Székesfehérvár bus station 5 min late and reached Úrhida 21 min late in a jam).
+  GROWN_DELAY_MAX_SECS    = int('GTFS_MATCH_GROWN_DELAY_MAX_SECS', 1800)
   ENDPOINT_POINTS         = int('GTFS_MATCH_ENDPOINT_POINTS', 3)          # "first/last points" of a window
   ENDPOINT_SECS           = int('GTFS_MATCH_ENDPOINT_SECS', 90)
   MAX_CANDIDATES          = int('GTFS_MATCH_MAX_CANDIDATES', 15)          # scored in detail (9.5: "best 10")

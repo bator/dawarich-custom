@@ -31,7 +31,7 @@ class Gtfs::SegmentMatcher
   TRANSFER_WAIT_SECS = 1200 # waiting at the end of a gap before the next ride (gaps_before_transfers)
   TRANSFER_GAP_METRO_SHARE = 0.8 # metro_over_rail
   GAP_NEIGHBOUR_SECS = 60 # a gap window and a movement window this close share their edge point
-  EXTEND_GAP_SECS = 180 # a movement window starting this soon after a ride may be its rest
+  EXTEND_GAP_SECS = 300 # a movement window starting this soon after a ride may be its rest (a jam, 2026-11-25: 250 s)
   EXTEND_MAX_STEPS = 3
   # A train can stop short of the station (signal) and enter it after the
   # movement window has ended: look this far past the end of an unmatched window.
@@ -570,8 +570,8 @@ class Gtfs::SegmentMatcher
           .flat_map { |half| match_window(half, depth + 1, stats) }
   end
 
-  # => [best_score, other_scores]
-  def evaluate(window, stats)
+  # => [best_score, other_scores]; grown_delay: see Gtfs::Config::GROWN_DELAY_MAX_SECS
+  def evaluate(window, stats, grown_delay: false)
     board_points = endpoint_points(window.points)
     alight_points = endpoint_points(window.points.reverse)
     scores = []
@@ -587,11 +587,11 @@ class Gtfs::SegmentMatcher
                                                      privacy_zones: @privacy_zones)
         next if window.slow? && !slow_window_plausible?(window, finder, board_points, alight_points)
 
-        candidates = finder.call(window, board_points:, alight_points:)
+        candidates = finder.call(window, board_points:, alight_points:, grown_delay:)
         stats['candidates'] += candidates.size
         candidates.each do |candidate|
           profile = Gtfs::Matching::TripProfile.load(feed, version, candidate.trip_gtfs_id, cache: @profiles)
-          scores << Gtfs::Matching::Scorer.new(window, candidate, profile).call
+          scores << Gtfs::Matching::Scorer.new(window, candidate, profile, grown_delay:).call
         end
       end
     end
@@ -749,7 +749,7 @@ class Gtfs::SegmentMatcher
   # Kelenföld -> Dinnyés, 21 s before the last 11 km to Székesfehérvár;
   # Bator). A movement window that starts at most EXTEND_GAP_SECS after a
   # ride and that no other ride covers is scored together with it; the
-  # longer ride is kept when it is accepted on the same trip.
+  # longer ride is kept when it is accepted on the same trip (or rides_on?).
   def extend_into_next(matches, points, windows, stats)
     matches.map do |match|
       EXTEND_MAX_STEPS.times do
@@ -776,11 +776,25 @@ class Gtfs::SegmentMatcher
       truncated_start: match.window.truncated_start, truncated_end: nxt.truncated_end,
       sparse: [match.window, nxt].any?(&:sparse)
     )
-    best, alternatives = evaluate(window, stats)
-    return unless best && same_trip?(best, match.score) && best.confidence >= drop_below(best)
+    best, alternatives = evaluate(window, stats, grown_delay: true)
+    return unless best && best.confidence >= drop_below(best)
+    return unless same_trip?(best, match.score) || rides_on?(best, match)
 
     stats['extended_rides'] += 1
     build_match(window, best, alternatives)
+  end
+
+  # 2026-11-25 (phone): the short stretch from the Székesfehérvár bus station to Jancsár utca
+  # fitted city bus 10 best, the whole ride to Úrhida only the 8069 (Volán), which serves the
+  # same stops. Another trip may take over the extended ride when it boards at the same place,
+  # alights later and scores at least as well as the short ride.
+  def rides_on?(best, match)
+    a = best.board
+    b = match.score.board
+    return false if a.nil? || b.nil? || best.ended_at.to_i <= match.ended_at.to_i
+    return false if best.confidence < match.confidence
+
+    same_stop?(a, b) || Gtfs::Matching::Geo.haversine(a.lon, a.lat, b.lon, b.lat) <= Gtfs::Config::GAP_JOIN_STOP_RADIUS_M
   end
 
   def same_trip?(score, other)

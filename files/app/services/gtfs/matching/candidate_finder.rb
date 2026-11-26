@@ -4,7 +4,9 @@
 # date. A trip qualifies when it runs on the service date, calls at a stop
 # near the window start before a stop near the window end (stop_sequence
 # order, so loop lines work, 17.7), and departs/arrives within
-# TIME_TOLERANCE_SECS of the window start/end. Only read queries.
+# TIME_TOLERANCE_SECS of the window start/end; with grown_delay the arrival
+# may also lie up to GROWN_DELAY_MAX_SECS before the window end (a delay that
+# grew on the way, judged by the Scorer). Only read queries.
 class Gtfs::Matching::CandidateFinder
   Candidate = Struct.new(
     :feed, :version, :service_date, :day_start, :trip_gtfs_id, :board_stop_gtfs_id, :alight_stop_gtfs_id,
@@ -22,14 +24,14 @@ class Gtfs::Matching::CandidateFinder
   end
 
   # board_points / alight_points: MatchPoint lists around the window ends
-  def call(window, board_points:, alight_points:)
+  def call(window, board_points:, alight_points:, grown_delay: false)
     board_ids = stops_near(board_points)
     alight_ids = stops_near(alight_points)
     return [] if board_ids.empty? || alight_ids.empty?
 
     t_start = window.start_ts - @day_start.to_i
     t_end = window.end_ts - @day_start.to_i
-    best_pair_per_trip(query(board_ids, alight_ids, t_start, t_end), t_start, t_end)
+    best_pair_per_trip(query(board_ids, alight_ids, t_start, t_end, grown_delay), t_start, t_end)
       .min_by(Gtfs::Config::MAX_CANDIDATES, &:residual)
   end
 
@@ -94,13 +96,14 @@ class Gtfs::Matching::CandidateFinder
     distance <= Gtfs::Config::RAIL_BOARD_RADIUS_M && self.class.rail_stop_ids(@feed.id, @version).include?(stop_id)
   end
 
-  def query(board_ids, alight_ids, t_start, t_end)
+  def query(board_ids, alight_ids, t_start, t_end, grown_delay)
     tol = Gtfs::Config::TIME_TOLERANCE_SECS
+    late = grown_delay ? [tol, Gtfs::Config::GROWN_DELAY_MAX_SECS].max : tol
     binds = {
       feed_id: @feed.id, version: @version, service_date: @service_date,
       board_ids:, alight_ids:,
       start_min: t_start - tol, start_max: t_start + tol,
-      end_min: t_end - tol, end_max: t_end + tol, t_start:, t_end:,
+      end_min: t_end - late, end_max: t_end + tol, t_start:, t_end:,
       limit: ROW_LIMIT
     }
     sql = ActiveRecord::Base.sanitize_sql_array([<<~SQL.squish, binds])

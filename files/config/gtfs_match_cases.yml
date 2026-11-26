@@ -206,3 +206,25 @@ cases:
       - line: '7'
         board: Zugló vasútállomás
         alight: Rákospatak utca / Csömöri út
+  - id: volan-bus-delay-grows-in-jam-logger
+    note: >-
+      GPS logger (1 Hz), 2026-11-25 (Bator: "full szarul matchelte a tegnapi utamat"):
+      the 8069 left the Székesfehérvár bus station at 16:50 (16:45 in the timetable),
+      crawled 4 min in the evening jam after Jancsár utca, then went via Sárpentele to
+      Úrhida, Kossuth utca 65., 21 min late at 17:29. The jam split the ride (250 s pause)
+      and a delay over 15 min was rejected, so the ride ended at Jancsár utca. Fixed with
+      GROWN_DELAY_MAX_SECS (a delay may grow along the ride), timing at the stops when the
+      curve offset sticks, and EXTEND_GAP_SECS 300.
+    user_id: 8
+    date: 2026-11-25
+    expect:
+      - line: '8069'
+        board: Székesfehérvár, autóbusz-állomás
+        alight: Úrhida, Kossuth utca 65.
+        from: '16:50'
+        to: '17:29'
+        tolerance_min: 4
+    forbid:
+      - line: '8069'
+        board: Székesfehérvár, autóbusz-állomás
+        alight: Székesfehérvár, Jancsár  utca

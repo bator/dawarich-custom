@@ -104,7 +104,9 @@ class Gtfs::Matching::Scorer
   MOVEMENT_STILL_SPEED_MS = Gtfs::Config::MOVEMENT_STILL_SPEED_MS
   MOVEMENT_MAX_STEP_SECS = Gtfs::Config::MOVEMENT_MAX_STEP_SECS
 
-  def initialize(window, candidate, profile)
+  # grown_delay: the delay may grow up to GROWN_DELAY_MAX_SECS along the ride (an extended ride)
+  def initialize(window, candidate, profile, grown_delay: false)
+    @grown_delay = grown_delay
     @window = window
     @candidate = candidate
     @profile = profile
@@ -129,6 +131,7 @@ class Gtfs::Matching::Scorer
     end
     time = if gap_mode? then endpoint_time_score
            elsif stop_mode? || rail_timing? then stop_passage_time_score
+           elsif @grown_delay then curve_or_grown_time_score
            else curve_time_score
            end
     return reject(time[:reason]) if time[:reason]
@@ -411,8 +414,7 @@ class Gtfs::Matching::Scorer
       else 0
       end
     end
-    tol = Gtfs::Config::TIME_TOLERANCE_SECS
-    return { reason: 'delay outside the tolerance' } if delays.any? { |d| d.abs > tol }
+    return { reason: 'delay outside the tolerance' } unless delays_fit?(delays)
     # trains do not leave early: with only two stops seen, averaging would
     # hide it behind the arrival slack (review K1)
     if @departure_seen && !board_from_gap? && delays.first < -Gtfs::Config::EARLY_DEPARTURE_REJECT_SECS
@@ -426,6 +428,31 @@ class Gtfs::Matching::Scorer
     error += delays.each_cons(2).sum { |a, b| [a - b - Gtfs::Config::DELAY_RECOVERY_SLACK, 0].max }
     delay = delays.max_by(&:abs)
     { score: time_value(error.fdiv(delays.size), delay), delay: delay.round }
+  end
+
+  # Every delay within TIME_TOLERANCE_SECS, or a delay that grew: the first
+  # timed stop within the tolerance, later ones late by up to GROWN_DELAY_MAX_SECS.
+  def delays_fit?(delays)
+    tol = Gtfs::Config::TIME_TOLERANCE_SECS
+    return true if delays.all? { |d| d.abs <= tol }
+    return false unless @grown_delay
+
+    delays.first.abs <= tol && delays.all? { |d| d >= -tol && d <= Gtfs::Config::GROWN_DELAY_MAX_SECS }
+  end
+
+  # 2026-11-25 (8069 to Úrhida, 5 min late at the bus station, 21 min at the end): one
+  # offset on the time-distance curve cannot follow a bus whose delay grows in a jam; the
+  # best offset sticks at the tolerance or the fit fails. Then the timing at the stops,
+  # where each stop has its own delay, is tried, and the better of the two counts.
+  def curve_or_grown_time_score
+    curve = curve_time_score
+    pinned = curve[:delay].to_i.abs >= Gtfs::Config::TIME_TOLERANCE_SECS
+    return curve unless pinned || curve[:score] < Gtfs::Config::MIN_TIME_SCORE
+
+    stops = stop_passage_time_score
+    return curve if stops[:reason] || stops[:score] <= curve[:score]
+
+    stops
   end
 
   def stop_passage_samples
