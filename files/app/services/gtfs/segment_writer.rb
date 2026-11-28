@@ -10,7 +10,9 @@
 # - `auto` segments of the range that were not found again are removed, but
 #   only for feeds that could actually be evaluated in the range. Rides from a
 #   feed whose timetable is no longer available (decision K4: only active +
-#   one backup version) are kept as they are.
+#   one backup version) are kept as they are, and no new segment is created
+#   that overlaps one of them (2026-11-27: after the Volán import dropped the
+#   version for 11-25, its kept 8069 ride got a city bus 10 ride on top of it).
 # - `confirmed` and `rejected` segments, and `auto` segments the user switched
 #   to another trip (chosen_by_user, waiting for approval), are never
 #   modified, and no new segment is created that overlaps one of them.
@@ -32,7 +34,7 @@ class Gtfs::SegmentWriter
     TransitSegment.transaction do
       raise FeedChanged, 'a feed switched its timetable version during matching' unless @feed_set.unchanged?
 
-      protected_ranges = protected_segments(from_ts, to_ts)
+      protected_ranges = protected_segments(from_ts, to_ts) + kept_ranges(from_ts, to_ts, evaluated_feed_ids)
       existing = existing_auto(from_ts, to_ts, evaluated_feed_ids).index_by { |s| key_of(s) }
       kept_ids = []
 
@@ -68,6 +70,12 @@ class Gtfs::SegmentWriter
     reviewed.where('started_at < ? AND ended_at > ?', to_ts + Gtfs::Config::DAY_BUFFER_SECS,
                    from_ts - Gtfs::Config::DAY_BUFFER_SECS)
             .pluck(:started_at, :ended_at)
+  end
+
+  # auto rides of feeds that could not be evaluated in the range: kept, so they also block
+  def kept_ranges(from_ts, to_ts, evaluated_feed_ids)
+    @user.transit_segments.auto.where(started_at: from_ts...to_ts).where.not(feed_id: evaluated_feed_ids)
+         .pluck(:started_at, :ended_at)
   end
 
   def existing_auto(from_ts, to_ts, feed_ids)
