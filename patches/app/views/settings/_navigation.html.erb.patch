@@ -1,17 +1,132 @@
 --- a/app/views/settings/_navigation.html.erb
 +++ b/app/views/settings/_navigation.html.erb
-@@ -2,9 +2,12 @@
-   items = [
-     [t('.general'), settings_general_index_path, active_tab?(settings_general_index_path)],
-     [t('.integrations'), settings_integrations_path, active_tab?(settings_integrations_path)],
+@@ -1,29 +1,100 @@
+-<%
+-  items = [
+-    [t('.general'), settings_general_index_path, active_tab?(settings_general_index_path)],
+-    [t('.integrations'), settings_integrations_path, active_tab?(settings_integrations_path)],
 -    [t('.data_processing'), settings_data_processing_path, active_tab?(settings_data_processing_path)],
 -    [t('.geofencing'), settings_geofencing_path, controller_path.in?(%w[settings/geofencing settings/webhooks]) ? 'tab-active' : '']
-+    [t('.data_processing'), settings_data_processing_path, active_tab?(settings_data_processing_path)]
-   ]
-+  if Gtfs.enabled? || Gtfs::UserSettings.new(current_user).enabled?
-+    items << [t('settings.navigation.transit', default: t('settings.navigation.transit', locale: :en)), settings_transit_path, active_tab?(settings_transit_path)]
-+  end
-+  items << [t('.geofencing'), settings_geofencing_path, controller_path.in?(%w[settings/geofencing settings/webhooks]) ? 'tab-active' : '']
-   items << [t('.two_factor_authentication'), settings_two_factor_path, active_tab?(settings_two_factor_path)] if DawarichSettings.two_factor_available?
-   if DawarichSettings.self_hosted?
-     if current_user.admin?
+-  ]
+-  items << [t('.two_factor_authentication'), settings_two_factor_path, active_tab?(settings_two_factor_path)] if DawarichSettings.two_factor_available?
+-  if DawarichSettings.self_hosted?
+-    if current_user.admin?
+-      items << [t('.users'), settings_users_path, controller_path == 'settings/users' ? 'tab-active' : '']
+-      items << [t('.instance'), admin_settings_path, controller_path == 'admin/settings' ? 'tab-active' : '']
+-    end
+-    items << [t('.background_jobs'), settings_background_jobs_path, active_tab?(settings_background_jobs_path)]
+-  end
+-%>
+-<nav class="mb-6" aria-label="<%= t('ux_p2.settings.sections') %>">
+-  <label class="form-control md:hidden" data-controller="section-navigation">
+-    <span class="label-text mb-1"><%= t('ux_p2.settings.sections') %></span>
+-    <select class="select select-bordered w-full" data-testid="settings-section-select" data-action="change->section-navigation#navigate">
+-      <% items.each do |label, path, active| %><option value="<%= path %>" <%= 'selected' if active == 'tab-active' %>><%= label %></option><% end %>
+-    </select>
+-  </label>
+-  <div class="hidden md:block overflow-x-auto pb-1" data-controller="scroll-into-view">
+-    <div class="tabs tabs-boxed inline-flex min-w-max flex-nowrap" role="tablist">
+-      <% items.each do |label, path, active| %><%= link_to label, path, role: 'tab', class: "tab tab-lg #{active}", aria: { selected: active == 'tab-active' } %><% end %>
+-    </div>
+-  </div>
+-</nav>
++const defaultTheme = require("tailwindcss/defaultTheme")
++
++module.exports = {
++  content: [
++    "./app/helpers/**/*.rb",
++    "./app/javascript/**/*.js",
++    "./app/views/**/*.{erb,haml,html,slim}",
++  ],
++  theme: {
++    extend: {
++      fontFamily: {
++        sans: ["Inter", ...defaultTheme.fontFamily.sans],
++        display: ["Archivo", ...defaultTheme.fontFamily.sans],
++      },
++      // Coloured text that holds 4.5:1 on base-100/200 in both themes
++      // (dawarich-custom design system: text-*-ink instead of text-warning etc.)
++      colors: {
++        "primary-ink": "var(--primary-ink)",
++        "success-ink": "var(--success-ink)",
++        "warning-ink": "var(--warning-ink)",
++        "error-ink": "var(--error-ink)",
++        "info-ink": "var(--info-ink)",
++      },
++    },
++  },
++  plugins: [
++    require("daisyui"),
++    require("@tailwindcss/forms"),
++    require("@tailwindcss/aspect-ratio"),
++    require("@tailwindcss/typography"),
++  ],
++  daisyui: {
++    themes: [
++      {
++        dawarich: {
++          "color-scheme": "light",
++          primary: "#3B82F6",
++          "primary-content": "#FFFFFF",
++          secondary: "#0D9488",
++          "secondary-content": "#FFFFFF",
++          accent: "#0D9488",
++          "accent-content": "#FFFFFF",
++          neutral: "#1A1A1A",
++          "neutral-content": "#EAEAEA",
++          "base-100": "#FFFFFF",
++          "base-200": "#F5F5F3",
++          "base-300": "#E5E5E2",
++          "base-content": "#1A1A1A",
++          info: "#06B6D4",
++          "info-content": "#FFFFFF",
++          success: "#0D9488",
++          "success-content": "#FFFFFF",
++          warning: "#F59E0B",
++          "warning-content": "#FFFFFF",
++          error: "#EF4444",
++          "error-content": "#FFFFFF",
++          "--primary-ink": "#1D4ED8",
++          "--success-ink": "#0F766E",
++          "--warning-ink": "#92400E",
++          "--error-ink": "#B91C1C",
++          "--info-ink": "#0E7490",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
++        },
++        "dawarich-dark": {
++          "color-scheme": "dark",
++          primary: "#60A5FA",
++          "primary-content": "#0A1530",
++          secondary: "#2DD4BF",
++          "secondary-content": "#0A1510",
++          accent: "#2DD4BF",
++          "accent-content": "#0A1510",
++          neutral: "#EAEAEA",
++          "neutral-content": "#141414",
++          "base-100": "#1C1C1C",
++          "base-200": "#141414",
++          "base-300": "#101010",
++          "base-content": "#EAEAEA",
++          info: "#22D3EE",
++          "info-content": "#0A1520",
++          success: "#2DD4BF",
++          "success-content": "#0A1510",
++          warning: "#FBBF24",
++          "warning-content": "#1A1505",
++          error: "#F87171",
++          "error-content": "#1A0A0A",
++          "--primary-ink": "#60A5FA",
++          "--success-ink": "#2DD4BF",
++          "--warning-ink": "#FBBF24",
++          "--error-ink": "#F87171",
++          "--info-ink": "#22D3EE",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
++        },
++      },
++    ],
++  },
++}

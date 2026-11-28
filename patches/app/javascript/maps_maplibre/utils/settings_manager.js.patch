@@ -1,12 +1,496 @@
 --- a/app/javascript/maps_maplibre/utils/settings_manager.js
 +++ b/app/javascript/maps_maplibre/utils/settings_manager.js
-@@ -16,6 +16,9 @@
-   Photos: "photosEnabled",
-   Tracks: "tracksEnabled",
-   Flights: "flightsEnabled",
-+  Transit: "transitEnabled",
-+  "Walking legs": "walkLegsEnabled",
-+  "Frequent routes": "corridorsEnabled",
-   "Fog of War": "fogEnabled",
-   "Scratch map": "scratchEnabled",
-   "Family Members": "familyEnabled",
+@@ -1,397 +1,100 @@
+-/**
+- * Settings manager for persisting user preferences
+- * Loads settings from backend API only (no localStorage)
+- */
++const defaultTheme = require("tailwindcss/defaultTheme")
+ 
+-import { classifyBasemapUrl } from "maps_maplibre/utils/basemap_url"
+-
+-// Every default lives on the server (Users::SafeSettings): the map reads
+-// effective values from /api/v1/settings and keeps none of its own.
+-
+-export const LAYER_NAME_MAP = {
+-  Points: "pointsVisible",
+-  Heatmap: "heatmapEnabled",
+-  Hexagons: "hexagonsEnabled",
+-  Visits: "visitsEnabled",
+-  Photos: "photosEnabled",
+-  Tracks: "tracksEnabled",
+-  Flights: "flightsEnabled",
+-  "Fog of War": "fogEnabled",
+-  "Scratch map": "scratchEnabled",
+-  "Family Members": "familyEnabled",
+-  Places: "placesEnabled",
+-  "Place boundaries": "placeBoundariesEnabled",
+-  Anomalies: "anomaliesEnabled",
+-  Notes: "notesEnabled",
+-}
+-
+-const BOOLEAN_SETTINGS = [
+-  "gpsFilteringEnabled",
+-  "gpsAccuracyFilterEnabled",
+-  "pointDraggingEnabled",
+-  "splitTracksAtMidnight",
+-  "globeProjection",
+-  "speedColoredRoutes",
+-  "liveMapEnabled",
+-  "tilesFallback",
+-]
+-
+-const INTEGER_SETTINGS_ON_SAVE = new Set([
+-  "fogOfWarRadius",
+-  "fogOfWarThreshold",
+-  "metersBetweenRoutes",
+-  "minutesBetweenRoutes",
+-  "minMinutesSpentInCity",
+-])
+-
+-const BOOLEAN_SETTINGS_ON_SAVE = new Set([
+-  "globeProjection",
+-  "speedColoredRoutes",
+-  "liveMapEnabled",
+-  "pointDraggingEnabled",
+-  "splitTracksAtMidnight",
+-])
+-
+-export const BACKEND_SETTINGS_MAP = {
+-  mapStyle: "maps_maplibre_style",
+-  customTheme: "maps_maplibre_custom_theme",
+-  vectorTilesUrl: "maps_maplibre_tiles_url",
+-  tilesFallback: "maps_maplibre_tiles_fallback",
+-  trackColor: "track_color",
+-  enabledMapLayers: "enabled_map_layers",
+-  placesTagFilters: "places_tag_filters",
+-  fogOfWarRadius: "fog_of_war_meters",
+-  fogOfWarThreshold: "fog_of_war_threshold",
+-  fogOfWarMode: "fog_of_war_mode",
+-  globeProjection: "globe_projection",
+-  speedColoredRoutes: "speed_colored_routes",
+-  speedColorScale: "speed_color_scale",
+-  metersBetweenRoutes: "meters_between_routes",
+-  minutesBetweenRoutes: "minutes_between_routes",
+-  splitTracksAtMidnight: "split_tracks_at_midnight",
+-  minMinutesSpentInCity: "min_minutes_spent_in_city",
+-  gpsFilteringEnabled: "gps_filtering_enabled",
+-  gpsAccuracyFilterEnabled: "gps_accuracy_filter_enabled",
+-  gpsAccuracyThreshold: "gps_accuracy_threshold",
+-  pointDraggingEnabled: "point_dragging_enabled",
+-  enabledTransportationModes: "enabled_transportation_modes",
+-  distance_unit: "distance_unit",
+-  liveMapEnabled: "live_map_enabled",
+-}
+-
+-// biome-ignore lint/complexity/noStaticOnlyClass: retain the established public API
+-export class SettingsManager {
+-  static apiKey = null
+-  static cachedSettings = null
+-  // False until settings load from the server; saving is refused meanwhile so
+-  // a partial snapshot can never overwrite the stored settings.
+-  static loaded = false
+-  static saveQueue = Promise.resolve()
+-
+-  /**
+-   * Initialize settings manager with API key
+-   * @param {string} apiKey - User's API key for backend requests
+-   */
+-  static initialize(apiKey) {
+-    SettingsManager.apiKey = apiKey
+-    SettingsManager.cachedSettings = null
+-    SettingsManager.loaded = false
+-  }
+-
+-  /**
+-   * Get the loaded settings; empty until they load from the server
+-   * @returns {Object} Settings object
+-   */
+-  static getSettings() {
+-    if (SettingsManager.cachedSettings) {
+-      return { ...SettingsManager.cachedSettings }
+-    }
+-
+-    return SettingsManager._expandLayerSettings({})
+-  }
+-
+-  /**
+-   * Convert enabled_map_layers array to individual boolean flags
+-   * @param {Object} settings - Settings with enabledMapLayers array
+-   * @returns {Object} Settings with individual layer booleans
+-   */
+-  static _expandLayerSettings(settings) {
+-    const enabledLayers = [...(settings.enabledMapLayers || [])]
+-    if (enabledLayers.includes("Routes") && !enabledLayers.includes("Tracks")) {
+-      enabledLayers.push("Tracks")
+-    }
+-    if (enabledLayers.includes("Areas")) {
+-      enabledLayers.push("Places", "Place boundaries")
+-    }
+-    settings.enabledMapLayers = [
+-      ...new Set(
+-        enabledLayers.filter((name) => name !== "Routes" && name !== "Areas"),
+-      ),
+-    ]
+-
+-    Object.entries(LAYER_NAME_MAP).forEach(([layerName, settingKey]) => {
+-      settings[settingKey] = settings.enabledMapLayers.includes(layerName)
+-    })
+-
+-    return settings
+-  }
+-
+-  /**
+-   * Convert individual boolean flags to enabled_map_layers array
+-   * @param {Object} settings - Settings with individual layer booleans
+-   * @returns {Array} Array of enabled layer names
+-   */
+-  static _collapseLayerSettings(settings) {
+-    const enabledLayers = []
+-
+-    Object.entries(LAYER_NAME_MAP).forEach(([layerName, settingKey]) => {
+-      if (settings[settingKey] === true) {
+-        enabledLayers.push(layerName)
+-      }
+-    })
+-
+-    return enabledLayers
+-  }
+-
+-  /**
+-   * Load settings from backend API
+-   * @returns {Promise<Object|null>} Settings, or null when loading failed
+-   */
+-  static async loadFromBackend() {
+-    if (!SettingsManager.apiKey) {
+-      console.warn("[Settings] API key not set, cannot load from backend")
+-      return null
+-    }
+-
+-    try {
+-      const response = await fetch("/api/v1/settings", {
+-        headers: SettingsManager._headers(),
+-      })
+-
+-      if (!response.ok) {
+-        throw new Error(`Failed to load settings: ${response.status}`)
+-      }
+-
+-      const data = await response.json()
+-      return SettingsManager._applyBackendSettings(data.settings)
+-    } catch (error) {
+-      console.error("[Settings] Failed to load from backend:", error)
+-      return null
+-    }
+-  }
+-
+-  static _headers() {
+-    return {
+-      Authorization: `Bearer ${SettingsManager.apiKey}`,
+-      "Content-Type": "application/json",
+-    }
+-  }
+-
+-  /**
+-   * Map the server's effective settings to frontend keys and cache them
+-   * @param {Object} backendSettings - `settings` from the settings API
+-   * @returns {Object} Expanded frontend settings
+-   */
+-  static _applyBackendSettings(backendSettings) {
+-    const frontendSettings = {}
+-    Object.entries(BACKEND_SETTINGS_MAP).forEach(
+-      ([frontendKey, backendKey]) => {
+-        if (!(backendKey in backendSettings)) return
+-
+-        let value = backendSettings[backendKey]
+-        if (BOOLEAN_SETTINGS.includes(frontendKey)) {
+-          value = value === true || value === "true"
+-        }
+-        frontendSettings[frontendKey] = value
++module.exports = {
++  content: [
++    "./app/helpers/**/*.rb",
++    "./app/javascript/**/*.js",
++    "./app/views/**/*.{erb,haml,html,slim}",
++  ],
++  theme: {
++    extend: {
++      fontFamily: {
++        sans: ["Inter", ...defaultTheme.fontFamily.sans],
++        display: ["Archivo", ...defaultTheme.fontFamily.sans],
+       },
+-    )
+-
+-    // Extract map customization from nested maps settings
+-    if (backendSettings.maps?.hidden_tile_categories) {
+-      frontendSettings.hiddenTileCategories =
+-        backendSettings.maps.hidden_tile_categories
+-    }
+-    if (backendSettings.maps?.disabled_poi_groups) {
+-      frontendSettings.disabledPoiGroups =
+-        backendSettings.maps.disabled_poi_groups
+-    }
+-
+-    const expandedSettings =
+-      SettingsManager._expandLayerSettings(frontendSettings)
+-
+-    SettingsManager.updateCache(expandedSettings)
+-    SettingsManager.loaded = true
+-
+-    return SettingsManager.cachedSettings
+-  }
+-
+-  /**
+-   * Update cache with new settings
+-   * @param {Object} settings - Settings object
+-   */
+-  static updateCache(settings) {
+-    // In place: controllers hold on to the object sync() returned.
+-    if (SettingsManager.cachedSettings) {
+-      Object.assign(SettingsManager.cachedSettings, settings)
+-    } else {
+-      SettingsManager.cachedSettings = { ...settings }
+-    }
+-  }
+-
+-  /**
+-   * Save settings to backend API
+-   * @param {Object} settings - Settings to save
+-   * @returns {Promise<Object|null>} API response data or null on failure
+-   */
+-  static async saveToBackend(settings) {
+-    if (!SettingsManager.apiKey) {
+-      console.warn("[Settings] API key not set, cannot save to backend")
+-      return null
+-    }
+-    if (!SettingsManager.loaded) {
+-      console.warn("[Settings] Settings not loaded, refusing to save")
+-      return null
+-    }
+-
+-    try {
+-      const backendSettings = {}
+-      Object.entries(BACKEND_SETTINGS_MAP).forEach(
+-        ([frontendKey, backendKey]) => {
+-          if (frontendKey in settings) {
+-            let value = settings[frontendKey]
+-
+-            if (INTEGER_SETTINGS_ON_SAVE.has(frontendKey)) {
+-              value = parseInt(value, 10).toString()
+-            } else if (BOOLEAN_SETTINGS_ON_SAVE.has(frontendKey)) {
+-              value = Boolean(value)
+-            }
+-
+-            backendSettings[backendKey] = value
+-          }
++      // Coloured text that holds 4.5:1 on base-100/200 in both themes
++      // (dawarich-custom design system: text-*-ink instead of text-warning etc.)
++      colors: {
++        "primary-ink": "var(--primary-ink)",
++        "success-ink": "var(--success-ink)",
++        "warning-ink": "var(--warning-ink)",
++        "error-ink": "var(--error-ink)",
++        "info-ink": "var(--info-ink)",
++      },
++    },
++  },
++  plugins: [
++    require("daisyui"),
++    require("@tailwindcss/forms"),
++    require("@tailwindcss/aspect-ratio"),
++    require("@tailwindcss/typography"),
++  ],
++  daisyui: {
++    themes: [
++      {
++        dawarich: {
++          "color-scheme": "light",
++          primary: "#3B82F6",
++          "primary-content": "#FFFFFF",
++          secondary: "#0D9488",
++          "secondary-content": "#FFFFFF",
++          accent: "#0D9488",
++          "accent-content": "#FFFFFF",
++          neutral: "#1A1A1A",
++          "neutral-content": "#EAEAEA",
++          "base-100": "#FFFFFF",
++          "base-200": "#F5F5F3",
++          "base-300": "#E5E5E2",
++          "base-content": "#1A1A1A",
++          info: "#06B6D4",
++          "info-content": "#FFFFFF",
++          success: "#0D9488",
++          "success-content": "#FFFFFF",
++          warning: "#F59E0B",
++          "warning-content": "#FFFFFF",
++          error: "#EF4444",
++          "error-content": "#FFFFFF",
++          "--primary-ink": "#1D4ED8",
++          "--success-ink": "#0F766E",
++          "--warning-ink": "#92400E",
++          "--error-ink": "#B91C1C",
++          "--info-ink": "#0E7490",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
+         },
+-      )
+-
+-      // distance_unit, tile categories, and POI groups live inside the
+-      // nested `maps` hash on the backend, the API merges it so the V1
+-      // keys managed by the settings page survive.
+-      delete backendSettings.distance_unit
+-      const mapsPayload = {}
+-      if (settings.distance_unit != null) {
+-        mapsPayload.distance_unit = settings.distance_unit
+-      }
+-      if (Array.isArray(settings.hiddenTileCategories)) {
+-        mapsPayload.hidden_tile_categories = settings.hiddenTileCategories
+-      }
+-      if (Array.isArray(settings.disabledPoiGroups)) {
+-        mapsPayload.disabled_poi_groups = settings.disabledPoiGroups
+-      }
+-      if (Object.keys(mapsPayload).length > 0) {
+-        backendSettings.maps = mapsPayload
+-      }
+-
+-      const response = await fetch("/api/v1/settings", {
+-        method: "PATCH",
+-        headers: SettingsManager._headers(),
+-        body: JSON.stringify({ settings: backendSettings }),
+-      })
+-
+-      return await response.json()
+-    } catch (error) {
+-      console.error("[Settings] Failed to save to backend:", error)
+-      return null
+-    }
+-  }
+-
+-  /**
+-   * Get a specific setting
+-   * @param {string} key - Setting key
+-   * @returns {*} Setting value
+-   */
+-  static getSetting(key) {
+-    return SettingsManager.getSettings()[key]
+-  }
+-
+-  static validVectorTilesUrl(url) {
+-    return !url || classifyBasemapUrl(url) !== null
+-  }
+-
+-  /**
+-   * Update a specific setting and save to backend
+-   * @param {string} key - Setting key
+-   * @param {*} value - New value
+-   * @returns {Promise<Object|null>} API response data
+-   */
+-  static async updateSetting(key, value) {
+-    return await SettingsManager.updateSettings({ [key]: value })
+-  }
+-
+-  static async updateSettings(updates) {
+-    const settings = SettingsManager.getSettings()
+-    Object.assign(settings, updates)
+-
+-    const isLayerSetting = Object.keys(updates).some((key) =>
+-      Object.values(LAYER_NAME_MAP).includes(key),
+-    )
+-    if (isLayerSetting) {
+-      settings.enabledMapLayers =
+-        SettingsManager._collapseLayerSettings(settings)
+-    }
+-
+-    SettingsManager.updateCache(settings)
+-
+-    // Send only what changed: a full snapshot would re-store every default
+-    // and carry data rules such as transportation modes into each toggle.
+-    const changes = { ...updates }
+-    if (isLayerSetting) changes.enabledMapLayers = settings.enabledMapLayers
+-
+-    const previousSave = SettingsManager.saveQueue.catch(() => null)
+-    const save = previousSave.then(() => SettingsManager.saveToBackend(changes))
+-    SettingsManager.saveQueue = save
+-
+-    return await save
+-  }
+-
+-  /**
+-   * Restore appearance settings to the server defaults
+-   * @param {string[]|null} keys - Backend keys to reset; all appearance settings when omitted
+-   * @returns {Promise<Object|null>} Settings after the reset, or null on failure
+-   */
+-  static async resetToDefaults(keys = null) {
+-    if (!SettingsManager.apiKey) return null
+-
+-    const query = keys
+-      ? `?${keys.map((key) => `keys[]=${encodeURIComponent(key)}`).join("&")}`
+-      : ""
+-    const previousSave = SettingsManager.saveQueue.catch(() => null)
+-    const reset = previousSave.then(async () => {
+-      const response = await fetch(`/api/v1/settings/appearance${query}`, {
+-        method: "DELETE",
+-        headers: SettingsManager._headers(),
+-      })
+-      if (!response.ok) {
+-        throw new Error(`Failed to reset settings: ${response.status}`)
+-      }
+-      const data = await response.json()
+-      return SettingsManager._applyBackendSettings(data.settings)
+-    })
+-    SettingsManager.saveQueue = reset
+-
+-    try {
+-      return await reset
+-    } catch (error) {
+-      console.error("[Settings] Failed to reset settings:", error)
+-      return null
+-    }
+-  }
+-
+-  /**
+-   * Sync settings: load from backend
+-   * Call this on app initialization
+-   * @returns {Promise<Object>} Settings from backend, empty when loading failed
+-   */
+-  static async sync() {
+-    return (
+-      (await SettingsManager.loadFromBackend()) || SettingsManager.getSettings()
+-    )
+-  }
++        "dawarich-dark": {
++          "color-scheme": "dark",
++          primary: "#60A5FA",
++          "primary-content": "#0A1530",
++          secondary: "#2DD4BF",
++          "secondary-content": "#0A1510",
++          accent: "#2DD4BF",
++          "accent-content": "#0A1510",
++          neutral: "#EAEAEA",
++          "neutral-content": "#141414",
++          "base-100": "#1C1C1C",
++          "base-200": "#141414",
++          "base-300": "#101010",
++          "base-content": "#EAEAEA",
++          info: "#22D3EE",
++          "info-content": "#0A1520",
++          success: "#2DD4BF",
++          "success-content": "#0A1510",
++          warning: "#FBBF24",
++          "warning-content": "#1A1505",
++          error: "#F87171",
++          "error-content": "#1A0A0A",
++          "--primary-ink": "#60A5FA",
++          "--success-ink": "#2DD4BF",
++          "--warning-ink": "#FBBF24",
++          "--error-ink": "#F87171",
++          "--info-ink": "#22D3EE",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
++        },
++      },
++    ],
++  },
+ }

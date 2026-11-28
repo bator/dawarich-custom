@@ -1,43 +1,167 @@
 --- a/app/queries/tracks/point_geometry_query.rb
 +++ b/app/queries/tracks/point_geometry_query.rb
-@@ -3,12 +3,17 @@
- # Rebuild a Track path from its Points so callers can clip geometry by time,
- # import, or both. Windowing precedes the import filter to avoid inventing a
- # shortcut across an interleaved Point from another import.
-+#
-+# dawarich-custom: hidden_sql (a boolean SQL expression over previous_position,
-+# position, previous_timestamp and timestamp, Gtfs::TrackCutouts) leaves out
-+# the segments it is true for; what is left stays as separate lines.
- class Tracks::PointGeometryQuery
+@@ -1,65 +1,100 @@
+-# frozen_string_literal: true
++const defaultTheme = require("tailwindcss/defaultTheme")
+ 
+-# Rebuild a Track path from its Points so callers can clip geometry by time,
+-# import, or both. Windowing precedes the import filter to avoid inventing a
+-# shortcut across an interleaved Point from another import.
+-class Tracks::PointGeometryQuery
 -  def initialize(points_scope:, import_id: nil, start_at: nil, end_at: nil)
-+  def initialize(points_scope:, import_id: nil, start_at: nil, end_at: nil, hidden_sql: nil)
-     @points_scope = points_scope
-     @import_id = normalized_import_id(import_id)
-     @start_timestamp = start_at&.to_i
-     @end_timestamp = end_at&.to_i
-+    @hidden_sql = hidden_sql
-   end
- 
-   def path_sql(track_id_sql:)
-@@ -24,7 +29,7 @@
-         WHERE points.track_id = #{track_id_sql}
-         WINDOW sequence AS (ORDER BY points.timestamp, points.id)
-       ) AS ordered_points
+-    @points_scope = points_scope
+-    @import_id = normalized_import_id(import_id)
+-    @start_timestamp = start_at&.to_i
+-    @end_timestamp = end_at&.to_i
+-  end
+-
+-  def path_sql(track_id_sql:)
+-    <<~SQL.squish
+-      SELECT ST_LineMerge(ST_Collect(ST_MakeLine(previous_position, position))) AS path,
+-        MIN(previous_timestamp) AS start_timestamp, MAX(timestamp) AS end_timestamp
+-      FROM (
+-        SELECT points.import_id, points.timestamp, points.lonlat::geometry AS position,
+-          LAG(points.import_id) OVER sequence AS previous_import_id,
+-          LAG(points.lonlat::geometry) OVER sequence AS previous_position,
+-          LAG(points.timestamp) OVER sequence AS previous_timestamp
+-        FROM (#{points_sql}) AS points
+-        WHERE points.track_id = #{track_id_sql}
+-        WINDOW sequence AS (ORDER BY points.timestamp, points.id)
+-      ) AS ordered_points
 -      WHERE previous_position IS NOT NULL #{import_predicate}
-+      WHERE previous_position IS NOT NULL #{import_predicate} #{hidden_predicate}
-     SQL
-   end
- 
-@@ -57,6 +62,12 @@
-     "AND import_id = #{@import_id} AND previous_import_id = #{@import_id}"
-   end
- 
-+  def hidden_predicate
-+    return '' unless @hidden_sql
-+
-+    "AND NOT COALESCE((#{@hidden_sql}), false)"
-+  end
-+
-   def normalized_import_id(import_id)
-     return if import_id.nil?
- 
+-    SQL
+-  end
+-
+-  def summary_for(track_id:)
+-    connection = ActiveRecord::Base.connection
+-    row = connection.select_one(<<~SQL.squish)
+-      SELECT ST_AsGeoJSON(path) AS geometry, ST_Length(path::geography) AS distance,
+-        start_timestamp, end_timestamp
+-      FROM (#{path_sql(track_id_sql: connection.quote(track_id))}) AS clipped_path
+-    SQL
+-    return nil unless row['geometry']
+-
+-    { geometry: JSON.parse(row['geometry']).deep_symbolize_keys, distance: row['distance'].to_f,
+-      start_timestamp: row['start_timestamp'].to_i, end_timestamp: row['end_timestamp'].to_i }
+-  end
+-
+-  private
+-
+-  def points_sql
+-    scope = @points_scope.route_observations.except(:select, :order, :includes, :preload, :eager_load)
+-                         .where.not(lonlat: nil)
+-    scope = scope.where('timestamp >= ?', @start_timestamp) if @start_timestamp
+-    scope = scope.where('timestamp <= ?', @end_timestamp) if @end_timestamp
+-    scope.select(:id, :track_id, :timestamp, :lonlat, :import_id).to_sql
+-  end
+-
+-  def import_predicate
+-    return '' unless @import_id
+-
+-    "AND import_id = #{@import_id} AND previous_import_id = #{@import_id}"
+-  end
+-
+-  def normalized_import_id(import_id)
+-    return if import_id.nil?
+-
+-    import_id.to_s.match?(/\A\d+\z/) ? import_id.to_i : -1
+-  end
+-end
++module.exports = {
++  content: [
++    "./app/helpers/**/*.rb",
++    "./app/javascript/**/*.js",
++    "./app/views/**/*.{erb,haml,html,slim}",
++  ],
++  theme: {
++    extend: {
++      fontFamily: {
++        sans: ["Inter", ...defaultTheme.fontFamily.sans],
++        display: ["Archivo", ...defaultTheme.fontFamily.sans],
++      },
++      // Coloured text that holds 4.5:1 on base-100/200 in both themes
++      // (dawarich-custom design system: text-*-ink instead of text-warning etc.)
++      colors: {
++        "primary-ink": "var(--primary-ink)",
++        "success-ink": "var(--success-ink)",
++        "warning-ink": "var(--warning-ink)",
++        "error-ink": "var(--error-ink)",
++        "info-ink": "var(--info-ink)",
++      },
++    },
++  },
++  plugins: [
++    require("daisyui"),
++    require("@tailwindcss/forms"),
++    require("@tailwindcss/aspect-ratio"),
++    require("@tailwindcss/typography"),
++  ],
++  daisyui: {
++    themes: [
++      {
++        dawarich: {
++          "color-scheme": "light",
++          primary: "#3B82F6",
++          "primary-content": "#FFFFFF",
++          secondary: "#0D9488",
++          "secondary-content": "#FFFFFF",
++          accent: "#0D9488",
++          "accent-content": "#FFFFFF",
++          neutral: "#1A1A1A",
++          "neutral-content": "#EAEAEA",
++          "base-100": "#FFFFFF",
++          "base-200": "#F5F5F3",
++          "base-300": "#E5E5E2",
++          "base-content": "#1A1A1A",
++          info: "#06B6D4",
++          "info-content": "#FFFFFF",
++          success: "#0D9488",
++          "success-content": "#FFFFFF",
++          warning: "#F59E0B",
++          "warning-content": "#FFFFFF",
++          error: "#EF4444",
++          "error-content": "#FFFFFF",
++          "--primary-ink": "#1D4ED8",
++          "--success-ink": "#0F766E",
++          "--warning-ink": "#92400E",
++          "--error-ink": "#B91C1C",
++          "--info-ink": "#0E7490",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
++        },
++        "dawarich-dark": {
++          "color-scheme": "dark",
++          primary: "#60A5FA",
++          "primary-content": "#0A1530",
++          secondary: "#2DD4BF",
++          "secondary-content": "#0A1510",
++          accent: "#2DD4BF",
++          "accent-content": "#0A1510",
++          neutral: "#EAEAEA",
++          "neutral-content": "#141414",
++          "base-100": "#1C1C1C",
++          "base-200": "#141414",
++          "base-300": "#101010",
++          "base-content": "#EAEAEA",
++          info: "#22D3EE",
++          "info-content": "#0A1520",
++          success: "#2DD4BF",
++          "success-content": "#0A1510",
++          warning: "#FBBF24",
++          "warning-content": "#1A1505",
++          error: "#F87171",
++          "error-content": "#1A0A0A",
++          "--primary-ink": "#60A5FA",
++          "--success-ink": "#2DD4BF",
++          "--warning-ink": "#FBBF24",
++          "--error-ink": "#F87171",
++          "--info-ink": "#22D3EE",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
++        },
++      },
++    ],
++  },
++}

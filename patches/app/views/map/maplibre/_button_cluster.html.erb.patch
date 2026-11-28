@@ -1,23 +1,246 @@
 --- a/app/views/map/maplibre/_button_cluster.html.erb
 +++ b/app/views/map/maplibre/_button_cluster.html.erb
-@@ -36,6 +36,20 @@
-       <%= icon 'search' %>
-     </button>
+@@ -1,144 +1,100 @@
+-<div class="map-button-cluster" data-controller="map-panel" role="toolbar" aria-label="<%= t('.map_controls') %>">
+-  <div class="map-button-cluster__scroll">
+-    <button type="button"
+-            class="map-button-cluster__btn"
+-            data-action="click->map-panel#openTab"
+-            aria-expanded="false"
+-            data-tab="timeline-feed"
+-            data-testid="map-button-timeline"
+-            aria-label="<%= t('.timeline') %>"
+-            aria-keyshortcuts="T"
+-            title="<%= t('.timeline_t') %>">
+-      <%= icon 'calendar-clock' %>
+-    </button>
++const defaultTheme = require("tailwindcss/defaultTheme")
  
-+    <%# Directions through Atlas (docs/atlas.md), only while Atlas is configured %>
-+    <% if Atlas::Config.enabled? %>
-+      <button type="button"
-+              class="map-button-cluster__btn"
-+              data-action="click->map-panel#openTab"
-+              aria-expanded="false"
-+              data-tab="directions"
-+              data-testid="map-button-directions"
-+              aria-label="<%= t('atlas_directions.title') %>"
-+              title="<%= t('atlas_directions.title') %>">
-+        <%= icon 'route' %>
-+      </button>
-+    <% end %>
-+
-     <% if family_feature_available? && current_user.in_family? %>
-       <button type="button"
-               class="map-button-cluster__btn"
+-    <button type="button"
+-            class="map-button-cluster__btn"
+-            data-action="click->map-panel#openTab"
+-            aria-expanded="false"
+-            data-tab="layers"
+-            data-testid="map-button-layers"
+-            aria-label="<%= t('.layers') %>"
+-            aria-keyshortcuts="L"
+-            title="<%= t('.layers_l') %>">
+-      <%= icon 'layer' %>
+-    </button>
+-
+-    <button type="button"
+-            class="map-button-cluster__btn"
+-            data-action="click->map-panel#openTab"
+-            aria-expanded="false"
+-            data-tab="search"
+-            data-testid="map-button-search"
+-            aria-label="<%= t('.search') %>"
+-            aria-keyshortcuts="/"
+-            title="<%= t('.search_2') %>">
+-      <%= icon 'search' %>
+-    </button>
+-
+-    <% if family_feature_available? && current_user.in_family? %>
+-      <button type="button"
+-              class="map-button-cluster__btn"
+-              data-action="click->map-panel#openTab"
+-              aria-expanded="false"
+-              data-tab="family"
+-              data-testid="map-button-family"
+-              aria-label="<%= t('.family') %>"
+-              aria-keyshortcuts="F"
+-              title="<%= t('.family_f') %>">
+-        <%= icon 'users' %>
+-      </button>
+-    <% end %>
+-
+-    <button type="button"
+-            class="map-button-cluster__btn map-button-cluster__btn--create"
+-            data-action="click->map-panel#openTab"
+-            aria-expanded="false"
+-            data-tab="tools"
+-            data-testid="map-button-create"
+-            aria-label="<%= t('.tools') %>"
+-            aria-keyshortcuts="C"
+-            title="<%= t('.tools_c') %>">
+-      <%= icon 'wrench' %>
+-    </button>
+-
+-    <button type="button"
+-            class="map-button-cluster__btn"
+-            data-action="click->maps--maplibre#toggleReplay"
+-            data-testid="map-button-replay"
+-            aria-label="<%= t('.replay') %>"
+-            aria-keyshortcuts="R"
+-            title="<%= t('.replay_points_for_the_current_date_range_r') %>">
+-      <%= icon 'play', class: 'w-5 h-5', aria: { hidden: true } %>
+-    </button>
+-
+-    <button type="button"
+-            class="map-button-cluster__btn"
+-            data-action="click->map-panel#openPosterStudio"
+-            data-testid="map-button-poster"
+-            aria-label="<%= t('.poster_studio') %>"
+-            title="<%= t('.poster_studio') %>">
+-      <%= icon 'image' %>
+-    </button>
+-
+-    <button type="button"
+-            class="map-button-cluster__btn"
+-            data-action="click->map-panel#openVideoStudio"
+-            data-testid="map-button-video"
+-            aria-label="<%= t('.video_studio') %>"
+-            title="<%= t('.video_studio') %>">
+-      <%= icon 'video' %>
+-    </button>
+-
+-    <div class="map-button-cluster__divider" aria-hidden="true"></div>
+-
+-    <button type="button"
+-            class="map-button-cluster__btn map-button-cluster__btn--muted"
+-            data-action="click->map-panel#openTab"
+-            aria-expanded="false"
+-            data-tab="settings"
+-            data-testid="map-button-settings"
+-            aria-label="<%= t('.settings') %>"
+-            aria-keyshortcuts="S"
+-            title="<%= t('.settings_s') %>">
+-      <%= icon 'settings' %>
+-    </button>
+-
+-    <div class="relative">
+-      <%= link_to share_links_hub_path(tab: 'timeline', start_date: start_at.to_date, end_date: end_at.to_date, import_id: params[:import_id]),
+-                  class: 'map-button-cluster__btn',
+-                  title: t('shared.map.date_navigation_v2.share'),
+-                  'aria-label': t('shared.map.date_navigation_v2.share'),
+-                  data: { turbo_frame: 'share-link-modal', testid: 'timeline-share-button' } do %>
+-        <%= icon 'share-2', class: 'w-5 h-5', aria: { hidden: true } %>
+-      <% end %>
+-      <%= render 'shared/map/share_indicator' %>
+-    </div>
+-
+-    <%# Cloud-only — same gating as the previous in-panel `Links` tab so
+-        self-hosted instances aren't pointed at marketing/help URLs. The Links
+-        tab content is still rendered in the side panel (just without its own
+-        tab button there); this cluster icon is the only entry point. %>
+-    <% if !DawarichSettings.self_hosted? %>
+-      <button type="button"
+-              class="map-button-cluster__btn map-button-cluster__btn--muted"
+-              data-action="click->map-panel#openTab"
+-            aria-expanded="false"
+-              data-tab="links"
+-              data-testid="map-button-links"
+-              aria-label="<%= t('.links') %>"
+-              title="<%= t('.links') %>">
+-        <%= icon 'info' %>
+-      </button>
+-    <% end %>
+-
+-  </div>
+-
+-  <%# Live updates: a dot at the foot of the cluster. Green while connected,
+-      amber and pulsing while the connection is down; the words are its
+-      tooltip and are announced to screen readers. Hidden until the state
+-      is known. %>
+-  <span class="map-button-cluster__live tooltip tooltip-right hidden" role="status" aria-live="polite"
+-        data-testid="realtime-status"
+-        data-maps--maplibre-realtime-target="connectionStatus"><span class="map-button-cluster__dot" aria-hidden="true"></span><span class="sr-only"></span></span>
+-</div>
++module.exports = {
++  content: [
++    "./app/helpers/**/*.rb",
++    "./app/javascript/**/*.js",
++    "./app/views/**/*.{erb,haml,html,slim}",
++  ],
++  theme: {
++    extend: {
++      fontFamily: {
++        sans: ["Inter", ...defaultTheme.fontFamily.sans],
++        display: ["Archivo", ...defaultTheme.fontFamily.sans],
++      },
++      // Coloured text that holds 4.5:1 on base-100/200 in both themes
++      // (dawarich-custom design system: text-*-ink instead of text-warning etc.)
++      colors: {
++        "primary-ink": "var(--primary-ink)",
++        "success-ink": "var(--success-ink)",
++        "warning-ink": "var(--warning-ink)",
++        "error-ink": "var(--error-ink)",
++        "info-ink": "var(--info-ink)",
++      },
++    },
++  },
++  plugins: [
++    require("daisyui"),
++    require("@tailwindcss/forms"),
++    require("@tailwindcss/aspect-ratio"),
++    require("@tailwindcss/typography"),
++  ],
++  daisyui: {
++    themes: [
++      {
++        dawarich: {
++          "color-scheme": "light",
++          primary: "#3B82F6",
++          "primary-content": "#FFFFFF",
++          secondary: "#0D9488",
++          "secondary-content": "#FFFFFF",
++          accent: "#0D9488",
++          "accent-content": "#FFFFFF",
++          neutral: "#1A1A1A",
++          "neutral-content": "#EAEAEA",
++          "base-100": "#FFFFFF",
++          "base-200": "#F5F5F3",
++          "base-300": "#E5E5E2",
++          "base-content": "#1A1A1A",
++          info: "#06B6D4",
++          "info-content": "#FFFFFF",
++          success: "#0D9488",
++          "success-content": "#FFFFFF",
++          warning: "#F59E0B",
++          "warning-content": "#FFFFFF",
++          error: "#EF4444",
++          "error-content": "#FFFFFF",
++          "--primary-ink": "#1D4ED8",
++          "--success-ink": "#0F766E",
++          "--warning-ink": "#92400E",
++          "--error-ink": "#B91C1C",
++          "--info-ink": "#0E7490",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
++        },
++        "dawarich-dark": {
++          "color-scheme": "dark",
++          primary: "#60A5FA",
++          "primary-content": "#0A1530",
++          secondary: "#2DD4BF",
++          "secondary-content": "#0A1510",
++          accent: "#2DD4BF",
++          "accent-content": "#0A1510",
++          neutral: "#EAEAEA",
++          "neutral-content": "#141414",
++          "base-100": "#1C1C1C",
++          "base-200": "#141414",
++          "base-300": "#101010",
++          "base-content": "#EAEAEA",
++          info: "#22D3EE",
++          "info-content": "#0A1520",
++          success: "#2DD4BF",
++          "success-content": "#0A1510",
++          warning: "#FBBF24",
++          "warning-content": "#1A1505",
++          error: "#F87171",
++          "error-content": "#1A0A0A",
++          "--primary-ink": "#60A5FA",
++          "--success-ink": "#2DD4BF",
++          "--warning-ink": "#FBBF24",
++          "--error-ink": "#F87171",
++          "--info-ink": "#22D3EE",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
++        },
++      },
++    ],
++  },
++}

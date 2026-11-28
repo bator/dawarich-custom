@@ -1,152 +1,530 @@
 --- a/app/javascript/controllers/maps/maplibre/layer_visibility_manager.js
 +++ b/app/javascript/controllers/maps/maplibre/layer_visibility_manager.js
-@@ -1,6 +1,9 @@
- import { translate } from "i18n"
- import { Toast } from "maps_maplibre/components/toast"
- import { anomaliesVisible } from "maps_maplibre/utils/layer_dependencies"
-+import { tr } from "maps_maplibre/layers/transit_layer"
-+import { walkTr } from "maps_maplibre/layers/walk_legs_layer"
-+import { corridorTr } from "maps_maplibre/layers/corridors_layer"
- import { gatedToggle } from "maps_maplibre/utils/layer_gate"
- import { lazyLoader } from "maps_maplibre/utils/lazy_loader"
- import { SettingsManager } from "maps_maplibre/utils/settings_manager"
-@@ -329,6 +332,139 @@
-     }
-   }
+@@ -1,429 +1,100 @@
+-import { translate } from "i18n"
+-import { Toast } from "maps_maplibre/components/toast"
+-import { anomaliesVisible } from "maps_maplibre/utils/layer_dependencies"
+-import { gatedToggle } from "maps_maplibre/utils/layer_gate"
+-import { lazyLoader } from "maps_maplibre/utils/lazy_loader"
+-import { SettingsManager } from "maps_maplibre/utils/settings_manager"
++const defaultTheme = require("tailwindcss/defaultTheme")
  
-+  /**
-+   * Toggle the GTFS public transport layer (lazy-loads on first enable).
-+   */
-+  async toggleTransit(event) {
-+    const enabled = event.target.checked
-+    SettingsManager.updateSetting("transitEnabled", enabled)
-+    this.layerManager.updateTrackCutouts()
-+    const transitLayer = this.layerManager.getLayer("transit")
-+    if (!transitLayer) return
-+
-+    try {
-+      if (enabled) {
-+        if (!(transitLayer.data?.features?.length > 0)) {
-+          await this.reloadTransit()
-+        }
-+        transitLayer.show()
-+      } else {
-+        transitLayer.hide()
-+      }
-+    } catch (error) {
-+      console.error("Failed to toggle transit layer:", error)
-+      Toast.error(tr("failed"))
-+    }
-+  }
-+
-+  /**
-+   * Filter the transit layer by mode (bus, tram, rail, ...).
-+   */
-+  changeTransitMode(event) {
-+    const mode = event.target.value || "all"
-+    SettingsManager.updateSetting("transitMode", mode)
-+    this.layerManager.getLayer("transit")?.setMode(mode)
-+    this.layerManager.updateTrackCutouts()
-+  }
-+
-+  /**
-+   * Toggle the walking legs next to the rides (lazy-loads on first enable).
-+   */
-+  async toggleWalkLegs(event) {
-+    const enabled = event.target.checked
-+    SettingsManager.updateSetting("walkLegsEnabled", enabled)
-+    this.layerManager.updateTrackCutouts()
-+    const layer = this.layerManager.getLayer("walkLegs")
-+    if (!layer) return
-+
-+    try {
-+      if (enabled) {
-+        if (!(layer.data?.features?.length > 0)) {
-+          await this.reloadWalkLegs()
-+        }
-+        layer.show()
-+      } else {
-+        layer.hide()
-+      }
-+    } catch (error) {
-+      console.error("Failed to toggle walking legs layer:", error)
-+      Toast.error(walkTr("failed_to_load"))
-+    }
-+  }
-+
-+  /**
-+   * Toggle the frequent routes (loads them on first enable; not date bound).
-+   */
-+  async toggleCorridors(event) {
-+    const enabled = event.target.checked
-+    SettingsManager.updateSetting("corridorsEnabled", enabled)
-+    const layer = this.layerManager.getLayer("corridors")
-+    if (!layer) return
-+
-+    try {
-+      if (enabled) {
-+        if (!(layer.data?.features?.length > 0)) {
-+          layer.update(await this.controller.api.fetchCorridors())
-+        }
-+        layer.show()
-+      } else {
-+        layer.hide()
-+      }
-+    } catch (error) {
-+      console.error("Failed to toggle frequent routes layer:", error)
-+      Toast.error(corridorTr("failed_to_load"))
-+    }
-+  }
-+
-+  async reloadWalkLegs() {
-+    const layer = this.layerManager.getLayer("walkLegs")
-+    if (!layer) return
-+    const geojson = await this.controller.api.fetchWalkLegs({
-+      start_at: this.controller.startDateValue,
-+      end_at: this.controller.endDateValue,
-+    })
-+    layer.update(geojson)
-+    const data = this.controller.mapDataManager?.lastLoadedData
-+    if (data) data.walkLegsGeoJSON = geojson
-+  }
-+
-+  async reloadTransit() {
-+    const transitLayer = this.layerManager.getLayer("transit")
-+    if (!transitLayer) return
-+    const geojson = await this.controller.api.fetchTransitSegments({
-+      start_at: this.controller.startDateValue,
-+      end_at: this.controller.endDateValue,
-+    })
-+    transitLayer.update(geojson)
-+    const data = this.controller.mapDataManager?.lastLoadedData
-+    if (data) data.transitGeoJSON = geojson
-+  }
-+
-+  /**
-+   * Confirm / reject a ride from the map popup. A 404 means the ride was
-+   * matched again in the meantime (review A2): reload the layer.
-+   */
-+  async reviewTransit(id, status, popup) {
-+    try {
-+      const result = await this.controller.api.updateTransitSegment(id, status)
-+      popup?.remove()
-+      if (result.reload) {
-+        Toast.info(tr("reload"))
-+      } else if (result.ok) {
-+        Toast.success(tr(`done_${status}`))
-+      } else {
-+        Toast.error(tr("failed"))
-+      }
-+      await this.reloadTransit()
-+      if (this.layerManager.getLayer("walkLegs")?.visible) {
-+        await this.reloadWalkLegs()
-+      }
-+    } catch (error) {
-+      console.error("Failed to review transit segment:", error)
-+      Toast.error(tr("failed"))
-+    }
-+  }
-+
-   /**
-    * Toggle points layer visibility
-    */
+-/**
+- * Manages main-map layer visibility and lazy loading.
+- */
+-export class LayerVisibilityManager {
+-  constructor(controller) {
+-    this.controller = controller
+-    this.map = controller.map
+-    this.layerManager = controller.layerManager
+-    this.settings = controller.settings
+-    this._anomaliesFetchId = 0
+-  }
+-
+-  _previewedForLite({ layer, layerName = layer, toggle, showFn, hideFn }) {
+-    return gatedToggle({
+-      layer,
+-      gatedLayers: this.controller.gatedLayersValue,
+-      layerName,
+-      userPlan: this.controller.userPlanValue,
+-      toggle,
+-      showFn,
+-      hideFn,
+-      upgradeUrl: this.controller.upgradeUrlValue,
+-    })
+-  }
+-
+-  /**
+-   * Toggle heatmap visibility
+-   */
+-  async toggleHeatmap(event) {
+-    const toggle = event.target
+-
+-    const showHeatmap = async () => {
+-      this.applyHeatmapRenderer(true)
+-    }
+-
+-    const hideHeatmap = () => {
+-      this.applyHeatmapRenderer(false)
+-    }
+-
+-    if (
+-      this._previewedForLite({
+-        layer: "Heatmap",
+-        toggle,
+-        showFn: showHeatmap,
+-        hideFn: hideHeatmap,
+-      })
+-    )
+-      return
+-
+-    const enabled = toggle.checked
+-    SettingsManager.updateSetting("heatmapEnabled", enabled)
+-    await this.reapplyPointsRenderer()
+-
+-    if (enabled) {
+-      await showHeatmap()
+-    } else {
+-      hideHeatmap()
+-    }
+-  }
+-
+-  /**
+-   * Toggle hexagons visibility
+-   */
+-  async toggleHexagons(event) {
+-    const toggle = event.target
+-
+-    if (
+-      this._previewedForLite({
+-        layer: "Hexagons",
+-        toggle,
+-        showFn: () => this._showHexagons(),
+-        hideFn: () => this._hideHexagons(),
+-      })
+-    )
+-      return
+-
+-    const enabled = toggle.checked
+-    SettingsManager.updateSetting("hexagonsEnabled", enabled)
+-
+-    if (enabled) {
+-      await this._showHexagons()
+-    } else {
+-      this._hideHexagons()
+-    }
+-  }
+-
+-  async _showHexagons() {
+-    let hexagonLayer = this.layerManager.getLayer("hexagons")
+-    if (!hexagonLayer) hexagonLayer = this.layerManager._addHexagonLayer()
+-    hexagonLayer.show()
+-    await hexagonLayer.load({
+-      start_at: this.controller.startDateValue,
+-      end_at: this.controller.endDateValue,
+-    })
+-  }
+-
+-  _hideHexagons() {
+-    const hexagonLayer = this.layerManager.getLayer("hexagons")
+-    if (hexagonLayer) {
+-      hexagonLayer.dispose()
+-      hexagonLayer.hide()
+-    }
+-  }
+-
+-  /**
+-   * Toggle fog of war layer
+-   */
+-  async toggleFog(event) {
+-    const toggle = event.target
+-    const fogLayer = this.layerManager.getLayer("fog")
+-
+-    const showFog = async () => {
+-      fogLayer?.toggle(true)
+-    }
+-
+-    const hideFog = () => {
+-      fogLayer?.toggle(false)
+-    }
+-
+-    if (
+-      this._previewedForLite({
+-        layer: "Fog of War",
+-        toggle,
+-        showFn: showFog,
+-        hideFn: hideFog,
+-      })
+-    )
+-      return
+-
+-    const enabled = toggle.checked
+-    SettingsManager.updateSetting("fogEnabled", enabled)
+-    await this.reapplyPointsRenderer()
+-
+-    if (enabled) {
+-      await showFog()
+-    } else {
+-      hideFog()
+-    }
+-  }
+-
+-  /**
+-   * Toggle scratch map layer
+-   */
+-  async toggleScratch(event) {
+-    const toggle = event.target
+-
+-    const showScratch = async () => {
+-      const scratchLayer = this.layerManager.getLayer("scratch")
+-      if (!scratchLayer) {
+-        const ScratchLayer = await lazyLoader.loadLayer("scratch")
+-        const newScratchLayer = new ScratchLayer(this.map, {
+-          visible: true,
+-          apiClient: this.controller.api,
+-          historyScope: () => ({
+-            startAt: this.controller.startDateValue,
+-            endAt: this.controller.endDateValue,
+-          }),
+-          onTileError: () =>
+-            Toast.retry(
+-              translate("messages.failed_to_load_visited_countries"),
+-              translate("messages.retry"),
+-              () => newScratchLayer.refresh(),
+-            ),
+-          onMembershipError: () =>
+-            Toast.retry(
+-              translate("messages.failed_to_load_visited_countries"),
+-              translate("messages.retry"),
+-              () => newScratchLayer.retryMembership(),
+-            ),
+-        })
+-        this.layerManager.layers.scratchLayer = newScratchLayer
+-        try {
+-          await newScratchLayer.add()
+-        } catch (error) {
+-          // A membership failure happens after the source, layers and event
+-          // listener are installed. Keep that instance for the Retry action;
+-          // only tear it down if layer installation itself failed.
+-          if (!this.map.getLayer(newScratchLayer.id)) {
+-            newScratchLayer.remove()
+-            if (this.layerManager.layers.scratchLayer === newScratchLayer)
+-              this.layerManager.layers.scratchLayer = null
+-          }
+-          throw error
+-        }
+-      } else {
+-        scratchLayer.show()
+-      }
+-    }
+-
+-    const hideScratch = () => {
+-      const scratchLayer = this.layerManager.getLayer("scratch")
+-      if (scratchLayer) scratchLayer.hide()
+-    }
+-
+-    if (
+-      this._previewedForLite({
+-        layer: "Scratch map",
+-        layerName: translate("layers.scratch_map"),
+-        toggle,
+-        showFn: showScratch,
+-        hideFn: hideScratch,
+-      })
+-    )
+-      return
+-
+-    const enabled = toggle.checked
+-    SettingsManager.updateSetting("scratchEnabled", enabled)
+-    await this.reapplyPointsRenderer()
+-
+-    try {
+-      if (enabled) {
+-        await showScratch()
+-      } else {
+-        hideScratch()
+-      }
+-    } catch (error) {
+-      console.error("Failed to toggle scratch layer:", error)
+-      Toast.retry(
+-        translate("messages.failed_to_load_visited_countries"),
+-        translate("messages.retry"),
+-        showScratch,
+-      )
+-    }
+-  }
+-
+-  /**
+-   * Toggle photos layer
+-   * Fetches photos from backend on first enable (lazy-load pattern)
+-   */
+-  async togglePhotos(event) {
+-    const enabled = event.target.checked
+-    SettingsManager.updateSetting("photosEnabled", enabled)
+-
+-    try {
+-      const photosLayer = this.layerManager.getLayer("photos")
+-
+-      if (enabled) {
+-        if (photosLayer && photosLayer.data?.features?.length > 0) {
+-          photosLayer.show()
+-        } else {
+-          // Fetch photos from backend
+-          this.controller.loadingBadge.start("photos")
+-
+-          const dataLoader = this.controller.dataLoader
+-          const photos = await dataLoader.fetchPhotosWithTimeout(
+-            this.controller.startDateValue,
+-            this.controller.endDateValue,
+-          )
+-          const photosGeoJSON = dataLoader.photosToGeoJSON(photos)
+-
+-          this.controller.loadingBadge.finish("photos", photos.length)
+-
+-          await this.layerManager._addPhotosLayer(photosGeoJSON)
+-
+-          const newPhotosLayer = this.layerManager.getLayer("photos")
+-          if (newPhotosLayer) {
+-            newPhotosLayer.show()
+-          }
+-        }
+-      } else {
+-        if (photosLayer) {
+-          photosLayer.hide()
+-        }
+-      }
+-    } catch (error) {
+-      console.error("Failed to toggle photos layer:", error)
+-      Toast.error(translate("messages.failed_to_load_photos"))
+-    }
+-  }
+-
+-  /**
+-   * Toggle tracks layer
+-   * Fetches tracks from backend on first enable (lazy-load pattern)
+-   */
+-  async toggleTracks(event) {
+-    const enabled = event.target.checked
+-    SettingsManager.updateSetting("tracksEnabled", enabled)
+-
+-    this.layerManager.getLayer("tracks-mvt")?.setEnabled(enabled)
+-    this.layerManager.getLayer("tracks")?.toggle(enabled)
+-    if (!enabled && this.controller.eventHandlers?.selectedTrackFeature) {
+-      this.controller.eventHandlers.clearTrackSelection()
+-    }
+-  }
+-
+-  /**
+-   * Toggle AirTrail flights layer visibility (lazy-loads on first enable).
+-   */
+-  async toggleFlights(event) {
+-    const enabled = event.target.checked
+-    SettingsManager.updateSetting("flightsEnabled", enabled)
+-
+-    try {
+-      const flightsLayer = this.layerManager.getLayer("flights")
+-
+-      if (enabled) {
+-        if (flightsLayer && flightsLayer.data?.features?.length > 0) {
+-          flightsLayer.show()
+-        } else {
+-          const api = this.controller.api
+-          const flightsGeoJSON = await api.fetchFlights({
+-            start_at: this.controller.startDateValue,
+-            end_at: this.controller.endDateValue,
+-          })
+-
+-          if (flightsLayer) {
+-            flightsLayer.update(flightsGeoJSON)
+-            flightsLayer.show()
+-          }
+-
+-          const data = this.controller.mapDataManager?.lastLoadedData
+-          if (data) data.flightsGeoJSON = flightsGeoJSON
+-        }
+-      } else if (flightsLayer) {
+-        flightsLayer.hide()
+-      }
+-
+-      this.controller.mapDataManager?.applyFlightMask()
+-    } catch (error) {
+-      console.error("Failed to toggle flights layer:", error)
+-      Toast.error(translate("messages.failed_to_load_flights"))
+-    }
+-  }
+-
+-  /**
+-   * Toggle points layer visibility
+-   */
+-  async togglePoints(event) {
+-    SettingsManager.updateSetting("pointsVisible", event.currentTarget.checked)
+-
+-    await this.reapplyPointsRenderer()
+-    await this.refreshAnomalies({
+-      enabled: anomaliesVisible(SettingsManager.getSettings()),
+-    })
+-  }
+-
+-  async reapplyPointsRenderer() {
+-    const settings = SettingsManager.getSettings()
+-    const visible = this.controller.hasPointsToggleTarget
+-      ? this.controller.pointsToggleTarget.checked
+-      : settings.pointsVisible !== false
+-
+-    this.layerManager.getLayer("points-mvt")?.toggle(visible)
+-    this.applyHeatmapRenderer(Boolean(settings.heatmapEnabled))
+-    this.layerManager
+-      .getLayer("tracks-mvt")
+-      ?.setEnabled(settings.tracksEnabled === true)
+-    this.controller.settingsController?.syncPointsEditAvailability()
+-  }
+-
+-  applyHeatmapRenderer(enabled) {
+-    this.layerManager.getLayer("points-mvt")?.setHeatmapVisible(enabled)
+-  }
+-
+-  async toggleAnomalies(event) {
+-    const enabled = event.target.checked
+-    SettingsManager.updateSetting("anomaliesEnabled", enabled)
+-    await this.refreshAnomalies({
+-      enabled: anomaliesVisible(SettingsManager.getSettings()),
+-    })
+-  }
+-
+-  async refreshAnomalies({ enabled }) {
+-    const anomaliesLayer = this.layerManager.getLayer("anomalies")
+-    if (!anomaliesLayer) return
+-
+-    if (!enabled) {
+-      anomaliesLayer.hide()
+-      return
+-    }
+-
+-    const fetchId = ++this._anomaliesFetchId
+-    this.controller.loadingBadge.start("anomalies")
+-
+-    try {
+-      const startDate = this.controller.startDateValue
+-      const endDate = this.controller.endDateValue
+-      const geoJSON = await anomaliesLayer.fetchAnomalies({
+-        start_at: startDate,
+-        end_at: endDate,
+-      })
+-
+-      if (fetchId !== this._anomaliesFetchId) return
+-
+-      this.controller.loadingBadge.finish("anomalies", geoJSON.features.length)
+-
+-      anomaliesLayer.update(geoJSON)
+-      anomaliesLayer.show()
+-    } catch (error) {
+-      if (fetchId !== this._anomaliesFetchId) return
+-      console.error("Failed to refresh anomalies layer:", error)
+-      this.controller.loadingBadge.finish("anomalies", 0)
+-      Toast.error(translate("messages.failed_to_load_anomalies"))
+-    }
+-  }
+-
+-  /**
+-   * Toggle family members layer
+-   */
+-  async toggleFamily(event) {
+-    const enabled = event.target.checked
+-    SettingsManager.updateSetting("familyEnabled", enabled)
+-
+-    const familyLayer = this.layerManager.getLayer("family")
+-    if (familyLayer) {
+-      if (enabled) {
+-        familyLayer.show()
+-        // Load family members data
+-        await this.controller.loadFamilyMembers()
+-      } else {
+-        familyLayer.hide()
+-      }
+-    }
+-
+-    // Show/hide the family members list
+-    if (this.controller.hasFamilyMembersListTarget) {
+-      this.controller.familyMembersListTarget.style.display = enabled
+-        ? "block"
+-        : "none"
+-    }
+-  }
++module.exports = {
++  content: [
++    "./app/helpers/**/*.rb",
++    "./app/javascript/**/*.js",
++    "./app/views/**/*.{erb,haml,html,slim}",
++  ],
++  theme: {
++    extend: {
++      fontFamily: {
++        sans: ["Inter", ...defaultTheme.fontFamily.sans],
++        display: ["Archivo", ...defaultTheme.fontFamily.sans],
++      },
++      // Coloured text that holds 4.5:1 on base-100/200 in both themes
++      // (dawarich-custom design system: text-*-ink instead of text-warning etc.)
++      colors: {
++        "primary-ink": "var(--primary-ink)",
++        "success-ink": "var(--success-ink)",
++        "warning-ink": "var(--warning-ink)",
++        "error-ink": "var(--error-ink)",
++        "info-ink": "var(--info-ink)",
++      },
++    },
++  },
++  plugins: [
++    require("daisyui"),
++    require("@tailwindcss/forms"),
++    require("@tailwindcss/aspect-ratio"),
++    require("@tailwindcss/typography"),
++  ],
++  daisyui: {
++    themes: [
++      {
++        dawarich: {
++          "color-scheme": "light",
++          primary: "#3B82F6",
++          "primary-content": "#FFFFFF",
++          secondary: "#0D9488",
++          "secondary-content": "#FFFFFF",
++          accent: "#0D9488",
++          "accent-content": "#FFFFFF",
++          neutral: "#1A1A1A",
++          "neutral-content": "#EAEAEA",
++          "base-100": "#FFFFFF",
++          "base-200": "#F5F5F3",
++          "base-300": "#E5E5E2",
++          "base-content": "#1A1A1A",
++          info: "#06B6D4",
++          "info-content": "#FFFFFF",
++          success: "#0D9488",
++          "success-content": "#FFFFFF",
++          warning: "#F59E0B",
++          "warning-content": "#FFFFFF",
++          error: "#EF4444",
++          "error-content": "#FFFFFF",
++          "--primary-ink": "#1D4ED8",
++          "--success-ink": "#0F766E",
++          "--warning-ink": "#92400E",
++          "--error-ink": "#B91C1C",
++          "--info-ink": "#0E7490",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
++        },
++        "dawarich-dark": {
++          "color-scheme": "dark",
++          primary: "#60A5FA",
++          "primary-content": "#0A1530",
++          secondary: "#2DD4BF",
++          "secondary-content": "#0A1510",
++          accent: "#2DD4BF",
++          "accent-content": "#0A1510",
++          neutral: "#EAEAEA",
++          "neutral-content": "#141414",
++          "base-100": "#1C1C1C",
++          "base-200": "#141414",
++          "base-300": "#101010",
++          "base-content": "#EAEAEA",
++          info: "#22D3EE",
++          "info-content": "#0A1520",
++          success: "#2DD4BF",
++          "success-content": "#0A1510",
++          warning: "#FBBF24",
++          "warning-content": "#1A1505",
++          error: "#F87171",
++          "error-content": "#1A0A0A",
++          "--primary-ink": "#60A5FA",
++          "--success-ink": "#2DD4BF",
++          "--warning-ink": "#FBBF24",
++          "--error-ink": "#F87171",
++          "--info-ink": "#22D3EE",
++          "--rounded-btn": "0.375rem",
++          "--rounded-box": "0.625rem",
++          "--rounded-badge": "9999px",
++        },
++      },
++    ],
++  },
+ }
