@@ -295,9 +295,6 @@ class Tracks::VectorTileQuery
       conn.exec_query('SET LOCAL jit = off', 'TracksVectorTileQuery JIT')
       conn.exec_query("SET LOCAL statement_timeout = #{VectorTileTimeout.query_timeout_ms}",
                       'TracksVectorTileQuery Timeout')
-      # dawarich-custom: the cut query's cost estimate triggers JIT, whose
-      # compile took 167 of its 200 ms (the work itself ~30 ms)
-      conn.exec_query('SET LOCAL jit = off', 'TracksVectorTileQuery JIT') if hiding?
       yield conn
     end
   end
